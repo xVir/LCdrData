@@ -1,0 +1,215 @@
+# AGENTS.md — LCDR Data
+
+LCDR Data is a native macOS **dual-panel file manager** inspired by orthodox file managers
+(Total Commander, ForkLift, Midnight Commander). It provides a keyboard-driven,
+power-user-oriented file management experience with two side-by-side directory panels,
+a command bar, and rich file operations. "LCDR" stands for "Lieutenant Commander" —
+a reference to Lt. Cmdr. Data from Star Trek: The Next Generation.
+
+Built with SwiftUI, Xcode 26.4, Swift 5.0, targeting macOS 26.4.
+Bundle identifier: `com.xvir.LCDR-Data`.
+
+See **[DESIGN.md](DESIGN.md)** for the full design document — architecture, data models,
+feature list, keyboard shortcuts, implementation phases, and sandbox requirements.
+
+## Build Commands
+
+```bash
+# Build (Debug)
+xcodebuild -project "LCDR Data.xcodeproj" -scheme "LCDR Data" -configuration Debug build
+
+# Build (Release)
+xcodebuild -project "LCDR Data.xcodeproj" -scheme "LCDR Data" -configuration Release build
+
+# Clean build
+xcodebuild -project "LCDR Data.xcodeproj" -scheme "LCDR Data" clean build
+```
+
+## Test Commands
+
+The project uses two test frameworks:
+- **Swift Testing** (`import Testing`) for unit tests — struct-based, `@Test` attribute, `#expect(...)` assertions
+- **XCTest** (`import XCTest`) for UI tests — class-based, `XCTestCase` subclass
+
+```bash
+# Run ALL tests
+xcodebuild test -project "LCDR Data.xcodeproj" -scheme "LCDR Data" -destination 'platform=macOS'
+
+# Run unit tests only
+xcodebuild test -project "LCDR Data.xcodeproj" -scheme "LCDR Data" -destination 'platform=macOS' \
+  -only-testing:"LCDR DataTests"
+
+# Run UI tests only
+xcodebuild test -project "LCDR Data.xcodeproj" -scheme "LCDR Data" -destination 'platform=macOS' \
+  -only-testing:"LCDR DataUITests"
+
+# Run a SINGLE unit test (Swift Testing: TargetName/StructName/functionName)
+xcodebuild test -project "LCDR Data.xcodeproj" -scheme "LCDR Data" -destination 'platform=macOS' \
+  -only-testing:"LCDR DataTests/LCDR_DataTests/example"
+
+# Run a SINGLE UI test (XCTest: TargetName/ClassName/testMethodName)
+xcodebuild test -project "LCDR Data.xcodeproj" -scheme "LCDR Data" -destination 'platform=macOS' \
+  -only-testing:"LCDR DataUITests/LCDR_DataUITests/testExample"
+```
+
+## Lint / Format
+
+No linting or formatting tools are currently configured (no SwiftLint, SwiftFormat, etc.).
+If added later, update this section.
+
+## Project Structure
+
+```
+LCDR Data/
+├── LCDR Data.xcodeproj/       # Xcode project configuration
+├── LCDR Data/                  # Main app target
+│   ├── Assets.xcassets/        # Asset catalog (colors, app icon)
+│   ├── LCDR_DataApp.swift      # @main App entry point
+│   └── ContentView.swift       # Root SwiftUI view
+├── LCDR DataTests/             # Unit tests (Swift Testing)
+│   └── LCDR_DataTests.swift
+├── LCDR DataUITests/           # UI tests (XCTest)
+│   ├── LCDR_DataUITests.swift
+│   └── LCDR_DataUITestsLaunchTests.swift
+└── AGENTS.md
+```
+
+## Swift Concurrency Settings
+
+The project has strict Swift 6 concurrency enabled:
+- `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` — all types default to MainActor isolation
+- `SWIFT_APPROACHABLE_CONCURRENCY = YES` — Swift 6 approachable concurrency mode
+- `SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES` — stricter import visibility
+
+These settings mean:
+- All types are implicitly `@MainActor` unless explicitly opted out with `nonisolated`
+- You must handle sendability and actor isolation correctly
+- Imports must be explicit about what they expose to downstream modules
+
+## Code Style Guidelines
+
+### File Header
+
+Every Swift file must begin with the standard Xcode file header:
+```swift
+//
+//  FileName.swift
+//  LCDR Data
+//
+//  Created by Author Name on Date.
+//
+```
+
+### Imports
+
+- One `import` per line
+- Framework imports first (`import SwiftUI`, `import Foundation`)
+- `@testable import` on the line directly after framework imports in test files
+```swift
+import Testing
+@testable import LCDR_Data
+```
+
+### Naming Conventions
+
+| Element           | Convention       | Example                          |
+|-------------------|------------------|----------------------------------|
+| Types/Protocols   | `UpperCamelCase` | `ContentView`, `DataManager`     |
+| Functions/Methods | `lowerCamelCase` | `fetchData()`, `setUpWithError()`|
+| Properties/Vars   | `lowerCamelCase` | `body`, `isLoading`              |
+| Constants         | `lowerCamelCase` | `let maxRetryCount = 3`          |
+| Enum cases        | `lowerCamelCase` | `case loading`, `case error`     |
+
+### Types and Protocols
+
+- Use `struct` for SwiftUI views conforming to `View`
+- Use `struct` for data models (prefer value types)
+- Use `class` only when reference semantics are required (e.g., `ObservableObject`)
+- Use `final class` for XCTest test cases
+- Use `struct` for Swift Testing test suites
+- Prefer opaque return types: `some View`, `some Scene`
+
+### SwiftUI Patterns
+
+- Use `#Preview` macro for previews (not the deprecated `PreviewProvider`)
+- Chain view modifiers on separate lines, each indented and starting with `.`:
+```swift
+Image(systemName: "globe")
+    .imageScale(.large)
+    .foregroundStyle(.tint)
+```
+- Group views with `VStack`, `HStack`, `ZStack` with proper alignment
+- Apply `.padding()` at the outermost appropriate level
+
+### Error Handling
+
+- Use `throws` / `async throws` for functions that can fail
+- Prefer Swift's typed error handling (`throw`/`catch`) over optionals for recoverable errors
+- In tests, let errors propagate as test failures via `throws` on test functions
+- Use `do`/`catch` blocks when you need to handle errors at a specific call site
+- Avoid force-unwrapping (`!`) except in tests or when the invariant is guaranteed
+
+### Formatting
+
+- **Indentation:** 4 spaces (no tabs)
+- **Braces:** Opening brace on the same line as the declaration
+- **Line length:** Keep lines under 120 characters when practical
+- **Trailing closures:** Use trailing closure syntax for the last closure parameter
+- **Blank lines:** One blank line between functions/methods; no trailing whitespace
+
+### Test Conventions
+
+- Every class and struct with logic must have a corresponding unit test file
+- Design code for testability: use protocol-based dependencies injected via initializer
+- Avoid static methods — use instance methods on injectable types instead
+- Break large classes into smaller, focused types that are easier to test in isolation
+- Use [swift-mocking](https://github.com/DanielCardonaRojas/swift-mocking) for creating
+  mocks in tests — define protocols for dependencies and mock them via swift-mocking
+- Follow the Arrange / Act / Assert pattern in every test
+
+**Unit tests (Swift Testing):**
+```swift
+import Testing
+@testable import LCDR_Data
+
+struct SomeFeatureTests {
+    @Test func descriptiveName() async throws {
+        // Arrange
+        // Act
+        // Assert with #expect(...)
+    }
+}
+```
+
+**UI tests (XCTest):**
+```swift
+import XCTest
+
+final class SomeUITests: XCTestCase {
+    override func setUpWithError() throws {
+        continueAfterFailure = false
+    }
+
+    @MainActor
+    func testDescriptiveName() throws {
+        let app = XCUIApplication()
+        app.launch()
+        // Test interactions and assertions
+    }
+}
+```
+
+### Dependencies
+
+| Package | URL | Purpose |
+|---------|-----|---------|
+| kdl-swift | https://github.com/danini-the-panini/kdl-swift | KDL 2.0 parser for configuration files |
+| swift-mocking | https://github.com/DanielCardonaRojas/swift-mocking | Mock generation for unit tests |
+
+Dependencies are managed via Swift Package Manager in Xcode.
+
+### App Sandbox
+
+The app has App Sandbox enabled with read-only user-selected file access.
+Keep this in mind when working with file system APIs — only files explicitly
+selected by the user (via open panels) are accessible.
