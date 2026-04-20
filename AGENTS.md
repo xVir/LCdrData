@@ -1,13 +1,13 @@
-# AGENTS.md — LCDR Data
+# AGENTS.md — LCdrData
 
-LCDR Data is a native macOS **dual-panel file manager** inspired by orthodox file managers
+LCdrData is a native macOS **dual-panel file manager** inspired by orthodox file managers
 (Total Commander, ForkLift, Midnight Commander). It provides a keyboard-driven,
 power-user-oriented file management experience with two side-by-side directory panels,
 a command bar, and rich file operations. "LCDR" stands for "Lieutenant Commander" —
 a reference to Lt. Cmdr. Data from Star Trek: The Next Generation.
 
 Built with SwiftUI, Xcode 26.4, Swift 5.0, targeting macOS 26.4.
-Bundle identifier: `com.xvir.LCDR-Data`.
+Bundle identifier: `com.xvir.LCdrData`.
 
 See **[DESIGN.md](DESIGN.md)** for the full design document — architecture, data models,
 feature list, keyboard shortcuts, implementation phases, and sandbox requirements.
@@ -60,13 +60,13 @@ tuist dump
 
 ```bash
 # Build (Debug) — via workspace (after tuist generate)
-xcodebuild -workspace "LCDR Data.xcworkspace" -scheme "LCDR Data" -configuration Debug build
+xcodebuild -workspace "LCdrData.xcworkspace" -scheme "LCdrData" -configuration Debug build
 
 # Build (Release)
-xcodebuild -workspace "LCDR Data.xcworkspace" -scheme "LCDR Data" -configuration Release build
+xcodebuild -workspace "LCdrData.xcworkspace" -scheme "LCdrData" -configuration Release build
 
 # Clean build
-xcodebuild -workspace "LCDR Data.xcworkspace" -scheme "LCDR Data" clean build
+xcodebuild -workspace "LCdrData.xcworkspace" -scheme "LCdrData" clean build
 ```
 
 ## Test Commands
@@ -75,25 +75,36 @@ The project uses two test frameworks:
 - **Swift Testing** (`import Testing`) for unit tests — struct-based, `@Test` attribute, `#expect(...)` assertions
 - **XCTest** (`import XCTest`) for UI tests — class-based, `XCTestCase` subclass
 
+> **During development, only run unit tests (`LCdrDataTests`).** UI tests (`LCdrDataUITests`)
+> require a running app and must be run manually — do not run them as part of automated or
+> routine development workflows.
+
 ```bash
-# Run ALL tests
-xcodebuild test -workspace "LCDR Data.xcworkspace" -scheme "LCDR Data" -destination 'platform=macOS'
-
-# Run unit tests only
-xcodebuild test -workspace "LCDR Data.xcworkspace" -scheme "LCDR Data" -destination 'platform=macOS' \
-  -only-testing:"LCDR DataTests"
-
-# Run UI tests only
-xcodebuild test -workspace "LCDR Data.xcworkspace" -scheme "LCDR Data" -destination 'platform=macOS' \
-  -only-testing:"LCDR DataUITests"
+# Run unit tests only (use this during development)
+tuist test "LCdrData" --skip-ui-tests
 
 # Run a SINGLE unit test (Swift Testing: TargetName/StructName/functionName)
-xcodebuild test -workspace "LCDR Data.xcworkspace" -scheme "LCDR Data" -destination 'platform=macOS' \
-  -only-testing:"LCDR DataTests/LCDR_DataTests/example"
+tuist test "LCdrData" --test-targets "LCdrDataTests/LCdrDataTests/example"
+```
+
+Alternatively, via `xcodebuild` directly:
+
+```bash
+# Run unit tests only (use this during development)
+xcodebuild test -workspace "LCdrData.xcworkspace" -scheme "LCdrData" -destination 'platform=macOS' \
+  -only-testing:"LCdrDataTests"
+
+# Run UI tests only (manual only — do not run during development)
+xcodebuild test -workspace "LCdrData.xcworkspace" -scheme "LCdrData" -destination 'platform=macOS' \
+  -only-testing:"LCdrDataUITests"
+
+# Run a SINGLE unit test (Swift Testing: TargetName/StructName/functionName)
+xcodebuild test -workspace "LCdrData.xcworkspace" -scheme "LCdrData" -destination 'platform=macOS' \
+  -only-testing:"LCdrDataTests/LCdrDataTests/example"
 
 # Run a SINGLE UI test (XCTest: TargetName/ClassName/testMethodName)
-xcodebuild test -workspace "LCDR Data.xcworkspace" -scheme "LCDR Data" -destination 'platform=macOS' \
-  -only-testing:"LCDR DataUITests/LCDR_DataUITests/testExample"
+xcodebuild test -workspace "LCdrData.xcworkspace" -scheme "LCdrData" -destination 'platform=macOS' \
+  -only-testing:"LCdrDataUITests/LCdrDataUITests/testExample"
 ```
 
 ## Lint / Format
@@ -104,13 +115,13 @@ If added later, update this section.
 ## Project Structure
 
 ```
-LCDR Data/
+LCdrData/
 ├── Tuist.swift                 # Tuist project configuration
 ├── Project.swift               # Project manifest (targets, settings, deps)
 ├── Tuist/
 │   └── Package.swift           # SPM dependency declarations
 ├── .tuist-version              # Pinned Tuist version (4.182.0)
-├── LCDR Data/                  # Main app target
+├── LCdrData/                   # Main app target
 │   ├── App/                    # App entry point and delegate
 │   ├── Assets.xcassets/        # Asset catalog (colors, app icon)
 │   ├── Models/                 # Data models
@@ -118,8 +129,8 @@ LCDR Data/
 │   ├── Utilities/              # Formatters, keyboard shortcuts
 │   ├── ViewModels/             # Observable state objects
 │   └── Views/                  # SwiftUI views
-├── LCDR DataTests/             # Unit tests (Swift Testing)
-├── LCDR DataUITests/           # UI tests (XCTest)
+├── LCdrDataTests/              # Unit tests (Swift Testing)
+├── LCdrDataUITests/            # UI tests (XCTest)
 ├── Derived/                    # Tuist-generated files (gitignored)
 ├── AGENTS.md
 └── DESIGN.md
@@ -145,7 +156,7 @@ Every Swift file must begin with the standard Xcode file header:
 ```swift
 //
 //  FileName.swift
-//  LCDR Data
+//  LCdrData
 //
 //  Created by Author Name on Date.
 //
@@ -158,7 +169,7 @@ Every Swift file must begin with the standard Xcode file header:
 - `@testable import` on the line directly after framework imports in test files
 ```swift
 import Testing
-@testable import LCDR_Data
+@testable import LCdrData
 ```
 
 ### Naming Conventions
@@ -221,7 +232,7 @@ Image(systemName: "globe")
 **Unit tests (Swift Testing):**
 ```swift
 import Testing
-@testable import LCDR_Data
+@testable import LCdrData
 
 struct SomeFeatureTests {
     @Test func descriptiveName() async throws {
@@ -262,6 +273,7 @@ Declared in `Tuist/Package.swift` and resolved by `tuist install`.
 
 ### App Sandbox
 
-The app has App Sandbox enabled with read-only user-selected file access.
-Keep this in mind when working with file system APIs — only files explicitly
-selected by the user (via open panels) are accessible.
+The app has App Sandbox enabled with read-write user-selected file access
+and app-scope bookmarks. Files explicitly selected by the user (via open panels)
+are accessible for both reading and writing, and bookmarked folders persist
+across launches.

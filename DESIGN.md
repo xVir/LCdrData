@@ -1,8 +1,8 @@
-# LCDR Data — Design Document
+# LCdrData — Design Document
 
 ## Overview
 
-LCDR Data is a native macOS dual-panel file manager inspired by orthodox file managers
+LCdrData is a native macOS dual-panel file manager inspired by orthodox file managers
 (Total Commander, ForkLift, Midnight Commander). It is built entirely with Swift and
 SwiftUI, targeting macOS 26.4+. The name "LCDR" stands for "Lieutenant Commander" — a nod
 to the tradition of naming file managers with military/naval ranks (Commander, Captain, etc.)
@@ -44,12 +44,12 @@ two side-by-side directory panels, a command bar, and rich file operations.
 
 ### Target Module Layout
 
-All source code lives in the `LCDR Data/` app target. Organize by feature/layer:
+All source code lives in the `LCdrData/` app target. Organize by feature/layer:
 
 ```
-LCDR Data/
+LCdrData/
 ├── App/
-│   └── LCDR_DataApp.swift              # @main entry point, window/scene setup
+│   └── LCdrDataApp.swift               # @main entry point, window/scene setup
 ├── Models/
 │   ├── FileItem.swift                  # Single file/directory representation
 │   ├── PanelState.swift                # State of one file panel
@@ -249,7 +249,7 @@ language with node-based semantics. KDL is parsed via the
 [kdl-swift](https://github.com/danini-the-panini/kdl-swift) library (Swift Package Manager).
 
 The configuration file lives at:
-`~/Library/Application Support/com.xvir.LCDR-Data/config.kdl`
+`~/Library/Application Support/com.xvir.LCdrData/config.kdl`
 
 Example configuration:
 
@@ -442,7 +442,7 @@ Added via Swift Package Manager in Xcode (File > Add Package Dependencies).
 
 ## Sandbox and Entitlements
 
-Required entitlements (`LCDR_Data.entitlements`):
+Required entitlements (`LCdrData.entitlements`):
 
 ```xml
 <key>com.apple.security.app-sandbox</key>          <true/>
@@ -450,9 +450,9 @@ Required entitlements (`LCDR_Data.entitlements`):
 <key>com.apple.security.files.bookmarks.app-scope</key>       <true/>
 ```
 
-Note: the current project has `read-only` user-selected file access. This must be
-upgraded to `read-write` to support copy, move, rename, and delete operations.
-App-scope bookmarks are needed to remember user-granted folder access across launches.
+The project has `read-write` user-selected file access and app-scope bookmarks,
+enabling copy, move, rename, and delete operations. Bookmarked folders persist
+across launches.
 
 ## Implementation Phases
 

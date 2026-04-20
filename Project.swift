@@ -13,7 +13,8 @@ let appSettings: SettingsDictionary = sharedSettings.merging([
     "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
     "ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME": "AccentColor",
     "ENABLE_APP_SANDBOX": "YES",
-    "ENABLE_USER_SELECTED_FILES": "readonly",
+    "ENABLE_USER_SELECTED_FILES": "readwrite",
+    "ENABLE_APP_SANDBOXED_FILES_BOOKMARKS_APP_SCOPE": "YES",
     "ENABLE_PREVIEWS": "YES",
     "REGISTER_APP_GROUPS": "YES",
     "STRING_CATALOG_GENERATE_SYMBOLS": "YES",
@@ -26,7 +27,7 @@ let testSettings: SettingsDictionary = sharedSettings.merging([
 // MARK: - Project
 
 let project = Project(
-    name: "LCDR Data",
+    name: "LCdrData",
     settings: .settings(
         configurations: [
             .debug(name: .debug),
@@ -36,14 +37,14 @@ let project = Project(
     targets: [
         // MARK: App Target
         .target(
-            name: "LCDR Data",
+            name: "LCdrData",
             destinations: [.mac],
             product: .app,
-            productName: "LCDR_Data",
-            bundleId: "com.xvir.LCDR-Data",
+            productName: "LCdrData",
+            bundleId: "com.xvir.LCdrData",
             deploymentTargets: .macOS("26.4"),
-            sources: ["LCDR Data/**"],
-            resources: ["LCDR Data/Assets.xcassets"],
+            sources: ["LCdrData/**"],
+            resources: ["LCdrData/Assets.xcassets"],
             dependencies: [
                 .external(name: "KDL"),
             ],
@@ -59,15 +60,15 @@ let project = Project(
         ),
         // MARK: Unit Tests Target
         .target(
-            name: "LCDR DataTests",
+            name: "LCdrDataTests",
             destinations: [.mac],
             product: .unitTests,
-            productName: "LCDR_DataTests",
-            bundleId: "com.xvir.LCDR-DataTests",
+            productName: "LCdrDataTests",
+            bundleId: "com.xvir.LCdrDataTests",
             deploymentTargets: .macOS("26.4"),
-            sources: ["LCDR DataTests/**"],
+            sources: ["LCdrDataTests/**"],
             dependencies: [
-                .target(name: "LCDR Data"),
+                .target(name: "LCdrData"),
                 .external(name: "SwiftMocking"),
             ],
             settings: .settings(
@@ -76,15 +77,15 @@ let project = Project(
         ),
         // MARK: UI Tests Target
         .target(
-            name: "LCDR DataUITests",
+            name: "LCdrDataUITests",
             destinations: [.mac],
             product: .uiTests,
-            productName: "LCDR_DataUITests",
-            bundleId: "com.xvir.LCDR-DataUITests",
+            productName: "LCdrDataUITests",
+            bundleId: "com.xvir.LCdrDataUITests",
             deploymentTargets: .macOS("26.4"),
-            sources: ["LCDR DataUITests/**"],
+            sources: ["LCdrDataUITests/**"],
             dependencies: [
-                .target(name: "LCDR Data"),
+                .target(name: "LCdrData"),
             ],
             settings: .settings(
                 base: testSettings
