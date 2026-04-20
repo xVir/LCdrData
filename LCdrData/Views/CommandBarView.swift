@@ -9,8 +9,14 @@ import SwiftUI
 
 /// Bottom command bar with function-key labels reminiscent of classic orthodox
 /// file managers. Each button shows the key hint and action name.
-/// In Phase 1, buttons are visual placeholders; actual operations come in Phase 2.
+/// Wired to file operations via closures provided by the parent view.
 struct CommandBarView: View {
+
+    let hasSelection: Bool
+    let onCopy: () -> Void
+    let onMove: () -> Void
+    let onMkdir: () -> Void
+    let onDelete: () -> Void
 
     var body: some View {
         HStack(spacing: 0) {
@@ -29,16 +35,17 @@ struct CommandBarView: View {
         let key: String
         let label: String
         let isEnabled: Bool
+        let action: () -> Void
     }
 
     private var commands: [CommandDef] {
         [
-            CommandDef(key: "F3", label: "View", isEnabled: false),
-            CommandDef(key: "F4", label: "Edit", isEnabled: false),
-            CommandDef(key: "F5", label: "Copy", isEnabled: false),
-            CommandDef(key: "F6", label: "Move", isEnabled: false),
-            CommandDef(key: "F7", label: "Mkdir", isEnabled: false),
-            CommandDef(key: "F8", label: "Delete", isEnabled: false),
+            CommandDef(key: "F3", label: "View", isEnabled: false, action: {}),
+            CommandDef(key: "F4", label: "Edit", isEnabled: false, action: {}),
+            CommandDef(key: "F5", label: "Copy", isEnabled: hasSelection, action: onCopy),
+            CommandDef(key: "F6", label: "Move", isEnabled: hasSelection, action: onMove),
+            CommandDef(key: "F7", label: "Mkdir", isEnabled: true, action: onMkdir),
+            CommandDef(key: "F8", label: "Delete", isEnabled: hasSelection, action: onDelete),
         ]
     }
 
@@ -49,7 +56,7 @@ struct CommandBarView: View {
 
         var body: some View {
             Button {
-                // Actions will be wired in Phase 2
+                command.action()
             } label: {
                 HStack(spacing: 3) {
                     Text(command.key)
@@ -70,5 +77,11 @@ struct CommandBarView: View {
 }
 
 #Preview {
-    CommandBarView()
+    CommandBarView(
+        hasSelection: true,
+        onCopy: {},
+        onMove: {},
+        onMkdir: {},
+        onDelete: {}
+    )
 }

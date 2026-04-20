@@ -15,10 +15,12 @@ final class AppState {
     var leftPanel: PanelViewModel
     var rightPanel: PanelViewModel
     var activePanel: PanelSide
+    var fileOperations: FileOperationViewModel
 
     init(
         leftDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
-        rightDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+        rightDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
+        fileOperationService: FileOperationServiceProtocol = FileOperationService()
     ) {
         let sandboxAccess = SandboxAccessService()
         self.leftPanel = PanelViewModel(
@@ -32,6 +34,9 @@ final class AppState {
             sandboxAccessService: sandboxAccess
         )
         self.activePanel = .left
+        self.fileOperations = FileOperationViewModel(
+            operationService: fileOperationService
+        )
     }
 
     /// Returns the currently active panel view model.
