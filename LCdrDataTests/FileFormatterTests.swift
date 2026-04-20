@@ -70,7 +70,7 @@ struct FileFormatterTests {
 
     @Test func kindForParentDirectory() {
         let item = FileItem.parentEntry(for: URL(fileURLWithPath: "/tmp"))
-        #expect(FileFormatter.kind(for: item) == "Parent Directory")
+        #expect(FileFormatter.kind(for: item) == "Parent")
     }
 
     @Test func kindForSymlink() {
