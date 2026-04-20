@@ -1,10 +1,3 @@
-//
-//  SortDescriptor.swift
-//  LCdrData
-//
-//  Created by Dima Skachkov on 02.04.2026.
-//
-
 import Foundation
 
 /// Describes how a file panel's items are sorted.

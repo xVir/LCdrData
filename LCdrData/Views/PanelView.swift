@@ -1,10 +1,3 @@
-//
-//  PanelView.swift
-//  LCdrData
-//
-//  Created by Dima Skachkov on 02.04.2026.
-//
-
 import SwiftUI
 
 /// A single file panel containing a path bar, file table, and status bar.

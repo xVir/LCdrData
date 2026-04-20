@@ -1,10 +1,3 @@
-//
-//  FileOperation.swift
-//  LCdrData
-//
-//  Created by Dima Skachkov on 20.04.2026.
-//
-
 import Foundation
 
 /// Describes the kind of file operation being performed.

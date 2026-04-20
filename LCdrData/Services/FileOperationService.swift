@@ -1,10 +1,3 @@
-//
-//  FileOperationService.swift
-//  LCdrData
-//
-//  Created by Dima Skachkov on 20.04.2026.
-//
-
 import Foundation
 
 /// Describes the type of conflict encountered during a file operation.

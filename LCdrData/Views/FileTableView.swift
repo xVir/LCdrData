@@ -1,10 +1,3 @@
-//
-//  FileTableView.swift
-//  LCdrData
-//
-//  Created by Dima Skachkov on 02.04.2026.
-//
-
 import SwiftUI
 
 /// Displays the file listing as a sortable table with columns for

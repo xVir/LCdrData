@@ -1,10 +1,3 @@
-//
-//  FileOperationServiceTests.swift
-//  LCdrDataTests
-//
-//  Created by Dima Skachkov on 20.04.2026.
-//
-
 import Testing
 import Foundation
 @testable import LCdrData

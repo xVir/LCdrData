@@ -1,10 +1,3 @@
-//
-//  KeyboardShortcuts.swift
-//  LCdrData
-//
-//  Created by Dima Skachkov on 02.04.2026.
-//
-
 import SwiftUI
 
 /// Centralized keyboard shortcut definitions for the file manager.

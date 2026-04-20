@@ -1,10 +1,3 @@
-//
-//  FileItem.swift
-//  LCdrData
-//
-//  Created by Dima Skachkov on 02.04.2026.
-//
-
 import Foundation
 
 /// Represents a single file or directory entry in a panel's file listing.

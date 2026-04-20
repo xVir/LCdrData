@@ -1,10 +1,3 @@
-//
-//  AppState.swift
-//  LCdrData
-//
-//  Created by Dima Skachkov on 02.04.2026.
-//
-
 import Foundation
 import Observation
 

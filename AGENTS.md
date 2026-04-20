@@ -152,15 +152,8 @@ These settings mean:
 
 ### File Header
 
-Every Swift file must begin with the standard Xcode file header:
-```swift
-//
-//  FileName.swift
-//  LCdrData
-//
-//  Created by Author Name on Date.
-//
-```
+**Do not add Xcode file headers** (the `//  FileName.swift` / `//  LCdrData` / `//  Created by ...`
+comment block) to any Swift file. Files should start directly with `import` statements.
 
 ### Imports
 

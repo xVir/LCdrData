@@ -1,10 +1,3 @@
-//
-//  CommandBarView.swift
-//  LCdrData
-//
-//  Created by Dima Skachkov on 02.04.2026.
-//
-
 import SwiftUI
 
 /// Bottom command bar with function-key labels reminiscent of classic orthodox

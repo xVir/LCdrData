@@ -1,10 +1,3 @@
-//
-//  PathBarView.swift
-//  LCdrData
-//
-//  Created by Dima Skachkov on 02.04.2026.
-//
-
 import SwiftUI
 
 /// Displays the current directory path as clickable breadcrumb segments.

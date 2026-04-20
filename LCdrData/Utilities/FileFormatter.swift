@@ -1,10 +1,3 @@
-//
-//  FileFormatter.swift
-//  LCdrData
-//
-//  Created by Dima Skachkov on 02.04.2026.
-//
-
 import Foundation
 
 /// Formatting helpers for file sizes, dates, and other metadata displayed in panels.

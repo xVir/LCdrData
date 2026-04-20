@@ -1,10 +1,3 @@
-//
-//  StatusBarView.swift
-//  LCdrData
-//
-//  Created by Dima Skachkov on 02.04.2026.
-//
-
 import SwiftUI
 
 /// Per-panel status bar showing item count, selection count, and total size.

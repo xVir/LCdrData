@@ -1,10 +1,3 @@
-//
-//  FileOperationProgressView.swift
-//  LCdrData
-//
-//  Created by Dima Skachkov on 20.04.2026.
-//
-
 import SwiftUI
 
 /// Overlay view showing progress for long-running file operations (copy/move).

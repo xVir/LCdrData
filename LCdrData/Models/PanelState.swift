@@ -1,10 +1,3 @@
-//
-//  PanelState.swift
-//  LCdrData
-//
-//  Created by Dima Skachkov on 02.04.2026.
-//
-
 import Foundation
 
 /// The state of one file panel, including its current directory, items, selection, and sort.

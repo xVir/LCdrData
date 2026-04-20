@@ -1,10 +1,3 @@
-//
-//  FileSystemService.swift
-//  LCdrData
-//
-//  Created by Dima Skachkov on 02.04.2026.
-//
-
 import Foundation
 
 /// Protocol defining file system operations for directory listing and metadata.

@@ -1,10 +1,3 @@
-//
-//  LCdrDataUITestsLaunchTests.swift
-//  LCdrDataUITests
-//
-//  Created by Danil Skachkov on 4/2/26.
-//
-
 import XCTest
 
 final class LCdrDataUITestsLaunchTests: XCTestCase {

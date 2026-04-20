@@ -1,10 +1,3 @@
-//
-//  AppStateTests.swift
-//  LCdrDataTests
-//
-//  Created by Dima Skachkov on 02.04.2026.
-//
-
 import Testing
 import Foundation
 @testable import LCdrData
