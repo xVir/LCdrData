@@ -1,0 +1,78 @@
+{
+  "originHash" : "af7131c37de13b19ac08e793fc87af9d2bc84709660e736d162fd0e96a4ec0d5",
+  "pins" : [
+    {
+      "identity" : "bigdecimal",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/mgriebling/BigDecimal.git",
+      "state" : {
+        "revision" : "4414e0e82bb859cf5a2883f9401e7d7cb030f5b1",
+        "version" : "3.0.2"
+      }
+    },
+    {
+      "identity" : "bigint",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/mgriebling/BigInt.git",
+      "state" : {
+        "revision" : "f4c0c41dd681b2c3d770b9a83cb5e0e3e30ee708",
+        "version" : "2.3.0"
+      }
+    },
+    {
+      "identity" : "kdl-swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/danini-the-panini/kdl-swift",
+      "state" : {
+        "revision" : "ab851f823aceefc90e59c6c450294c3abaaf8721",
+        "version" : "2.0.0"
+      }
+    },
+    {
+      "identity" : "swift-mocking",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/DanielCardonaRojas/swift-mocking",
+      "state" : {
+        "revision" : "ac04188a1fa677713bda902922e76eb616e300e4",
+        "version" : "0.7.1"
+      }
+    },
+    {
+      "identity" : "swift-numerics",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-numerics",
+      "state" : {
+        "revision" : "0c0290ff6b24942dadb83a929ffaaa1481df04a2",
+        "version" : "1.1.1"
+      }
+    },
+    {
+      "identity" : "swift-syntax",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swiftlang/swift-syntax.git",
+      "state" : {
+        "revision" : "f99ae8aa18f0cf0d53481901f88a0991dc3bd4a2",
+        "version" : "601.0.1"
+      }
+    },
+    {
+      "identity" : "uint128",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/mgriebling/UInt128.git",
+      "state" : {
+        "revision" : "f32052e906fd125936fef2d16e3ad284d50d68ed",
+        "version" : "3.2.0"
+      }
+    },
+    {
+      "identity" : "xctest-dynamic-overlay",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pointfreeco/xctest-dynamic-overlay",
+      "state" : {
+        "revision" : "dfd70507def84cb5fb821278448a262c6ff2bbad",
+        "version" : "1.9.0"
+      }
+    }
+  ],
+  "version" : 3
+}

@@ -12,17 +12,61 @@ Bundle identifier: `com.xvir.LCDR-Data`.
 See **[DESIGN.md](DESIGN.md)** for the full design document — architecture, data models,
 feature list, keyboard shortcuts, implementation phases, and sandbox requirements.
 
+## Tuist
+
+The project uses **Tuist 4** to generate the Xcode project and workspace. The `.xcodeproj`
+and `.xcworkspace` are **not** checked into git — they are generated from the manifest files.
+
+### Tuist Version
+
+Pinned in `.tuist-version`: **4.182.0**
+
+### Manifest Files
+
+| File | Purpose |
+|------|---------|
+| `Tuist.swift` | Tuist project configuration (generation options) |
+| `Project.swift` | Project manifest — defines targets, settings, and dependencies |
+| `Tuist/Package.swift` | SPM dependency declarations (consumed by Tuist) |
+
+### Tuist Workflow
+
+After cloning or pulling changes, always run these two commands before opening the project:
+
+```bash
+# 1. Fetch/resolve SPM dependencies
+tuist install
+
+# 2. Generate the Xcode workspace
+tuist generate
+```
+
+`tuist generate` opens the workspace in Xcode by default. Use `--no-open` to suppress that.
+
+### Other Useful Tuist Commands
+
+```bash
+# Edit the manifest files in a temporary Xcode project (with autocompletion)
+tuist edit
+
+# Clean all Tuist-generated artifacts
+tuist clean
+
+# Dump the resolved project manifest as JSON (useful for debugging)
+tuist dump
+```
+
 ## Build Commands
 
 ```bash
-# Build (Debug)
-xcodebuild -project "LCDR Data.xcodeproj" -scheme "LCDR Data" -configuration Debug build
+# Build (Debug) — via workspace (after tuist generate)
+xcodebuild -workspace "LCDR Data.xcworkspace" -scheme "LCDR Data" -configuration Debug build
 
 # Build (Release)
-xcodebuild -project "LCDR Data.xcodeproj" -scheme "LCDR Data" -configuration Release build
+xcodebuild -workspace "LCDR Data.xcworkspace" -scheme "LCDR Data" -configuration Release build
 
 # Clean build
-xcodebuild -project "LCDR Data.xcodeproj" -scheme "LCDR Data" clean build
+xcodebuild -workspace "LCDR Data.xcworkspace" -scheme "LCDR Data" clean build
 ```
 
 ## Test Commands
@@ -33,22 +77,22 @@ The project uses two test frameworks:
 
 ```bash
 # Run ALL tests
-xcodebuild test -project "LCDR Data.xcodeproj" -scheme "LCDR Data" -destination 'platform=macOS'
+xcodebuild test -workspace "LCDR Data.xcworkspace" -scheme "LCDR Data" -destination 'platform=macOS'
 
 # Run unit tests only
-xcodebuild test -project "LCDR Data.xcodeproj" -scheme "LCDR Data" -destination 'platform=macOS' \
+xcodebuild test -workspace "LCDR Data.xcworkspace" -scheme "LCDR Data" -destination 'platform=macOS' \
   -only-testing:"LCDR DataTests"
 
 # Run UI tests only
-xcodebuild test -project "LCDR Data.xcodeproj" -scheme "LCDR Data" -destination 'platform=macOS' \
+xcodebuild test -workspace "LCDR Data.xcworkspace" -scheme "LCDR Data" -destination 'platform=macOS' \
   -only-testing:"LCDR DataUITests"
 
 # Run a SINGLE unit test (Swift Testing: TargetName/StructName/functionName)
-xcodebuild test -project "LCDR Data.xcodeproj" -scheme "LCDR Data" -destination 'platform=macOS' \
+xcodebuild test -workspace "LCDR Data.xcworkspace" -scheme "LCDR Data" -destination 'platform=macOS' \
   -only-testing:"LCDR DataTests/LCDR_DataTests/example"
 
 # Run a SINGLE UI test (XCTest: TargetName/ClassName/testMethodName)
-xcodebuild test -project "LCDR Data.xcodeproj" -scheme "LCDR Data" -destination 'platform=macOS' \
+xcodebuild test -workspace "LCDR Data.xcworkspace" -scheme "LCDR Data" -destination 'platform=macOS' \
   -only-testing:"LCDR DataUITests/LCDR_DataUITests/testExample"
 ```
 
@@ -61,17 +105,24 @@ If added later, update this section.
 
 ```
 LCDR Data/
-├── LCDR Data.xcodeproj/       # Xcode project configuration
+├── Tuist.swift                 # Tuist project configuration
+├── Project.swift               # Project manifest (targets, settings, deps)
+├── Tuist/
+│   └── Package.swift           # SPM dependency declarations
+├── .tuist-version              # Pinned Tuist version (4.182.0)
 ├── LCDR Data/                  # Main app target
+│   ├── App/                    # App entry point and delegate
 │   ├── Assets.xcassets/        # Asset catalog (colors, app icon)
-│   ├── LCDR_DataApp.swift      # @main App entry point
-│   └── ContentView.swift       # Root SwiftUI view
+│   ├── Models/                 # Data models
+│   ├── Services/               # File system and sandbox services
+│   ├── Utilities/              # Formatters, keyboard shortcuts
+│   ├── ViewModels/             # Observable state objects
+│   └── Views/                  # SwiftUI views
 ├── LCDR DataTests/             # Unit tests (Swift Testing)
-│   └── LCDR_DataTests.swift
 ├── LCDR DataUITests/           # UI tests (XCTest)
-│   ├── LCDR_DataUITests.swift
-│   └── LCDR_DataUITestsLaunchTests.swift
-└── AGENTS.md
+├── Derived/                    # Tuist-generated files (gitignored)
+├── AGENTS.md
+└── DESIGN.md
 ```
 
 ## Swift Concurrency Settings
@@ -207,6 +258,7 @@ final class SomeUITests: XCTestCase {
 | swift-mocking | https://github.com/DanielCardonaRojas/swift-mocking | Mock generation for unit tests |
 
 Dependencies are managed via Swift Package Manager in Xcode.
+Declared in `Tuist/Package.swift` and resolved by `tuist install`.
 
 ### App Sandbox
 
