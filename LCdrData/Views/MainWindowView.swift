@@ -59,6 +59,16 @@ struct MainWindowView: View {
             // Set initial keyboard focus to the left panel
             focusedPanel = .left
         }
+        // Refresh both panels when the app regains focus so that
+        // external file system changes (files created in Terminal, etc.)
+        // are reflected immediately.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task {
+                async let left: Void = appState.leftPanel.reloadKeepingSelection()
+                async let right: Void = appState.rightPanel.reloadKeepingSelection()
+                _ = await (left, right)
+            }
+        }
         // Sync focus state -> app state
         .onChange(of: focusedPanel) { _, newValue in
             if let newValue {

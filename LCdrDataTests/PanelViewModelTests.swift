@@ -28,6 +28,27 @@ nonisolated final class MockFileSystemService: FileSystemServiceProtocol, Sendab
     }
 }
 
+/// A mutable mock whose items can be changed between calls to simulate
+/// external file system changes (e.g. files created while the app was
+/// in the background).
+nonisolated final class MutableMockFileSystemService: FileSystemServiceProtocol, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _items: [FileItem]
+
+    nonisolated init(items: [FileItem] = []) {
+        self._items = items
+    }
+
+    var items: [FileItem] {
+        get { lock.withLock { _items } }
+        set { lock.withLock { _items = newValue } }
+    }
+
+    func listDirectory(at url: URL, showHidden: Bool) async throws -> [FileItem] {
+        return items
+    }
+}
+
 // MARK: - Tests
 
 @MainActor
@@ -411,5 +432,147 @@ struct PanelViewModelTests {
         #expect(firstItem != nil)
         #expect(firstItem?.isParentDirectory == true)
         #expect(vm.state.focusedItemID == firstItem?.id)
+    }
+
+    // MARK: - Reload Keeping Selection
+
+    @Test func reloadKeepingSelectionPreservesSelectedItem() async {
+        // Arrange — load directory, then select a specific file
+        let initialItems = [
+            FileItem(
+                url: URL(fileURLWithPath: "/tmp/alpha"),
+                name: "alpha",
+                isDirectory: true
+            ),
+            FileItem(
+                url: URL(fileURLWithPath: "/tmp/beta.txt"),
+                name: "beta.txt",
+                isDirectory: false,
+                size: 100
+            ),
+        ]
+        let service = MutableMockFileSystemService(items: initialItems)
+        let vm = PanelViewModel(
+            side: .left,
+            initialDirectory: URL(fileURLWithPath: "/tmp"),
+            fileSystemService: service
+        )
+        await vm.loadDirectory()
+
+        // Select beta.txt
+        let betaItem = vm.state.items.first { $0.name == "beta.txt" }!
+        vm.state.selectedItemIDs = [betaItem.id]
+        vm.state.focusedItemID = betaItem.id
+
+        // Simulate external change: a new file appears
+        service.items = initialItems + [
+            FileItem(
+                url: URL(fileURLWithPath: "/tmp/new_file.txt"),
+                name: "new_file.txt",
+                isDirectory: false,
+                size: 200
+            ),
+        ]
+
+        // Act — reload keeping selection
+        await vm.reloadKeepingSelection()
+
+        // Assert — beta.txt should still be selected and focused
+        // (items have new UUIDs, so the match is by URL)
+        let newBeta = vm.state.items.first { $0.name == "beta.txt" }
+        #expect(newBeta != nil)
+        #expect(vm.state.selectedItemIDs == [newBeta!.id])
+        #expect(vm.state.focusedItemID == newBeta!.id)
+        // New file should be in the list
+        #expect(vm.state.items.contains { $0.name == "new_file.txt" })
+    }
+
+    @Test func reloadKeepingSelectionPreservesMultipleSelections() async {
+        // Arrange
+        let items = [
+            FileItem(
+                url: URL(fileURLWithPath: "/tmp/a.txt"),
+                name: "a.txt",
+                isDirectory: false,
+                size: 10
+            ),
+            FileItem(
+                url: URL(fileURLWithPath: "/tmp/b.txt"),
+                name: "b.txt",
+                isDirectory: false,
+                size: 20
+            ),
+            FileItem(
+                url: URL(fileURLWithPath: "/tmp/c.txt"),
+                name: "c.txt",
+                isDirectory: false,
+                size: 30
+            ),
+        ]
+        let service = MutableMockFileSystemService(items: items)
+        let vm = PanelViewModel(
+            side: .left,
+            initialDirectory: URL(fileURLWithPath: "/tmp"),
+            fileSystemService: service
+        )
+        await vm.loadDirectory()
+
+        // Select a.txt and c.txt, focus on c.txt
+        let aItem = vm.state.items.first { $0.name == "a.txt" }!
+        let cItem = vm.state.items.first { $0.name == "c.txt" }!
+        vm.state.selectedItemIDs = [aItem.id, cItem.id]
+        vm.state.focusedItemID = cItem.id
+
+        // Act
+        await vm.reloadKeepingSelection()
+
+        // Assert — both items restored, focus on c.txt
+        let newA = vm.state.items.first { $0.name == "a.txt" }!
+        let newC = vm.state.items.first { $0.name == "c.txt" }!
+        #expect(vm.state.selectedItemIDs == [newA.id, newC.id])
+        #expect(vm.state.focusedItemID == newC.id)
+    }
+
+    @Test func reloadKeepingSelectionFallsBackWhenItemDeleted() async {
+        // Arrange — select a file, then it gets deleted externally
+        let items = [
+            FileItem(
+                url: URL(fileURLWithPath: "/tmp/keep.txt"),
+                name: "keep.txt",
+                isDirectory: false,
+                size: 10
+            ),
+            FileItem(
+                url: URL(fileURLWithPath: "/tmp/gone.txt"),
+                name: "gone.txt",
+                isDirectory: false,
+                size: 20
+            ),
+        ]
+        let service = MutableMockFileSystemService(items: items)
+        let vm = PanelViewModel(
+            side: .left,
+            initialDirectory: URL(fileURLWithPath: "/tmp"),
+            fileSystemService: service
+        )
+        await vm.loadDirectory()
+
+        // Select gone.txt
+        let goneItem = vm.state.items.first { $0.name == "gone.txt" }!
+        vm.state.selectedItemIDs = [goneItem.id]
+        vm.state.focusedItemID = goneItem.id
+
+        // Simulate deletion
+        service.items = [items[0]]
+
+        // Act
+        await vm.reloadKeepingSelection()
+
+        // Assert — selection falls back to the first item (".." entry)
+        let firstItem = vm.state.items.first
+        #expect(firstItem != nil)
+        #expect(firstItem?.isParentDirectory == true)
+        #expect(vm.state.focusedItemID == firstItem?.id)
+        #expect(vm.state.selectedItemIDs == [firstItem!.id])
     }
 }

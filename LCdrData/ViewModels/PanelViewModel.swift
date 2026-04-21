@@ -98,6 +98,76 @@ final class PanelViewModel {
         isLoading = false
     }
 
+    /// Reloads the current directory while preserving the user's selection.
+    /// Used for background refreshes (e.g. when the app regains focus) where
+    /// the selection should not jump to the first item.
+    func reloadKeepingSelection() async {
+        // Snapshot the currently selected and focused item URLs so we can
+        // restore them after the listing is refreshed (items get new UUIDs).
+        let previousSelectedURLs = Set(
+            state.items
+                .filter { state.selectedItemIDs.contains($0.id) }
+                .map { $0.url.standardizedFileURL.path }
+        )
+        let previousFocusedURL = state.items
+            .first { $0.id == state.focusedItemID }
+            .map { $0.url.standardizedFileURL.path }
+
+        isLoading = true
+        errorMessage = nil
+        isPermissionError = false
+
+        do {
+            let items = try await fileSystemService.listDirectory(
+                at: state.currentDirectory,
+                showHidden: state.showHiddenFiles
+            )
+
+            let sorted = sortItems(items)
+
+            var displayItems: [FileItem] = []
+            if state.currentDirectory.path != "/" {
+                displayItems.append(FileItem.parentEntry(for: state.currentDirectory))
+            }
+            displayItems.append(contentsOf: sorted)
+
+            state.items = displayItems
+
+            // Restore selection by matching URLs from the previous listing.
+            let restoredSelection = Set(
+                displayItems
+                    .filter { previousSelectedURLs.contains($0.url.standardizedFileURL.path) }
+                    .map(\.id)
+            )
+
+            if restoredSelection.isEmpty {
+                // Previous selection no longer exists — fall back to first item.
+                if let firstID = displayItems.first?.id {
+                    state.selectedItemIDs = [firstID]
+                } else {
+                    state.selectedItemIDs = []
+                }
+                state.focusedItemID = displayItems.first?.id
+            } else {
+                state.selectedItemIDs = restoredSelection
+
+                // Restore focused item, or fall back to first selected item.
+                let restoredFocus = displayItems.first {
+                    $0.url.standardizedFileURL.path == previousFocusedURL
+                }?.id
+                state.focusedItemID = restoredFocus ?? restoredSelection.first
+            }
+        } catch {
+            isPermissionError = SandboxAccessService.isPermissionError(error)
+            errorMessage = isPermissionError
+                ? "The app doesn't have permission to access this folder."
+                : error.localizedDescription
+            state.items = []
+        }
+
+        isLoading = false
+    }
+
     /// Presents an open panel so the user can grant sandbox access to the
     /// current directory, then reloads if access was granted.
     func requestAccessAndReload() async {
