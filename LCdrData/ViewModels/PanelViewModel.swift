@@ -41,6 +41,11 @@ final class PanelViewModel {
 
     // MARK: - Directory Loading
 
+    /// URL of a child directory to focus after the next directory load.
+    /// Set before navigating to a parent so the cursor lands on the folder
+    /// the user just left instead of resetting to the first item.
+    private var pendingFocusChildURL: URL?
+
     /// Loads the contents of the current directory.
     func loadDirectory() async {
         isLoading = true
@@ -63,14 +68,25 @@ final class PanelViewModel {
             displayItems.append(contentsOf: sorted)
 
             state.items = displayItems
-            // Select the first item so the List retains keyboard focus
-            // for arrow-key navigation and key press handlers.
-            if let firstID = displayItems.first?.id {
-                state.selectedItemIDs = [firstID]
+
+            // If we're returning from a child directory, focus that folder;
+            // otherwise default to the first item.
+            let targetID: UUID? = if let childURL = pendingFocusChildURL {
+                displayItems.first(where: {
+                    !$0.isParentDirectory && $0.isDirectory
+                        && $0.url.standardizedFileURL.path == childURL.standardizedFileURL.path
+                })?.id ?? displayItems.first?.id
+            } else {
+                displayItems.first?.id
+            }
+            pendingFocusChildURL = nil
+
+            if let targetID {
+                state.selectedItemIDs = [targetID]
             } else {
                 state.selectedItemIDs = []
             }
-            state.focusedItemID = displayItems.first?.id
+            state.focusedItemID = targetID
         } catch {
             isPermissionError = SandboxAccessService.isPermissionError(error)
             errorMessage = isPermissionError
@@ -100,6 +116,13 @@ final class PanelViewModel {
 
     /// Navigates into a directory, pushing to history.
     func navigate(to url: URL) async {
+        // When navigating to the parent of the current directory, remember
+        // the child so `loadDirectory()` can focus it after loading.
+        let currentDir = state.currentDirectory
+        if url.standardizedFileURL.path == currentDir.deletingLastPathComponent().standardizedFileURL.path {
+            pendingFocusChildURL = currentDir
+        }
+
         // Truncate forward history if we navigated back previously
         if state.historyIndex < state.history.count - 1 {
             state.history = Array(state.history.prefix(state.historyIndex + 1))
@@ -113,6 +136,8 @@ final class PanelViewModel {
     }
 
     /// Navigate to the parent directory.
+    /// After loading the parent listing, the cursor will land on the folder
+    /// we just left so the user can easily re-enter it.
     func navigateToParent() async {
         let parent = state.currentDirectory.deletingLastPathComponent()
         guard parent != state.currentDirectory else { return }
