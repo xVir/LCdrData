@@ -76,7 +76,12 @@ struct AppStateTests {
         // Arrange & Act
         let left = URL(fileURLWithPath: "/Users/test/Documents")
         let right = URL(fileURLWithPath: "/Users/test/Downloads")
-        let state = AppState(leftDirectory: left, rightDirectory: right)
+        let store = MockPanelPathStore(restoreResult: nil)
+        let state = AppState(
+            leftDirectory: left,
+            rightDirectory: right,
+            panelPathStore: store
+        )
 
         // Assert
         #expect(state.leftPanel.state.currentDirectory == left)

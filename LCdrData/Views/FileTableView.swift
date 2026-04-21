@@ -40,6 +40,20 @@ struct FileTableView: View {
                         proxy.scrollTo(newID)
                     }
                 }
+                // Track the user's cursor position: when arrow-key navigation
+                // or a click changes the selection to a single item, update
+                // focusedItemID so it always reflects the current position.
+                // When clicking empty space clears the selection, restore it
+                // from focusedItemID so the cursor never disappears.
+                .onChange(of: viewModel.state.selectedItemIDs) { _, newValue in
+                    if newValue.isEmpty {
+                        if let focusedID = viewModel.state.focusedItemID {
+                            viewModel.state.selectedItemIDs = [focusedID]
+                        }
+                    } else if newValue.count == 1 {
+                        viewModel.state.focusedItemID = newValue.first
+                    }
+                }
             }
         }
     }
