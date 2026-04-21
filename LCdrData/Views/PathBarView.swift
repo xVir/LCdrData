@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Displays the current directory path as clickable breadcrumb segments.
@@ -7,6 +8,7 @@ struct PathBarView: View {
     @Bindable var viewModel: PanelViewModel
     @State private var isEditing: Bool = false
     @State private var editedPath: String = ""
+    @State private var showCopyConfirmation: Bool = false
 
     var body: some View {
         HStack(spacing: 2) {
@@ -14,6 +16,10 @@ struct PathBarView: View {
                 pathTextField
             } else {
                 breadcrumbs
+
+                Spacer(minLength: 4)
+
+                copyPathButton
             }
         }
         .padding(.horizontal, 8)
@@ -46,6 +52,34 @@ struct PathBarView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Copy Path Button
+
+    private var copyPathButton: some View {
+        Button {
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.setString(viewModel.state.currentDirectory.path, forType: .string)
+
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showCopyConfirmation = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    showCopyConfirmation = false
+                }
+            }
+        } label: {
+            Image(systemName: showCopyConfirmation ? "checkmark" : "doc.on.doc")
+                .font(.caption)
+                .foregroundStyle(showCopyConfirmation ? .green : .secondary)
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(.plain)
+        .help("Copy path to clipboard")
     }
 
     // MARK: - Editable Path
