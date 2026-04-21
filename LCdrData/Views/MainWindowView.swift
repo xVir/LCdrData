@@ -123,10 +123,10 @@ struct MainWindowView: View {
             Button("Confirm") {
                 ops.confirmOperation(
                     reloadSource: { [weak appState] in
-                        await appState?.activePanelViewModel.loadDirectory()
+                        await appState?.activePanelViewModel.reloadKeepingSelection()
                     },
                     reloadDestination: { [weak appState] in
-                        await appState?.inactivePanelViewModel.loadDirectory()
+                        await appState?.inactivePanelViewModel.reloadKeepingSelection()
                     }
                 )
             }
@@ -156,7 +156,8 @@ struct MainWindowView: View {
                     await ops.performCreateFolder(
                         in: appState.activePanelViewModel.state.currentDirectory
                     )
-                    await appState.activePanelViewModel.loadDirectory()
+                    await appState.activePanelViewModel.reloadKeepingSelection()
+                    await appState.inactivePanelViewModel.reloadKeepingSelection()
                 }
             }
             .keyboardShortcut(.defaultAction)
@@ -171,7 +172,8 @@ struct MainWindowView: View {
             Button("Rename") {
                 Task {
                     await ops.performRename()
-                    await appState.activePanelViewModel.loadDirectory()
+                    await appState.activePanelViewModel.reloadKeepingSelection()
+                    await appState.inactivePanelViewModel.reloadKeepingSelection()
                 }
             }
             .keyboardShortcut(.defaultAction)

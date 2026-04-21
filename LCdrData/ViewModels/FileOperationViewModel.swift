@@ -226,6 +226,7 @@ final class FileOperationViewModel {
             await executeCopy(
                 sources: sources,
                 destination: destination,
+                reloadSource: reloadSource,
                 reloadDestination: reloadDestination
             )
 
@@ -240,25 +241,29 @@ final class FileOperationViewModel {
         case .delete(let items):
             await executeDelete(
                 items: items,
-                reloadSource: reloadSource
+                reloadSource: reloadSource,
+                reloadDestination: reloadDestination
             )
 
         case .createFolder(let directory, let name):
             newFolderName = name
             await performCreateFolder(in: directory)
             await reloadSource()
+            await reloadDestination()
 
         case .rename(let item, let newName):
             renameName = newName
             renameItem = FileItem(url: item, name: item.lastPathComponent, isDirectory: false)
             await performRename()
             await reloadSource()
+            await reloadDestination()
         }
     }
 
     private func executeCopy(
         sources: [URL],
         destination: URL,
+        reloadSource: @escaping () async -> Void,
         reloadDestination: @escaping () async -> Void
     ) async {
         let operationID = UUID()
@@ -296,6 +301,7 @@ final class FileOperationViewModel {
         }
 
         showProgressOverlay = false
+        await reloadSource()
         await reloadDestination()
 
         // Clean up completed operations after a short delay
@@ -351,7 +357,8 @@ final class FileOperationViewModel {
 
     private func executeDelete(
         items: [URL],
-        reloadSource: @escaping () async -> Void
+        reloadSource: @escaping () async -> Void,
+        reloadDestination: @escaping () async -> Void
     ) async {
         let operationID = UUID()
         let operation = FileOperation(
@@ -372,6 +379,7 @@ final class FileOperationViewModel {
         }
 
         await reloadSource()
+        await reloadDestination()
 
         cleanUpCompletedOperations(operationID: operationID)
     }
