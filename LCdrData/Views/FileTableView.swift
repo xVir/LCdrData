@@ -16,21 +16,29 @@ struct FileTableView: View {
             Divider()
 
             // File listing
-            List(selection: Binding(
-                get: { viewModel.state.selectedItemIDs },
-                set: { viewModel.state.selectedItemIDs = $0 }
-            )) {
-                ForEach(viewModel.state.items) { item in
-                    FileRowView(item: item, viewModel: viewModel)
-                        .tag(item.id)
-                        .listRowInsets(EdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8))
+            ScrollViewReader { proxy in
+                List(selection: Binding(
+                    get: { viewModel.state.selectedItemIDs },
+                    set: { viewModel.state.selectedItemIDs = $0 }
+                )) {
+                    ForEach(viewModel.state.items) { item in
+                        FileRowView(item: item, viewModel: viewModel)
+                            .tag(item.id)
+                            .id(item.id)
+                            .listRowInsets(EdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8))
+                    }
                 }
-            }
-            .listStyle(.plain)
-            .environment(\.defaultMinListRowHeight, 24)
-            .onDeleteCommand {
-                Task {
-                    await viewModel.navigateToParent()
+                .listStyle(.plain)
+                .environment(\.defaultMinListRowHeight, 24)
+                .onDeleteCommand {
+                    Task {
+                        await viewModel.navigateToParent()
+                    }
+                }
+                .onChange(of: viewModel.state.focusedItemID) { _, newID in
+                    if let newID {
+                        proxy.scrollTo(newID)
+                    }
                 }
             }
         }

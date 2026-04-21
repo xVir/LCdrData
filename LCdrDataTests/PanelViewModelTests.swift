@@ -478,7 +478,7 @@ struct PanelViewModelTests {
         await vm.reloadKeepingSelection()
 
         // Assert — beta.txt should still be selected and focused
-        // (items have new UUIDs, so the match is by URL)
+        // (IDs are deterministic from URL, so the same file keeps the same ID)
         let newBeta = vm.state.items.first { $0.name == "beta.txt" }
         #expect(newBeta != nil)
         #expect(vm.state.selectedItemIDs == [newBeta!.id])
@@ -533,8 +533,9 @@ struct PanelViewModelTests {
         #expect(vm.state.focusedItemID == newC.id)
     }
 
-    @Test func reloadKeepingSelectionFallsBackWhenItemDeleted() async {
-        // Arrange — select a file, then it gets deleted externally
+    @Test func reloadKeepingSelectionFallsBackToSamePositionWhenLastItemDeleted() async {
+        // Arrange — select the last file, then it gets deleted.
+        // Cursor should move to the new last item.
         let items = [
             FileItem(
                 url: URL(fileURLWithPath: "/tmp/keep.txt"),
@@ -556,8 +557,9 @@ struct PanelViewModelTests {
             fileSystemService: service
         )
         await vm.loadDirectory()
+        // Items after load: ["..", "keep.txt", "gone.txt"]  (sorted by name)
 
-        // Select gone.txt
+        // Select gone.txt (last item, index 2)
         let goneItem = vm.state.items.first { $0.name == "gone.txt" }!
         vm.state.selectedItemIDs = [goneItem.id]
         vm.state.focusedItemID = goneItem.id
@@ -568,11 +570,232 @@ struct PanelViewModelTests {
         // Act
         await vm.reloadKeepingSelection()
 
-        // Assert — selection falls back to the first item (".." entry)
-        let firstItem = vm.state.items.first
-        #expect(firstItem != nil)
-        #expect(firstItem?.isParentDirectory == true)
-        #expect(vm.state.focusedItemID == firstItem?.id)
-        #expect(vm.state.selectedItemIDs == [firstItem!.id])
+        // Assert — cursor clamps to new last item: "keep.txt"
+        let keepItem = vm.state.items.first { $0.name == "keep.txt" }
+        #expect(keepItem != nil)
+        #expect(vm.state.focusedItemID == keepItem?.id)
+        #expect(vm.state.selectedItemIDs == [keepItem!.id])
+    }
+
+    @Test func reloadKeepingSelectionFallsBackToSamePositionWhenMiddleItemDeleted() async {
+        // Arrange — select a middle file, then it gets deleted.
+        // Cursor should stay at the same index (the next file slides in).
+        let items = [
+            FileItem(
+                url: URL(fileURLWithPath: "/tmp/a.txt"),
+                name: "a.txt",
+                isDirectory: false,
+                size: 10
+            ),
+            FileItem(
+                url: URL(fileURLWithPath: "/tmp/b.txt"),
+                name: "b.txt",
+                isDirectory: false,
+                size: 20
+            ),
+            FileItem(
+                url: URL(fileURLWithPath: "/tmp/c.txt"),
+                name: "c.txt",
+                isDirectory: false,
+                size: 30
+            ),
+        ]
+        let service = MutableMockFileSystemService(items: items)
+        let vm = PanelViewModel(
+            side: .left,
+            initialDirectory: URL(fileURLWithPath: "/tmp"),
+            fileSystemService: service
+        )
+        await vm.loadDirectory()
+        // Items after load: ["..", "a.txt", "b.txt", "c.txt"]
+
+        // Select b.txt (index 2)
+        let bItem = vm.state.items.first { $0.name == "b.txt" }!
+        vm.state.selectedItemIDs = [bItem.id]
+        vm.state.focusedItemID = bItem.id
+
+        // Simulate deletion of b.txt
+        service.items = [items[0], items[2]]
+
+        // Act
+        await vm.reloadKeepingSelection()
+        // Items after reload: ["..", "a.txt", "c.txt"]
+
+        // Assert — cursor stays at index 2, which is now "c.txt"
+        let cItem = vm.state.items.first { $0.name == "c.txt" }
+        #expect(cItem != nil)
+        #expect(vm.state.focusedItemID == cItem?.id)
+        #expect(vm.state.selectedItemIDs == [cItem!.id])
+    }
+
+    @Test func reloadKeepingSelectionFallsBackToSamePositionWhenFirstNonParentItemDeleted() async {
+        // Arrange — select the first real file (right after ".."), then delete it.
+        // Cursor should stay at the same index (the next file slides in).
+        let items = [
+            FileItem(
+                url: URL(fileURLWithPath: "/tmp/a.txt"),
+                name: "a.txt",
+                isDirectory: false,
+                size: 10
+            ),
+            FileItem(
+                url: URL(fileURLWithPath: "/tmp/b.txt"),
+                name: "b.txt",
+                isDirectory: false,
+                size: 20
+            ),
+        ]
+        let service = MutableMockFileSystemService(items: items)
+        let vm = PanelViewModel(
+            side: .left,
+            initialDirectory: URL(fileURLWithPath: "/tmp"),
+            fileSystemService: service
+        )
+        await vm.loadDirectory()
+        // Items after load: ["..", "a.txt", "b.txt"]
+
+        // Select a.txt (index 1)
+        let aItem = vm.state.items.first { $0.name == "a.txt" }!
+        vm.state.selectedItemIDs = [aItem.id]
+        vm.state.focusedItemID = aItem.id
+
+        // Simulate deletion of a.txt
+        service.items = [items[1]]
+
+        // Act
+        await vm.reloadKeepingSelection()
+        // Items after reload: ["..", "b.txt"]
+
+        // Assert — cursor stays at index 1, which is now "b.txt"
+        let bItem = vm.state.items.first { $0.name == "b.txt" }
+        #expect(bItem != nil)
+        #expect(vm.state.focusedItemID == bItem?.id)
+        #expect(vm.state.selectedItemIDs == [bItem!.id])
+    }
+
+    // MARK: - prepareForDeletion + reload
+
+    @Test func prepareForDeletionThenReloadFocusesNextItem() async {
+        // Arrange: ["..", "a.txt", "b.txt", "c.txt"]  — delete b.txt
+        let items = [
+            FileItem(url: URL(fileURLWithPath: "/tmp/a.txt"), name: "a.txt", isDirectory: false, size: 10),
+            FileItem(url: URL(fileURLWithPath: "/tmp/b.txt"), name: "b.txt", isDirectory: false, size: 20),
+            FileItem(url: URL(fileURLWithPath: "/tmp/c.txt"), name: "c.txt", isDirectory: false, size: 30),
+        ]
+        let service = MutableMockFileSystemService(items: items)
+        let vm = PanelViewModel(
+            side: .left,
+            initialDirectory: URL(fileURLWithPath: "/tmp"),
+            fileSystemService: service
+        )
+        await vm.loadDirectory()
+
+        // Select b.txt
+        let bItem = vm.state.items.first { $0.name == "b.txt" }!
+        vm.state.selectedItemIDs = [bItem.id]
+        vm.state.focusedItemID = bItem.id
+
+        // Act — prepare then simulate delete
+        vm.prepareForDeletion()
+        service.items = [items[0], items[2]]
+        await vm.reloadKeepingSelection()
+
+        // Assert — focus moved to c.txt (next item after b.txt)
+        let cItem = vm.state.items.first { $0.name == "c.txt" }!
+        #expect(vm.state.focusedItemID == cItem.id)
+        #expect(vm.state.selectedItemIDs == [cItem.id])
+    }
+
+    @Test func prepareForDeletionLastItemThenReloadFocusesPreviousItem() async {
+        // Arrange: ["..", "a.txt", "b.txt"]  — delete b.txt (last)
+        let items = [
+            FileItem(url: URL(fileURLWithPath: "/tmp/a.txt"), name: "a.txt", isDirectory: false, size: 10),
+            FileItem(url: URL(fileURLWithPath: "/tmp/b.txt"), name: "b.txt", isDirectory: false, size: 20),
+        ]
+        let service = MutableMockFileSystemService(items: items)
+        let vm = PanelViewModel(
+            side: .left,
+            initialDirectory: URL(fileURLWithPath: "/tmp"),
+            fileSystemService: service
+        )
+        await vm.loadDirectory()
+
+        // Select b.txt (last item)
+        let bItem = vm.state.items.first { $0.name == "b.txt" }!
+        vm.state.selectedItemIDs = [bItem.id]
+        vm.state.focusedItemID = bItem.id
+
+        // Act
+        vm.prepareForDeletion()
+        service.items = [items[0]]
+        await vm.reloadKeepingSelection()
+
+        // Assert — focus moved to a.txt (previous item)
+        let aItem = vm.state.items.first { $0.name == "a.txt" }!
+        #expect(vm.state.focusedItemID == aItem.id)
+        #expect(vm.state.selectedItemIDs == [aItem.id])
+    }
+
+    @Test func prepareForDeletionMultipleItemsThenReloadFocusesNextAfterLast() async {
+        // Arrange: ["..", "a.txt", "b.txt", "c.txt", "d.txt"] — delete b.txt and c.txt
+        let items = [
+            FileItem(url: URL(fileURLWithPath: "/tmp/a.txt"), name: "a.txt", isDirectory: false, size: 10),
+            FileItem(url: URL(fileURLWithPath: "/tmp/b.txt"), name: "b.txt", isDirectory: false, size: 20),
+            FileItem(url: URL(fileURLWithPath: "/tmp/c.txt"), name: "c.txt", isDirectory: false, size: 30),
+            FileItem(url: URL(fileURLWithPath: "/tmp/d.txt"), name: "d.txt", isDirectory: false, size: 40),
+        ]
+        let service = MutableMockFileSystemService(items: items)
+        let vm = PanelViewModel(
+            side: .left,
+            initialDirectory: URL(fileURLWithPath: "/tmp"),
+            fileSystemService: service
+        )
+        await vm.loadDirectory()
+
+        // Select b.txt and c.txt
+        let bItem = vm.state.items.first { $0.name == "b.txt" }!
+        let cItem = vm.state.items.first { $0.name == "c.txt" }!
+        vm.state.selectedItemIDs = [bItem.id, cItem.id]
+        vm.state.focusedItemID = cItem.id
+
+        // Act
+        vm.prepareForDeletion()
+        service.items = [items[0], items[3]]
+        await vm.reloadKeepingSelection()
+
+        // Assert — focus moved to d.txt (next item after the last selected)
+        let dItem = vm.state.items.first { $0.name == "d.txt" }!
+        #expect(vm.state.focusedItemID == dItem.id)
+        #expect(vm.state.selectedItemIDs == [dItem.id])
+    }
+
+    @Test func prepareForDeletionFirstItemThenReloadFocusesNextItem() async {
+        // Arrange: ["..", "a.txt", "b.txt"]  — delete a.txt (first real item)
+        let items = [
+            FileItem(url: URL(fileURLWithPath: "/tmp/a.txt"), name: "a.txt", isDirectory: false, size: 10),
+            FileItem(url: URL(fileURLWithPath: "/tmp/b.txt"), name: "b.txt", isDirectory: false, size: 20),
+        ]
+        let service = MutableMockFileSystemService(items: items)
+        let vm = PanelViewModel(
+            side: .left,
+            initialDirectory: URL(fileURLWithPath: "/tmp"),
+            fileSystemService: service
+        )
+        await vm.loadDirectory()
+
+        // Select a.txt
+        let aItem = vm.state.items.first { $0.name == "a.txt" }!
+        vm.state.selectedItemIDs = [aItem.id]
+        vm.state.focusedItemID = aItem.id
+
+        // Act
+        vm.prepareForDeletion()
+        service.items = [items[1]]
+        await vm.reloadKeepingSelection()
+
+        // Assert — focus moved to b.txt (next item)
+        let bItem = vm.state.items.first { $0.name == "b.txt" }!
+        #expect(vm.state.focusedItemID == bItem.id)
+        #expect(vm.state.selectedItemIDs == [bItem.id])
     }
 }

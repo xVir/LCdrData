@@ -89,7 +89,7 @@ struct FileItemTests {
         #expect(set.count == 2)
     }
 
-    @Test func identifiableWithUniqueIDs() {
+    @Test func stableIDsForSameURL() {
         // Arrange & Act
         let item1 = FileItem(
             url: URL(fileURLWithPath: "/tmp/a"),
@@ -102,7 +102,40 @@ struct FileItemTests {
             isDirectory: false
         )
 
-        // Assert — each instance gets its own UUID
+        // Assert — same URL produces the same deterministic ID
+        #expect(item1.id == item2.id)
+    }
+
+    @Test func differentURLsProduceDifferentIDs() {
+        // Arrange & Act
+        let item1 = FileItem(
+            url: URL(fileURLWithPath: "/tmp/a"),
+            name: "a",
+            isDirectory: false
+        )
+        let item2 = FileItem(
+            url: URL(fileURLWithPath: "/tmp/b"),
+            name: "b",
+            isDirectory: false
+        )
+
+        // Assert — different URLs produce different IDs
         #expect(item1.id != item2.id)
+    }
+
+    @Test func parentEntryHasDifferentIDFromRegularDirectory() {
+        // Arrange — a regular directory and a ".." entry pointing to the same URL
+        let url = URL(fileURLWithPath: "/tmp")
+        let regularDir = FileItem(
+            url: url,
+            name: "tmp",
+            isDirectory: true,
+            isParentDirectory: false
+        )
+        let parentEntry = FileItem.parentEntry(for: URL(fileURLWithPath: "/tmp/child"))
+
+        // Assert — same URL but different identity because one is a parent entry
+        #expect(regularDir.url.standardizedFileURL.path == parentEntry.url.standardizedFileURL.path)
+        #expect(regularDir.id != parentEntry.id)
     }
 }

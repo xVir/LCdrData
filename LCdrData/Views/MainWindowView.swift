@@ -61,8 +61,14 @@ struct MainWindowView: View {
         }
         // Refresh both panels when the app regains focus so that
         // external file system changes (files created in Terminal, etc.)
-        // are reflected immediately.
+        // are reflected immediately. Skip when a file operation is
+        // in progress to avoid racing with the operation's own reload.
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            guard !appState.fileOperations.showConfirmationDialog
+                    && !appState.fileOperations.showProgressOverlay
+                    && appState.fileOperations.activeOperations.isEmpty else {
+                return
+            }
             Task {
                 async let left: Void = appState.leftPanel.reloadKeepingSelection()
                 async let right: Void = appState.rightPanel.reloadKeepingSelection()
@@ -121,6 +127,15 @@ struct MainWindowView: View {
             titleVisibility: .visible
         ) {
             Button("Confirm") {
+                // For delete and move operations, pre-compute which
+                // neighbouring item should receive focus after the
+                // selected items are removed from the source panel.
+                if case .delete = ops.pendingOperationType {
+                    appState.activePanelViewModel.prepareForDeletion()
+                } else if case .move = ops.pendingOperationType {
+                    appState.activePanelViewModel.prepareForDeletion()
+                }
+
                 ops.confirmOperation(
                     reloadSource: { [weak appState] in
                         await appState?.activePanelViewModel.reloadKeepingSelection()

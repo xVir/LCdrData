@@ -19,6 +19,8 @@ final class PanelViewModel {
     /// True when the last load failure was a sandbox permission denial.
     var isPermissionError: Bool = false
 
+
+
     // MARK: - Dependencies
 
     let side: PanelSide
@@ -45,6 +47,10 @@ final class PanelViewModel {
     /// Set before navigating to a parent so the cursor lands on the folder
     /// the user just left instead of resetting to the first item.
     private var pendingFocusChildURL: URL?
+
+    /// Item ID to focus after the next reload, set before a delete operation
+    /// so the cursor lands on the neighbouring item rather than resetting.
+    private var pendingPostDeleteFocusID: UUID?
 
     /// Loads the contents of the current directory.
     func loadDirectory() async {
@@ -99,21 +105,22 @@ final class PanelViewModel {
     }
 
     /// Reloads the current directory while preserving the user's selection.
-    /// Used for background refreshes (e.g. when the app regains focus) where
-    /// the selection should not jump to the first item.
+    /// Used for background refreshes (e.g. when the app regains focus) and
+    /// after file operations where the selection should stay in place.
+    ///
+    /// Because `FileItem` IDs are deterministic (derived from the file URL),
+    /// items that still exist keep the same UUID after a reload and SwiftUI
+    /// preserves the corresponding `List` rows without flicker.  Only items
+    /// that were removed need special handling: the cursor moves to the item
+    /// now at the same position, or the last item if the list shrank.
     func reloadKeepingSelection() async {
-        // Snapshot the currently selected and focused item URLs so we can
-        // restore them after the listing is refreshed (items get new UUIDs).
-        let previousSelectedURLs = Set(
-            state.items
-                .filter { state.selectedItemIDs.contains($0.id) }
-                .map { $0.url.standardizedFileURL.path }
-        )
-        let previousFocusedURL = state.items
-            .first { $0.id == state.focusedItemID }
-            .map { $0.url.standardizedFileURL.path }
+        // Snapshot the current focused item ID and its index so we can
+        // fall back to the same position when the focused item is removed.
+        let previousFocusedID = state.focusedItemID
+        let previousFocusedIndex = state.items
+            .firstIndex { $0.id == previousFocusedID }
+        let previousSelectedIDs = state.selectedItemIDs
 
-        isLoading = true
         errorMessage = nil
         isPermissionError = false
 
@@ -133,29 +140,41 @@ final class PanelViewModel {
 
             state.items = displayItems
 
-            // Restore selection by matching URLs from the previous listing.
-            let restoredSelection = Set(
-                displayItems
-                    .filter { previousSelectedURLs.contains($0.url.standardizedFileURL.path) }
-                    .map(\.id)
-            )
+            let newIDs = Set(displayItems.map(\.id))
 
-            if restoredSelection.isEmpty {
-                // Previous selection no longer exists — fall back to first item.
-                if let firstID = displayItems.first?.id {
-                    state.selectedItemIDs = [firstID]
+            // If a pre-delete focus target was set and still exists, use it.
+            if let pendingID = pendingPostDeleteFocusID, newIDs.contains(pendingID) {
+                pendingPostDeleteFocusID = nil
+                state.focusedItemID = pendingID
+                state.selectedItemIDs = [pendingID]
+            } else {
+                pendingPostDeleteFocusID = nil
+
+                // Keep only the selected IDs that still exist in the new listing.
+                let survivingSelection = previousSelectedIDs.intersection(newIDs)
+
+                if let previousFocusedID, newIDs.contains(previousFocusedID) {
+                    // Focused item still exists — keep it focused.
+                    state.focusedItemID = previousFocusedID
+                    state.selectedItemIDs = survivingSelection.isEmpty
+                        ? [previousFocusedID]
+                        : survivingSelection
+                } else if !displayItems.isEmpty {
+                    // Focused item was removed without a pre-set target.
+                    // Fall back to the same index position.
+                    let fallbackIndex: Int
+                    if let prevIndex = previousFocusedIndex {
+                        fallbackIndex = min(prevIndex, displayItems.count - 1)
+                    } else {
+                        fallbackIndex = 0
+                    }
+                    let fallbackItem = displayItems[fallbackIndex]
+                    state.focusedItemID = fallbackItem.id
+                    state.selectedItemIDs = [fallbackItem.id]
                 } else {
+                    state.focusedItemID = nil
                     state.selectedItemIDs = []
                 }
-                state.focusedItemID = displayItems.first?.id
-            } else {
-                state.selectedItemIDs = restoredSelection
-
-                // Restore focused item, or fall back to first selected item.
-                let restoredFocus = displayItems.first {
-                    $0.url.standardizedFileURL.path == previousFocusedURL
-                }?.id
-                state.focusedItemID = restoredFocus ?? restoredSelection.first
             }
         } catch {
             isPermissionError = SandboxAccessService.isPermissionError(error)
@@ -164,8 +183,6 @@ final class PanelViewModel {
                 : error.localizedDescription
             state.items = []
         }
-
-        isLoading = false
     }
 
     /// Presents an open panel so the user can grant sandbox access to the
@@ -344,6 +361,49 @@ final class PanelViewModel {
     /// Deselects all items.
     func deselectAll() {
         state.selectedItemIDs = []
+    }
+
+    /// Call before a delete operation to remember which item should receive
+    /// focus after the deleted items are gone.
+    ///
+    /// The rule: pick the next item after the last selected item. If the
+    /// selected items are at the end of the list, pick the item just before
+    /// the first selected item. The ".." parent entry is skipped.
+    func prepareForDeletion() {
+        let selectedIDs = state.selectedItemIDs
+        guard !selectedIDs.isEmpty else { return }
+
+        // Find the index range occupied by selected items.
+        let selectedIndices = state.items.enumerated()
+            .filter { selectedIDs.contains($0.element.id) }
+            .map(\.offset)
+
+        guard let lastSelectedIndex = selectedIndices.max() else { return }
+
+        // Try the item right after the last selected item.
+        let afterIndex = lastSelectedIndex + 1
+        if afterIndex < state.items.count {
+            let candidate = state.items[afterIndex]
+            if !candidate.isParentDirectory {
+                pendingPostDeleteFocusID = candidate.id
+                return
+            }
+        }
+
+        // All selected items are at the end — try the item before the first
+        // selected item.
+        guard let firstSelectedIndex = selectedIndices.min() else { return }
+        let beforeIndex = firstSelectedIndex - 1
+        if beforeIndex >= 0 {
+            let candidate = state.items[beforeIndex]
+            if !candidate.isParentDirectory {
+                pendingPostDeleteFocusID = candidate.id
+                return
+            }
+        }
+
+        // Fallback: focus the ".." entry if nothing else is available.
+        pendingPostDeleteFocusID = state.items.first?.id
     }
 
     // MARK: - Hidden Files
