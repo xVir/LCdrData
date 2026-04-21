@@ -95,6 +95,11 @@ struct MainWindowView: View {
             handleReturn()
             return .handled
         }
+        // F2 — Rename
+        .onKeyPress(KeyboardShortcuts.f2Key, phases: .down) { _ in
+            performRename()
+            return .handled
+        }
         // F5 — Copy
         .onKeyPress(KeyboardShortcuts.f5Key, phases: .down) { _ in
             performCopy()
@@ -196,22 +201,28 @@ struct MainWindowView: View {
         }
 
         // MARK: - Rename Dialog
-        .alert("Rename", isPresented: $ops.showRenameDialog) {
-            TextField("New name", text: $ops.renameName)
-            Button("Rename") {
-                Task {
-                    await ops.performRename()
-                    await appState.activePanelViewModel.reloadKeepingSelection()
-                    await appState.inactivePanelViewModel.reloadKeepingSelection()
-                }
-            }
-            .keyboardShortcut(.defaultAction)
-            Button("Cancel", role: .cancel) {
-                ops.renameItem = nil
-            }
-        } message: {
+        .sheet(isPresented: $ops.showRenameDialog) {
             if let item = ops.renameItem {
-                Text("Enter a new name for \"\(item.name)\":")
+                RenameDialogView(item: item) { newName in
+                    Task {
+                        let panel = appState.activePanelViewModel
+                        await ops.performRename(newName: newName)
+                        await panel.reloadKeepingSelection()
+                        await appState.inactivePanelViewModel.reloadKeepingSelection()
+
+                        // Select and highlight the renamed item.
+                        let parentDir = item.url.deletingLastPathComponent()
+                        let newURL = parentDir.appendingPathComponent(newName)
+                        let newItem = FileItem(
+                            url: newURL,
+                            name: newName,
+                            isDirectory: item.isDirectory
+                        )
+                        panel.state.selectedItemIDs = [newItem.id]
+                        panel.state.focusedItemID = newItem.id
+                        panel.highlightItem(id: newItem.id)
+                    }
+                }
             }
         }
 
@@ -285,6 +296,24 @@ struct MainWindowView: View {
         appState.fileOperations.requestDelete(
             from: appState.activePanelViewModel
         )
+    }
+
+    private func performRename() {
+        let panel = appState.activePanelViewModel
+
+        let targetID: UUID? = if panel.state.selectedItemIDs.count == 1 {
+            panel.state.selectedItemIDs.first
+        } else {
+            panel.state.focusedItemID
+        }
+
+        guard let targetID,
+              let item = panel.state.items.first(where: { $0.id == targetID }),
+              !item.isParentDirectory else {
+            return
+        }
+
+        appState.fileOperations.requestRename(item: item)
     }
 }
 

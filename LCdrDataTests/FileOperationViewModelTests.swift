@@ -340,7 +340,6 @@ struct FileOperationViewModelTests {
         vm.requestRename(item: item)
 
         #expect(vm.showRenameDialog)
-        #expect(vm.renameName == "test.txt")
         #expect(vm.renameItem?.name == "test.txt")
     }
 
@@ -355,8 +354,7 @@ struct FileOperationViewModelTests {
         let vm = FileOperationViewModel(operationService: mockService)
 
         vm.renameItem = item
-        vm.renameName = "new.txt"
-        await vm.performRename()
+        await vm.performRename(newName: "new.txt")
 
         #expect(mockService.renameCalled)
         #expect(mockService.lastRenameItem == URL(fileURLWithPath: "/tmp/old.txt"))
@@ -375,8 +373,7 @@ struct FileOperationViewModelTests {
         let vm = FileOperationViewModel(operationService: mockService)
 
         vm.renameItem = item
-        vm.renameName = "same.txt"
-        await vm.performRename()
+        await vm.performRename(newName: "same.txt")
 
         #expect(!mockService.renameCalled)
     }
@@ -393,8 +390,7 @@ struct FileOperationViewModelTests {
         let vm = FileOperationViewModel(operationService: mockService)
 
         vm.renameItem = item
-        vm.renameName = "conflicting.txt"
-        await vm.performRename()
+        await vm.performRename(newName: "conflicting.txt")
 
         #expect(vm.showErrorAlert)
         #expect(vm.errorMessage != nil)

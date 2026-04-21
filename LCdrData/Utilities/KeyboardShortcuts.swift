@@ -35,6 +35,9 @@ enum KeyboardShortcuts {
     // We define them using Unicode scalar values from the private-use area
     // that macOS uses for function keys (NSF5FunctionKey = 0xF708, etc.).
 
+    /// F2 key equivalent for Rename
+    static let f2Key = KeyEquivalent(Character(UnicodeScalar(0xF705)!))
+
     /// F5 key equivalent for Copy
     static let f5Key = KeyEquivalent(Character(UnicodeScalar(0xF708)!))
 

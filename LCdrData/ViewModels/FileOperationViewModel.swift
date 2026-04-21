@@ -59,9 +59,6 @@ final class FileOperationViewModel {
     /// Whether the rename dialog should be shown.
     var showRenameDialog: Bool = false
 
-    /// The name entered for renaming.
-    var renameName: String = ""
-
     /// The item being renamed.
     var renameItem: FileItem?
 
@@ -165,15 +162,16 @@ final class FileOperationViewModel {
     /// Shows the rename dialog for the given item.
     func requestRename(item: FileItem) {
         renameItem = item
-        renameName = item.name
         showRenameDialog = true
     }
 
     /// Performs the rename of the item.
-    func performRename() async {
+    func performRename(newName: String) async {
         guard let item = renameItem else { return }
-        let newName = renameName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !newName.isEmpty, newName != item.name else { return }
+        guard !newName.isEmpty, newName != item.name else {
+            renameItem = nil
+            return
+        }
 
         do {
             _ = try await operationService.rename(item: item.url, to: newName)
@@ -252,9 +250,8 @@ final class FileOperationViewModel {
             await reloadDestination()
 
         case .rename(let item, let newName):
-            renameName = newName
             renameItem = FileItem(url: item, name: item.lastPathComponent, isDirectory: false)
-            await performRename()
+            await performRename(newName: newName)
             await reloadSource()
             await reloadDestination()
         }
