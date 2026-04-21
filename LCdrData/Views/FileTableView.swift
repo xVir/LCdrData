@@ -122,6 +122,12 @@ private struct FileRowView: View {
     let item: FileItem
     let viewModel: PanelViewModel
 
+    @State private var showHighlight: Bool = false
+
+    private var isHighlighted: Bool {
+        viewModel.highlightedItemID == item.id
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             // Name column
@@ -151,6 +157,19 @@ private struct FileRowView: View {
                 .frame(width: 80, alignment: .leading)
         }
         .font(.system(.body, design: .monospaced))
+        .listRowBackground(
+            showHighlight
+                ? Color.green.opacity(0.25)
+                : Color.clear
+        )
+        .onChange(of: isHighlighted) { _, highlighted in
+            if highlighted {
+                showHighlight = true
+                withAnimation(.easeOut(duration: 1.2)) {
+                    showHighlight = false
+                }
+            }
+        }
         .contentShape(Rectangle())
         .gesture(
             TapGesture(count: 2).onEnded {

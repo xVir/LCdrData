@@ -168,11 +168,25 @@ struct MainWindowView: View {
             TextField("Folder name", text: $ops.newFolderName)
             Button("Create") {
                 Task {
-                    await ops.performCreateFolder(
-                        in: appState.activePanelViewModel.state.currentDirectory
-                    )
-                    await appState.activePanelViewModel.reloadKeepingSelection()
+                    let panel = appState.activePanelViewModel
+                    let dir = panel.state.currentDirectory
+                    let folderName = ops.newFolderName
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+
+                    await ops.performCreateFolder(in: dir)
+                    await panel.reloadKeepingSelection()
                     await appState.inactivePanelViewModel.reloadKeepingSelection()
+
+                    // Highlight the newly created folder and select it.
+                    if !folderName.isEmpty {
+                        let newFolderURL = dir.appendingPathComponent(folderName)
+                        let newItem = FileItem(
+                            url: newFolderURL, name: folderName, isDirectory: true
+                        )
+                        panel.state.selectedItemIDs = [newItem.id]
+                        panel.state.focusedItemID = newItem.id
+                        panel.highlightItem(id: newItem.id)
+                    }
                 }
             }
             .keyboardShortcut(.defaultAction)

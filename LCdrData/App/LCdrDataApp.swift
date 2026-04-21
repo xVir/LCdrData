@@ -10,6 +10,9 @@ struct LCdrDataApp: App {
         WindowGroup {
             MainWindowView()
                 .environment(appState)
+                .onAppear {
+                    appDelegate.appState = appState
+                }
         }
         .defaultSize(width: 1100, height: 700)
         .windowResizability(.contentMinSize)

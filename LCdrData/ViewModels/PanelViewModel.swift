@@ -19,6 +19,10 @@ final class PanelViewModel {
     /// True when the last load failure was a sandbox permission denial.
     var isPermissionError: Bool = false
 
+    /// When set, the row with this ID plays a highlight animation (fading
+    /// green background). Cleared automatically after the animation ends.
+    var highlightedItemID: UUID?
+
 
 
     // MARK: - Dependencies
@@ -404,6 +408,20 @@ final class PanelViewModel {
 
         // Fallback: focus the ".." entry if nothing else is available.
         pendingPostDeleteFocusID = state.items.first?.id
+    }
+
+    // MARK: - Highlight
+
+    /// Briefly highlights a row to draw the user's attention (e.g. after
+    /// creating a new folder). The highlight fades out automatically.
+    func highlightItem(id: UUID) {
+        highlightedItemID = id
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1.5))
+            if highlightedItemID == id {
+                highlightedItemID = nil
+            }
+        }
     }
 
     // MARK: - Hidden Files
