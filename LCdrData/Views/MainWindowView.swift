@@ -74,7 +74,9 @@ struct MainWindowView: View {
                 onF6: { performMove() },
                 onF7: { performMkdir() },
                 onF8: { performDelete() },
-                onDelete: { performDelete() },
+                onDeleteKeyNavigateParent: {
+                    Task { await appState.activePanelViewModel.navigateToParent() }
+                },
                 onPermanentDelete: { performPermanentDelete() },
                 pathEditingBlocksDelete: {
                     appState.activePanelViewModel.isPathBarEditing
@@ -395,7 +397,8 @@ private struct KeyShortcutModifier: ViewModifier {
     let onF6: () -> Void
     let onF7: () -> Void
     let onF8: () -> Void
-    let onDelete: () -> Void
+    /// Plain Delete / forward-delete — parent directory (not Trash).
+    let onDeleteKeyNavigateParent: () -> Void
     let onPermanentDelete: () -> Void
     let pathEditingBlocksDelete: () -> Bool
     let typeAhead: (KeyPress) -> KeyPress.Result
@@ -471,7 +474,7 @@ private struct KeyShortcutModifier: ViewModifier {
                     return .handled
                 }
                 guard !pathEditingBlocksDelete() else { return .ignored }
-                onDelete()
+                onDeleteKeyNavigateParent()
                 return .handled
             }
             .onKeyPress(.deleteForward, phases: .down) { press in
@@ -482,7 +485,7 @@ private struct KeyShortcutModifier: ViewModifier {
                     return .handled
                 }
                 guard !pathEditingBlocksDelete() else { return .ignored }
-                onDelete()
+                onDeleteKeyNavigateParent()
                 return .handled
             }
             .onKeyPress(phases: .down) { press in

@@ -145,11 +145,12 @@ struct SortDescriptor {
 - Columns: Icon, Name, Size, Date Modified, Kind
 - Sortable by clicking column headers
 - Single-click selects; Cmd+click for multi-select; Shift+click for range select
-- Enter opens files/navigates into directories (macOS convention: Enter renames)
-- Double-click or Cmd+Down opens/navigates
-- Cmd+Up navigates to parent directory
+- Enter: enter directories; for a focused **file**, Enter starts rename (macOS-style).
+- F2: rename the focused item (not the `..` row).
+- Double-click or Cmd+Down opens files and enters directories.
+- **Delete** (⌫) and **forward delete** (⌦): go to parent directory when the file list has keyboard focus and the path bar is not being edited—same outcome as activating `..`. **Cmd+Up** also goes to parent via the menu command **Go to Parent Directory**.
 - Show/hide hidden files toggle (Cmd+Shift+.)
-- ".." entry at top to navigate to parent
+- `..` entry at top to navigate to parent
 
 ### 3. File Operations
 
@@ -159,12 +160,15 @@ All operations work from the active panel to the inactive panel (as target):
 |-----------------|----------|------------------------------------------|
 | Copy            | F5       | Copy selected items to other panel       |
 | Move            | F6       | Move selected items to other panel       |
-| Delete          | F8/Del   | Move to Trash (Cmd+Del for permanent)    |
+| Delete          | F8       | Move selected items to Trash             |
+| Permanent delete| Cmd+Delete | Remove immediately (not Trash); confirmation |
 | New Folder      | F7       | Create directory in active panel         |
-| Rename          | Enter    | Inline rename of focused item            |
+| Rename          | Enter / F2 | Rename focused file (Enter Finder-style; F2 orthodox) |
 | View            | F3       | Quick Look preview                       |
 | Edit            | F4       | Open in default editor                   |
 | Refresh         | Cmd+R    | Reload active panel                      |
+
+Menu commands (same shortcuts where shown in the menu bar) also expose **Go to Parent**, **Open**, **Delete Immediately…**, **Copy Selected Paths**, etc. The **Edit › Delete** list command can still move the selection to Trash when chosen from the menu; the physical **Delete** / **forward delete** keys in the main window are bound to parent navigation only.
 
 - Confirmation dialogs for destructive operations
 - Progress sheet for long-running copy/move with cancel support
@@ -173,6 +177,7 @@ All operations work from the active panel to the inactive panel (as target):
 ### 4. Navigation
 
 - Path bar: clickable breadcrumbs; editable via Cmd+L (go to path)
+- Parent directory: `..` row, **Cmd+Up** (**Go to Parent Directory** in the menu), or plain **Delete** / **forward delete** when the list is focused (see File Table above).
 - Back/forward history per panel (Cmd+[ / Cmd+])
 - Bookmarks sidebar or dropdown for saved locations
 - Volumes list accessible from path bar root
@@ -183,8 +188,8 @@ All operations work from the active panel to the inactive panel (as target):
 - Arrow keys navigate the file list
 - Type-ahead / incremental search: start typing to jump to matching filename
 - Space selects/deselects the focused item and moves down (Commander-style)
-- Cmd+A selects all; Cmd+Shift+A deselects all
-- Home/End or Cmd+Up/Cmd+Down for first/last item
+- Cmd+A selects all; Cmd+Shift+A collapses multi-selection to the focused row
+- Home / End: first / last row in the list; Cmd+Down opens the focused item (same as double-click)
 
 ### 6. Command Bar
 
@@ -275,7 +280,9 @@ editor {
 }
 
 keyboard {
-    // Override default shortcuts
+    // Override default shortcuts (function keys for file ops).
+    // Plain Delete / forward-delete always mean “go to parent” in the main window;
+    // they are not assigned here.
     copy F5
     move F6
     delete F8
@@ -428,23 +435,28 @@ WindowGroup {
 | Shortcut          | Action                          |
 |-------------------|---------------------------------|
 | Tab               | Switch active panel             |
-| Enter             | Rename focused item             |
+| Enter             | Enter directory, or rename focused **file** |
+| F2                | Rename focused item (not `..`)  |
+| Delete / forward delete | Go to parent directory (list focused; not while editing path) |
 | Cmd+Down / Dbl-click | Open file / enter directory  |
-| Cmd+Up            | Go to parent directory          |
+| Cmd+Up            | Go to parent directory (menu)   |
 | Cmd+L             | Focus path bar (go to path)     |
-| Cmd+F             | Find / filter in current panel  |
+| Cmd+Shift+O       | Open Folder…                    |
 | Cmd+R             | Refresh panel                   |
 | Cmd+Shift+.       | Toggle hidden files             |
 | Cmd+[ / Cmd+]     | History back / forward          |
-| Cmd+A             | Select all                      |
-| Cmd+Del           | Permanent delete                |
+| Cmd+A             | Select all (excludes `..`)      |
+| Cmd+Shift+A       | Collapse selection to focused row |
+| Cmd+Option+C      | Copy selected paths to clipboard |
+| Cmd+Delete        | Permanent delete (with confirmation) |
 | Space             | Select item and move down       |
 | F3                | Quick Look preview              |
 | F4                | Open in editor                  |
 | F5                | Copy to other panel             |
 | F6                | Move to other panel             |
 | F7                | Create new folder               |
-| F8 / Delete       | Move to Trash                   |
+| F8                | Move to Trash                   |
+| Home / End        | First / last list row           |
 | Arrows            | Navigate list                   |
 | Type characters   | Incremental filename search     |
 
