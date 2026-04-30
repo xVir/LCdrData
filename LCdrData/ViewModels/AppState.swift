@@ -94,4 +94,16 @@ final class AppState {
     func switchActivePanel() {
         activePanel = (activePanel == .left) ? .right : .left
     }
+
+    /// Re-applies `configuration.current` to both panels (sort, hidden files) and reloads listings.
+    func applyEffectiveConfiguration() async {
+        let cfg = configuration.current
+        leftPanel.state.sortDescriptor = cfg.sortDescriptor
+        rightPanel.state.sortDescriptor = cfg.sortDescriptor
+        leftPanel.state.showHiddenFiles = cfg.panelShowHiddenFiles
+        rightPanel.state.showHiddenFiles = cfg.panelShowHiddenFiles
+        async let left: Void = leftPanel.reloadKeepingSelection()
+        async let right: Void = rightPanel.reloadKeepingSelection()
+        _ = await (left, right)
+    }
 }

@@ -94,5 +94,10 @@ struct LCdrDataApp: App {
                 .keyboardShortcut(KeyboardShortcuts.permanentDelete)
             }
         }
+
+        Settings {
+            ConfigurationView()
+                .environment(appState)
+        }
     }
 }

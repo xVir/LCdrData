@@ -11,8 +11,12 @@ struct MainWindowView: View {
 
     var body: some View {
         @Bindable var ops = appState.fileOperations
+        let dateFormat = appState.configuration.current.appearanceDateFormat
+        let fontSize = CGFloat(appState.configuration.current.appearanceFontSize)
 
         mainContentLayer(showProgressOverlay: ops.showProgressOverlay, operations: ops.activeOperations)
+            .environment(\.lcPanelDateFormat, dateFormat)
+            .environment(\.lcPanelFontSize, fontSize)
             .focusedSceneValue(\.activePanel, appState.activePanelViewModel)
             .task {
                 async let leftLoad: Void = appState.leftPanel.loadDirectory()

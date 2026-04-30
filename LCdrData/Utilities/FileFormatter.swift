@@ -20,16 +20,19 @@ enum FileFormatter {
 
     // MARK: - Date Formatting
 
-    private static let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd HH:mm"
-        return formatter
-    }()
+    private static let defaultDatePattern = "yyyy-MM-dd HH:mm"
 
-    /// Formats a date into "yyyy-MM-dd HH:mm" style.
+    /// Formats a date using the default panel pattern (`yyyy-MM-dd HH:mm`).
     static func formatDate(_ date: Date?) -> String {
+        formatDate(date, format: defaultDatePattern)
+    }
+
+    /// Formats a date with an explicit `DateFormatter` pattern string.
+    static func formatDate(_ date: Date?, format pattern: String) -> String {
         guard let date else { return "--" }
-        return dateFormatter.string(from: date)
+        let formatter = DateFormatter()
+        formatter.dateFormat = pattern
+        return formatter.string(from: date)
     }
 
     // MARK: - Kind

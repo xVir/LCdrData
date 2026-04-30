@@ -7,6 +7,8 @@ struct FileTableView: View {
 
     @Bindable var viewModel: PanelViewModel
     let isActive: Bool
+    @Environment(\.lcPanelDateFormat) private var panelDateFormat
+    @Environment(\.lcPanelFontSize) private var panelFontSize
     /// When set (typically for the active panel), the standard Delete menu / command moves selection to Trash.
     var onDeleteSelection: (() -> Void)? = nil
 
@@ -28,7 +30,12 @@ struct FileTableView: View {
                     set: { viewModel.state.selectedItemIDs = $0 }
                 )) {
                     ForEach(viewModel.visibleItems) { item in
-                        FileRowView(item: item, viewModel: viewModel)
+                        FileRowView(
+                            item: item,
+                            viewModel: viewModel,
+                            dateFormat: panelDateFormat,
+                            fontSize: panelFontSize
+                        )
                             .tag(item.id)
                             .id(item.id)
                             .listRowInsets(EdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8))
@@ -159,6 +166,8 @@ private struct SortableColumnHeader: View {
 private struct FileRowView: View {
     let item: FileItem
     let viewModel: PanelViewModel
+    let dateFormat: String
+    let fontSize: CGFloat
 
     @State private var showHighlight: Bool = false
 
@@ -183,7 +192,7 @@ private struct FileRowView: View {
                 .frame(width: 80, alignment: .trailing)
 
             // Date Modified column
-            Text(FileFormatter.formatDate(item.modificationDate))
+            Text(FileFormatter.formatDate(item.modificationDate, format: dateFormat))
                 .monospacedDigit()
                 .frame(width: 140, alignment: .leading)
                 .padding(.leading, 8)
@@ -194,7 +203,7 @@ private struct FileRowView: View {
                 .truncationMode(.tail)
                 .frame(width: 80, alignment: .leading)
         }
-        .font(.system(.body, design: .monospaced))
+        .font(.system(size: fontSize, design: .monospaced))
         .listRowBackground(
             showHighlight
                 ? Color.green.opacity(0.25)
