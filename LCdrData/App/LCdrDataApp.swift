@@ -62,11 +62,6 @@ struct LCdrDataApp: App {
                     }
                 }
                 .keyboardShortcut(KeyboardShortcuts.openItem)
-
-                Button("Find in Panel…") {
-                    appState.activePanelViewModel.showNameFilterBar()
-                }
-                .keyboardShortcut(KeyboardShortcuts.findInPanel)
             }
 
             // View commands

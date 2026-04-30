@@ -27,13 +27,6 @@ final class PanelViewModel {
     /// When true, the path bar shows an editable path field (Cmd+L).
     var isPathBarEditing: Bool = false
 
-    /// Substring filter for file names; only applied when `isFilterBarVisible` is true.
-    var nameFilterText: String = ""
-
-    /// When true, the filter bar is shown (Cmd+F) and `visibleItems` applies `nameFilterText`.
-    /// Keystrokes are routed to `nameFilterText` by `MainWindowView` while visible; the list stays focused.
-    var isFilterBarVisible: Bool = false
-
     // MARK: - Type-ahead (incremental search)
 
     private var typeAheadBuffer: String = ""
@@ -220,11 +213,8 @@ final class PanelViewModel {
 
     // MARK: - Navigation
 
-    /// Items shown in the file list: full listing unless the filter bar is open, then `nameFilterText` is applied.
-    var visibleItems: [FileItem] {
-        guard isFilterBarVisible else { return state.items }
-        return Self.filteredItems(state.items, nameFilterText: nameFilterText)
-    }
+    /// Items shown in the file list (same as `state.items`; kept for call sites).
+    var visibleItems: [FileItem] { state.items }
 
     /// Navigates into a directory, pushing to history.
     func navigate(to url: URL) async {
@@ -477,53 +467,6 @@ final class PanelViewModel {
         await loadDirectory()
     }
 
-    // MARK: - Name filter
-
-    /// Ensures focus and selection remain valid after the filter changes.
-    func syncFocusAfterFilterChange() {
-        let visible = visibleItems
-        guard !visible.isEmpty else { return }
-        if let f = state.focusedItemID, visible.contains(where: { $0.id == f }) {
-            return
-        }
-        let first = visible.first!
-        state.focusedItemID = first.id
-        state.selectedItemIDs = [first.id]
-    }
-
-    /// Shows the bottom filter bar (Cmd+F). The file list keeps keyboard focus; typing is routed to `nameFilterText`.
-    func showNameFilterBar() {
-        isFilterBarVisible = true
-    }
-
-    /// Hides the filter bar and clears the filter string.
-    func dismissNameFilterBar() {
-        isFilterBarVisible = false
-        nameFilterText = ""
-    }
-
-    /// Appends text to the name filter while the filter bar is visible (keyboard routing from `MainWindowView`).
-    func appendToNameFilter(_ text: String) {
-        guard isFilterBarVisible, !text.isEmpty else { return }
-        nameFilterText += text
-    }
-
-    /// Removes one character from the filter string (Backspace / Forward Delete). Returns false if nothing was removed.
-    @discardableResult
-    func deleteInNameFilter(backward: Bool) -> Bool {
-        guard isFilterBarVisible, !nameFilterText.isEmpty else { return false }
-        if backward {
-            nameFilterText.removeLast()
-        } else {
-            nameFilterText.removeFirst()
-        }
-        return true
-    }
-
-    func clearNameFilter() {
-        nameFilterText = ""
-    }
-
     // MARK: - Type-ahead
 
     func resetTypeAheadBuffer() {
@@ -619,8 +562,6 @@ final class PanelViewModel {
     // MARK: - Private
 
     private func clearDirectoryNavigationExtras() {
-        isFilterBarVisible = false
-        nameFilterText = ""
         resetTypeAheadBuffer()
         isPathBarEditing = false
     }

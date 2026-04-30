@@ -13,13 +13,6 @@ struct MainWindowView: View {
         @Bindable var ops = appState.fileOperations
 
         mainContentLayer(showProgressOverlay: ops.showProgressOverlay, operations: ops.activeOperations)
-            .environment(\.nameFilterKeyPressHandler) { press in
-                NameFilterKeyPress.handle(
-                    press: press,
-                    panel: appState.activePanelViewModel,
-                    keyboardRoutingActive: keyboardRoutingActive
-                )
-            }
             .focusedSceneValue(\.activePanel, appState.activePanelViewModel)
             .task {
                 async let leftLoad: Void = appState.leftPanel.loadDirectory()
@@ -46,8 +39,6 @@ struct MainWindowView: View {
             }
             .onChange(of: appState.activePanel) { _, newValue in
                 focusedPanel = newValue
-                appState.leftPanel.dismissNameFilterBar()
-                appState.rightPanel.dismissNameFilterBar()
             }
             .modifier(KeyShortcutModifier(
                 keyboardRoutingActive: keyboardRoutingActive,
@@ -59,18 +50,12 @@ struct MainWindowView: View {
                 onCmdL: { appState.activePanelViewModel.isPathBarEditing = true },
                 onCmdDown: { Task { await appState.activePanelViewModel.openSelectedItem() } },
                 onCmdShiftA: { appState.activePanelViewModel.deselectAllKeepingFocus() },
-                onCmdF: { appState.activePanelViewModel.showNameFilterBar() },
                 onEscape: {
-                    let panel = appState.activePanelViewModel
-                    if panel.isFilterBarVisible {
-                        panel.dismissNameFilterBar()
-                        return true
-                    }
-                    return false
+                    false
                 },
                 onSpace: {
                     let panel = appState.activePanelViewModel
-                    guard !panel.isPathBarEditing && !panel.isFilterBarVisible else {
+                    guard !panel.isPathBarEditing else {
                         return false
                     }
                     panel.commanderSpaceSelect()
@@ -89,14 +74,6 @@ struct MainWindowView: View {
                 onPermanentDelete: { performPermanentDelete() },
                 pathEditingBlocksDelete: {
                     appState.activePanelViewModel.isPathBarEditing
-                },
-                onFilterDelete: { backward in
-                    let panel = appState.activePanelViewModel
-                    guard panel.isFilterBarVisible else { return false }
-                    if !panel.nameFilterText.isEmpty {
-                        _ = panel.deleteInNameFilter(backward: backward)
-                    }
-                    return true
                 },
                 typeAhead: { handleTypeAheadKeyPress($0) }
             ))
@@ -309,11 +286,6 @@ struct MainWindowView: View {
         let panel = appState.activePanelViewModel
         guard !panel.isPathBarEditing else { return .ignored }
 
-        // Filter text is handled on the focused file `List` (see `FileTableView` + `NameFilterKeyPress.handle`).
-        if panel.isFilterBarVisible {
-            return .ignored
-        }
-
         if press.modifiers.contains(.command)
             || press.modifiers.contains(.control)
             || press.modifiers.contains(.option) {
@@ -406,7 +378,6 @@ private struct KeyShortcutModifier: ViewModifier {
     let onCmdL: () -> Void
     let onCmdDown: () -> Void
     let onCmdShiftA: () -> Void
-    let onCmdF: () -> Void
     /// Returns true if handled
     let onEscape: () -> Bool
     /// Returns true if key was consumed
@@ -423,8 +394,6 @@ private struct KeyShortcutModifier: ViewModifier {
     let onDelete: () -> Void
     let onPermanentDelete: () -> Void
     let pathEditingBlocksDelete: () -> Bool
-    /// When filter bar is visible, Delete is consumed (removes a character if non-empty; if empty, no-op). Returns true so file delete does not run.
-    let onFilterDelete: (_ backward: Bool) -> Bool
     let typeAhead: (KeyPress) -> KeyPress.Result
 
     func body(content: Content) -> some View {
@@ -497,7 +466,6 @@ private struct KeyShortcutModifier: ViewModifier {
                     onPermanentDelete()
                     return .handled
                 }
-                if onFilterDelete(true) { return .handled }
                 guard !pathEditingBlocksDelete() else { return .ignored }
                 onDelete()
                 return .handled
@@ -509,7 +477,6 @@ private struct KeyShortcutModifier: ViewModifier {
                     onPermanentDelete()
                     return .handled
                 }
-                if onFilterDelete(false) { return .handled }
                 guard !pathEditingBlocksDelete() else { return .ignored }
                 onDelete()
                 return .handled
@@ -520,8 +487,7 @@ private struct KeyShortcutModifier: ViewModifier {
                     keyboardRoutingActive: keyboardRoutingActive,
                     onCmdL: onCmdL,
                     onCmdDown: onCmdDown,
-                    onCmdShiftA: onCmdShiftA,
-                    onCmdF: onCmdF
+                    onCmdShiftA: onCmdShiftA
                 )
                 if r != .ignored { return r }
                 return typeAhead(press)
@@ -533,8 +499,7 @@ private struct KeyShortcutModifier: ViewModifier {
         keyboardRoutingActive: Bool,
         onCmdL: () -> Void,
         onCmdDown: () -> Void,
-        onCmdShiftA: () -> Void,
-        onCmdF: () -> Void
+        onCmdShiftA: () -> Void
     ) -> KeyPress.Result {
         guard keyboardRoutingActive else { return .ignored }
         let cmd = press.modifiers.contains(.command)
@@ -550,10 +515,6 @@ private struct KeyShortcutModifier: ViewModifier {
         }
         if press.key == KeyEquivalent("a"), cmd, shift {
             onCmdShiftA()
-            return .handled
-        }
-        if press.key == KeyEquivalent("f"), cmd, !shift {
-            onCmdF()
             return .handled
         }
         return .ignored

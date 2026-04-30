@@ -63,44 +63,10 @@ struct PanelViewModelPhase3Tests {
         #expect(match == betaID)
     }
 
-    @Test func visibleItemsIgnoresNameFilterWhenFilterBarHidden() {
+    @Test func visibleItemsMatchesStateItems() {
         let vm = PanelViewModel(side: .left, initialDirectory: URL(fileURLWithPath: "/tmp"))
         let items = sampleItems()
         vm.state.items = items
-        vm.nameFilterText = "apple"
-        vm.isFilterBarVisible = false
-        #expect(vm.visibleItems.count == items.count)
-    }
-
-    @Test func visibleItemsAppliesNameFilterWhenFilterBarVisible() {
-        let vm = PanelViewModel(side: .left, initialDirectory: URL(fileURLWithPath: "/tmp"))
-        let items = sampleItems()
-        vm.state.items = items
-        vm.nameFilterText = "apple"
-        vm.isFilterBarVisible = true
-        let expected = PanelViewModel.filteredItems(items, nameFilterText: "apple")
-        #expect(vm.visibleItems.map(\.id) == expected.map(\.id))
-    }
-
-    @Test func appendToNameFilterRequiresVisibleBar() {
-        let vm = PanelViewModel(side: .left, initialDirectory: URL(fileURLWithPath: "/tmp"))
-        vm.isFilterBarVisible = false
-        vm.appendToNameFilter("a")
-        #expect(vm.nameFilterText.isEmpty)
-        vm.isFilterBarVisible = true
-        vm.appendToNameFilter("hi")
-        #expect(vm.nameFilterText == "hi")
-    }
-
-    @Test func deleteInNameFilterBackwardAndForward() {
-        let vm = PanelViewModel(side: .left, initialDirectory: URL(fileURLWithPath: "/tmp"))
-        vm.isFilterBarVisible = true
-        vm.nameFilterText = "abc"
-        #expect(vm.deleteInNameFilter(backward: true))
-        #expect(vm.nameFilterText == "ab")
-        #expect(vm.deleteInNameFilter(backward: false))
-        #expect(vm.nameFilterText == "b")
-        vm.nameFilterText = ""
-        #expect(!vm.deleteInNameFilter(backward: true))
+        #expect(vm.visibleItems.map(\.id) == items.map(\.id))
     }
 }

@@ -35,9 +35,6 @@ enum KeyboardShortcuts {
     /// Cmd+Shift+A — collapse selection to focused item (deselect multi-select)
     static let deselectAll = KeyboardShortcut("a", modifiers: [.command, .shift])
 
-    /// Cmd+F — find / filter in panel
-    static let findInPanel = KeyboardShortcut("f", modifiers: .command)
-
     // MARK: - File Operations (Function Keys)
     //
     // SwiftUI's KeyEquivalent doesn't expose F5–F8 as static properties.
