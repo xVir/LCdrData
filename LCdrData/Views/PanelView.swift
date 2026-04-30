@@ -32,6 +32,18 @@ struct PanelView: View {
 
             Divider()
 
+            if viewModel.isFilterBarVisible && isActive {
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    filterDisplay
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(.bar.opacity(0.5))
+            }
+
             StatusBarView(viewModel: viewModel)
         }
         .background(isActive ? Color.accentColor.opacity(0.03) : Color.clear)
@@ -39,6 +51,10 @@ struct PanelView: View {
             RoundedRectangle(cornerRadius: 0)
                 .stroke(isActive ? Color.accentColor.opacity(0.4) : Color.clear, lineWidth: 2)
         )
+        .onChange(of: viewModel.nameFilterText) { _, _ in
+            guard viewModel.isFilterBarVisible else { return }
+            viewModel.syncFocusAfterFilterChange()
+        }
         .contentShape(Rectangle())
         .simultaneousGesture(
             TapGesture().onEnded {
@@ -47,6 +63,33 @@ struct PanelView: View {
                 }
             }
         )
+    }
+
+    /// Non-interactive display; typing is routed via `MainWindowView` while the list stays focused.
+    private var filterDisplay: some View {
+        Group {
+            if viewModel.nameFilterText.isEmpty {
+                Text("Filter names")
+                    .foregroundStyle(.secondary)
+            } else {
+                Text(viewModel.nameFilterText)
+                    .foregroundStyle(.primary)
+            }
+        }
+        .font(.system(.body, design: .monospaced))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(
+            RoundedRectangle(cornerRadius: 4)
+                .fill(.background)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 4)
+                .stroke(.separator.opacity(0.6), lineWidth: 1)
+        )
+        .accessibilityLabel("Name filter")
+        .accessibilityValue(viewModel.nameFilterText.isEmpty ? "Filter names" : viewModel.nameFilterText)
     }
 
     // MARK: - Error View

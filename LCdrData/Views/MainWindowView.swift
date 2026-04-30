@@ -7,126 +7,100 @@ struct MainWindowView: View {
 
     @Environment(AppState.self) private var appState
     @FocusState private var focusedPanel: PanelSide?
+    @State private var quickLookController = QuickLookPreviewController()
 
     var body: some View {
         @Bindable var ops = appState.fileOperations
 
-        ZStack {
-            VStack(spacing: 0) {
-                // Dual-panel area with resizable splitter
-                HSplitView {
-                    PanelView(viewModel: appState.leftPanel)
-                        .focusSection()
-                        .focused($focusedPanel, equals: .left)
-                        .frame(minWidth: 300)
-
-                    PanelView(viewModel: appState.rightPanel)
-                        .focusSection()
-                        .focused($focusedPanel, equals: .right)
-                        .frame(minWidth: 300)
+        mainContentLayer(showProgressOverlay: ops.showProgressOverlay, operations: ops.activeOperations)
+            .environment(\.nameFilterKeyPressHandler) { press in
+                NameFilterKeyPress.handle(
+                    press: press,
+                    panel: appState.activePanelViewModel,
+                    keyboardRoutingActive: keyboardRoutingActive
+                )
+            }
+            .focusedSceneValue(\.activePanel, appState.activePanelViewModel)
+            .task {
+                async let leftLoad: Void = appState.leftPanel.loadDirectory()
+                async let rightLoad: Void = appState.rightPanel.loadDirectory()
+                _ = await (leftLoad, rightLoad)
+                focusedPanel = .left
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                guard !appState.fileOperations.showConfirmationDialog
+                        && !appState.fileOperations.showProgressOverlay
+                        && appState.fileOperations.activeOperations.isEmpty else {
+                    return
                 }
-
-                Divider()
-
-                // Command bar at the bottom
-                CommandBarView(
-                    hasSelection: hasSelection,
-                    onCopy: { performCopy() },
-                    onMove: { performMove() },
-                    onMkdir: { performMkdir() },
-                    onDelete: { performDelete() }
-                )
+                Task {
+                    async let left: Void = appState.leftPanel.reloadKeepingSelection()
+                    async let right: Void = appState.rightPanel.reloadKeepingSelection()
+                    _ = await (left, right)
+                }
             }
-            .frame(minWidth: 800, minHeight: 500)
-
-            // Progress overlay for long-running operations
-            if ops.showProgressOverlay {
-                Color.black.opacity(0.3)
-                    .ignoresSafeArea()
-
-                FileOperationProgressView(
-                    operations: ops.activeOperations,
-                    onCancel: { ops.cancelCurrentOperation() }
-                )
+            .onChange(of: focusedPanel) { _, newValue in
+                if let newValue {
+                    appState.activePanel = newValue
+                }
             }
-        }
-        .focusedSceneValue(\.activePanel, appState.activePanelViewModel)
-        .task {
-            // Load both panels on first appearance
-            async let leftLoad: Void = appState.leftPanel.loadDirectory()
-            async let rightLoad: Void = appState.rightPanel.loadDirectory()
-            _ = await (leftLoad, rightLoad)
-            // Set initial keyboard focus to the left panel
-            focusedPanel = .left
-        }
-        // Refresh both panels when the app regains focus so that
-        // external file system changes (files created in Terminal, etc.)
-        // are reflected immediately. Skip when a file operation is
-        // in progress to avoid racing with the operation's own reload.
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            guard !appState.fileOperations.showConfirmationDialog
-                    && !appState.fileOperations.showProgressOverlay
-                    && appState.fileOperations.activeOperations.isEmpty else {
-                return
+            .onChange(of: appState.activePanel) { _, newValue in
+                focusedPanel = newValue
+                appState.leftPanel.dismissNameFilterBar()
+                appState.rightPanel.dismissNameFilterBar()
             }
-            Task {
-                async let left: Void = appState.leftPanel.reloadKeepingSelection()
-                async let right: Void = appState.rightPanel.reloadKeepingSelection()
-                _ = await (left, right)
-            }
-        }
-        // Sync focus state -> app state
-        .onChange(of: focusedPanel) { _, newValue in
-            if let newValue {
-                appState.activePanel = newValue
-            }
-        }
-        // Sync app state -> focus state (e.g. when clicking a panel)
-        .onChange(of: appState.activePanel) { _, newValue in
-            focusedPanel = newValue
-        }
-        // MARK: - Keyboard Shortcuts
-        .onKeyPress(.tab, phases: .down) { _ in
-            appState.switchActivePanel()
-            focusedPanel = appState.activePanel
-            return .handled
-        }
-        .onKeyPress(.return, phases: .down) { _ in
-            handleReturn()
-            return .handled
-        }
-        // F2 — Rename
-        .onKeyPress(KeyboardShortcuts.f2Key, phases: .down) { _ in
-            performRename()
-            return .handled
-        }
-        // F5 — Copy
-        .onKeyPress(KeyboardShortcuts.f5Key, phases: .down) { _ in
-            performCopy()
-            return .handled
-        }
-        // F6 — Move
-        .onKeyPress(KeyboardShortcuts.f6Key, phases: .down) { _ in
-            performMove()
-            return .handled
-        }
-        // F7 — Mkdir
-        .onKeyPress(KeyboardShortcuts.f7Key, phases: .down) { _ in
-            performMkdir()
-            return .handled
-        }
-        // F8 — Delete
-        .onKeyPress(KeyboardShortcuts.f8Key, phases: .down) { _ in
-            performDelete()
-            return .handled
-        }
-        // Note: Backspace/Delete for "go to parent" is handled via
-        // .onDeleteCommand on the List in FileTableView, because
-        // SwiftUI's List intercepts .delete key events before they
-        // can propagate to parent views.
-
-        // MARK: - Confirmation Dialog
-        .confirmationDialog(
+            .modifier(KeyShortcutModifier(
+                keyboardRoutingActive: keyboardRoutingActive,
+                onTab: {
+                    appState.switchActivePanel()
+                    focusedPanel = appState.activePanel
+                },
+                onReturn: { handleReturn() },
+                onCmdL: { appState.activePanelViewModel.isPathBarEditing = true },
+                onCmdDown: { Task { await appState.activePanelViewModel.openSelectedItem() } },
+                onCmdShiftA: { appState.activePanelViewModel.deselectAllKeepingFocus() },
+                onCmdF: { appState.activePanelViewModel.showNameFilterBar() },
+                onEscape: {
+                    let panel = appState.activePanelViewModel
+                    if panel.isFilterBarVisible {
+                        panel.dismissNameFilterBar()
+                        return true
+                    }
+                    return false
+                },
+                onSpace: {
+                    let panel = appState.activePanelViewModel
+                    guard !panel.isPathBarEditing && !panel.isFilterBarVisible else {
+                        return false
+                    }
+                    panel.commanderSpaceSelect()
+                    return true
+                },
+                onHome: { appState.activePanelViewModel.focusFirstListItem() },
+                onEnd: { appState.activePanelViewModel.focusLastListItem() },
+                onF3: { performQuickLook() },
+                onF4: { performEditFile() },
+                onF2: { performRename() },
+                onF5: { performCopy() },
+                onF6: { performMove() },
+                onF7: { performMkdir() },
+                onF8: { performDelete() },
+                onDelete: { performDelete() },
+                pathEditingBlocksDelete: {
+                    appState.activePanelViewModel.isPathBarEditing
+                },
+                onFilterDelete: { backward in
+                    let panel = appState.activePanelViewModel
+                    guard panel.isFilterBarVisible else { return false }
+                    if !panel.nameFilterText.isEmpty {
+                        _ = panel.deleteInNameFilter(backward: backward)
+                    }
+                    return true
+                },
+                typeAhead: { handleTypeAheadKeyPress($0) }
+            ))
+            // MARK: - Confirmation Dialog
+            .confirmationDialog(
             "Confirm Operation",
             isPresented: $ops.showConfirmationDialog,
             titleVisibility: .visible
@@ -240,11 +214,24 @@ struct MainWindowView: View {
 
     // MARK: - Computed Properties
 
+    private var keyboardRoutingActive: Bool {
+        let ops = appState.fileOperations
+        return !ops.showConfirmationDialog
+            && !ops.showProgressOverlay
+            && !ops.showRenameDialog
+            && !ops.showNewFolderDialog
+            && !ops.showConflictDialog
+    }
+
     private var hasSelection: Bool {
         let panel = appState.activePanelViewModel
-        return panel.state.items.contains { item in
+        return panel.visibleItems.contains { item in
             panel.state.selectedItemIDs.contains(item.id) && !item.isParentDirectory
         }
+    }
+
+    private var canViewOrEditFile: Bool {
+        appState.activePanelViewModel.previewURLForQuickLook() != nil
     }
 
     // MARK: - Actions
@@ -298,6 +285,45 @@ struct MainWindowView: View {
         )
     }
 
+    private func performQuickLook() {
+        guard let url = appState.activePanelViewModel.previewURLForQuickLook() else { return }
+        quickLookController.show(url: url)
+    }
+
+    private func performEditFile() {
+        appState.activePanelViewModel.openSelectedFileWithDefaultApp()
+    }
+
+    private func handleTypeAheadKeyPress(_ press: KeyPress) -> KeyPress.Result {
+        guard keyboardRoutingActive else { return .ignored }
+        let panel = appState.activePanelViewModel
+        guard !panel.isPathBarEditing else { return .ignored }
+
+        // Filter text is handled on the focused file `List` (see `FileTableView` + `NameFilterKeyPress.handle`).
+        if panel.isFilterBarVisible {
+            return .ignored
+        }
+
+        if press.modifiers.contains(.command)
+            || press.modifiers.contains(.control)
+            || press.modifiers.contains(.option) {
+            return .ignored
+        }
+
+        let chars = press.characters
+        guard chars.count == 1, let scalar = chars.unicodeScalars.first else {
+            return .ignored
+        }
+        if scalar.value < 32 || scalar.value == 127 {
+            return .ignored
+        }
+
+        if panel.handleTypeAheadInsert(String(chars)) {
+            return .handled
+        }
+        return .ignored
+    }
+
     private func performRename() {
         let panel = appState.activePanelViewModel
 
@@ -314,6 +340,202 @@ struct MainWindowView: View {
         }
 
         appState.fileOperations.requestRename(item: item)
+    }
+
+    @ViewBuilder
+    private func mainContentLayer(showProgressOverlay: Bool, operations: [FileOperation]) -> some View {
+        ZStack {
+            VStack(spacing: 0) {
+                HSplitView {
+                    PanelView(viewModel: appState.leftPanel)
+                        .focusSection()
+                        .focused($focusedPanel, equals: .left)
+                        .frame(minWidth: 300)
+
+                    PanelView(viewModel: appState.rightPanel)
+                        .focusSection()
+                        .focused($focusedPanel, equals: .right)
+                        .frame(minWidth: 300)
+                }
+
+                Divider()
+
+                CommandBarView(
+                    canViewOrEditFile: canViewOrEditFile,
+                    hasSelection: hasSelection,
+                    onView: { performQuickLook() },
+                    onEdit: { performEditFile() },
+                    onCopy: { performCopy() },
+                    onMove: { performMove() },
+                    onMkdir: { performMkdir() },
+                    onDelete: { performDelete() }
+                )
+            }
+            .frame(minWidth: 800, minHeight: 500)
+
+            if showProgressOverlay {
+                Color.black.opacity(0.3)
+                    .ignoresSafeArea()
+
+                FileOperationProgressView(
+                    operations: operations,
+                    onCancel: { appState.fileOperations.cancelCurrentOperation() }
+                )
+            }
+        }
+    }
+}
+
+// MARK: - Keyboard shortcut modifier (split out for faster type-checking)
+
+private struct KeyShortcutModifier: ViewModifier {
+
+    let keyboardRoutingActive: Bool
+    let onTab: () -> Void
+    let onReturn: () -> Void
+    let onCmdL: () -> Void
+    let onCmdDown: () -> Void
+    let onCmdShiftA: () -> Void
+    let onCmdF: () -> Void
+    /// Returns true if handled
+    let onEscape: () -> Bool
+    /// Returns true if key was consumed
+    let onSpace: () -> Bool
+    let onHome: () -> Void
+    let onEnd: () -> Void
+    let onF3: () -> Void
+    let onF4: () -> Void
+    let onF2: () -> Void
+    let onF5: () -> Void
+    let onF6: () -> Void
+    let onF7: () -> Void
+    let onF8: () -> Void
+    let onDelete: () -> Void
+    let pathEditingBlocksDelete: () -> Bool
+    /// When filter bar is visible, Delete is consumed (removes a character if non-empty; if empty, no-op). Returns true so file delete does not run.
+    let onFilterDelete: (_ backward: Bool) -> Bool
+    let typeAhead: (KeyPress) -> KeyPress.Result
+
+    func body(content: Content) -> some View {
+        content
+            .onKeyPress(.tab, phases: .down) { _ in
+                onTab()
+                return .handled
+            }
+            .onKeyPress(.return, phases: .down) { _ in
+                onReturn()
+                return .handled
+            }
+            .onKeyPress(.escape, phases: .down) { _ in
+                if onEscape() { return .handled }
+                return .ignored
+            }
+            .onKeyPress(.space, phases: .down) { _ in
+                guard keyboardRoutingActive else { return .ignored }
+                return onSpace() ? .handled : .ignored
+            }
+            .onKeyPress(.home, phases: .down) { _ in
+                guard keyboardRoutingActive else { return .ignored }
+                onHome()
+                return .handled
+            }
+            .onKeyPress(.end, phases: .down) { _ in
+                guard keyboardRoutingActive else { return .ignored }
+                onEnd()
+                return .handled
+            }
+            .onKeyPress(KeyboardShortcuts.f3Key, phases: .down) { _ in
+                guard keyboardRoutingActive else { return .ignored }
+                onF3()
+                return .handled
+            }
+            .onKeyPress(KeyboardShortcuts.f4Key, phases: .down) { _ in
+                guard keyboardRoutingActive else { return .ignored }
+                onF4()
+                return .handled
+            }
+            .onKeyPress(KeyboardShortcuts.f2Key, phases: .down) { _ in
+                guard keyboardRoutingActive else { return .ignored }
+                onF2()
+                return .handled
+            }
+            .onKeyPress(KeyboardShortcuts.f5Key, phases: .down) { _ in
+                guard keyboardRoutingActive else { return .ignored }
+                onF5()
+                return .handled
+            }
+            .onKeyPress(KeyboardShortcuts.f6Key, phases: .down) { _ in
+                guard keyboardRoutingActive else { return .ignored }
+                onF6()
+                return .handled
+            }
+            .onKeyPress(KeyboardShortcuts.f7Key, phases: .down) { _ in
+                guard keyboardRoutingActive else { return .ignored }
+                onF7()
+                return .handled
+            }
+            .onKeyPress(KeyboardShortcuts.f8Key, phases: .down) { _ in
+                guard keyboardRoutingActive else { return .ignored }
+                onF8()
+                return .handled
+            }
+            .onKeyPress(.delete, phases: .down) { _ in
+                guard keyboardRoutingActive else { return .ignored }
+                if onFilterDelete(true) { return .handled }
+                guard !pathEditingBlocksDelete() else { return .ignored }
+                onDelete()
+                return .handled
+            }
+            .onKeyPress(.deleteForward, phases: .down) { _ in
+                guard keyboardRoutingActive else { return .ignored }
+                if onFilterDelete(false) { return .handled }
+                guard !pathEditingBlocksDelete() else { return .ignored }
+                onDelete()
+                return .handled
+            }
+            .onKeyPress(phases: .down) { press in
+                let r = Self.handleCommandArrowsAndLetters(
+                    press: press,
+                    keyboardRoutingActive: keyboardRoutingActive,
+                    onCmdL: onCmdL,
+                    onCmdDown: onCmdDown,
+                    onCmdShiftA: onCmdShiftA,
+                    onCmdF: onCmdF
+                )
+                if r != .ignored { return r }
+                return typeAhead(press)
+            }
+    }
+
+    private static func handleCommandArrowsAndLetters(
+        press: KeyPress,
+        keyboardRoutingActive: Bool,
+        onCmdL: () -> Void,
+        onCmdDown: () -> Void,
+        onCmdShiftA: () -> Void,
+        onCmdF: () -> Void
+    ) -> KeyPress.Result {
+        guard keyboardRoutingActive else { return .ignored }
+        let cmd = press.modifiers.contains(.command)
+        let shift = press.modifiers.contains(.shift)
+
+        if press.key == KeyEquivalent("l"), cmd, !shift {
+            onCmdL()
+            return .handled
+        }
+        if press.key == .downArrow, cmd {
+            onCmdDown()
+            return .handled
+        }
+        if press.key == KeyEquivalent("a"), cmd, shift {
+            onCmdShiftA()
+            return .handled
+        }
+        if press.key == KeyEquivalent("f"), cmd, !shift {
+            onCmdF()
+            return .handled
+        }
+        return .ignored
     }
 }
 

@@ -48,6 +48,25 @@ struct LCdrDataApp: App {
                     }
                 }
                 .keyboardShortcut(KeyboardShortcuts.historyForward)
+
+                Divider()
+
+                Button("Go to Path…") {
+                    appState.activePanelViewModel.isPathBarEditing = true
+                }
+                .keyboardShortcut(KeyboardShortcuts.goToPath)
+
+                Button("Open") {
+                    Task {
+                        await appState.activePanelViewModel.openSelectedItem()
+                    }
+                }
+                .keyboardShortcut(KeyboardShortcuts.openItem)
+
+                Button("Find in Panel…") {
+                    appState.activePanelViewModel.showNameFilterBar()
+                }
+                .keyboardShortcut(KeyboardShortcuts.findInPanel)
             }
 
             // View commands
@@ -66,6 +85,11 @@ struct LCdrDataApp: App {
                     appState.activePanelViewModel.selectAll()
                 }
                 .keyboardShortcut(KeyboardShortcuts.selectAll)
+
+                Button("Deselect All") {
+                    appState.activePanelViewModel.deselectAllKeepingFocus()
+                }
+                .keyboardShortcut(KeyboardShortcuts.deselectAll)
             }
         }
     }

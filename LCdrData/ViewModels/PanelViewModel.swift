@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Observation
 
@@ -23,7 +24,21 @@ final class PanelViewModel {
     /// green background). Cleared automatically after the animation ends.
     var highlightedItemID: UUID?
 
+    /// When true, the path bar shows an editable path field (Cmd+L).
+    var isPathBarEditing: Bool = false
 
+    /// Substring filter for file names; only applied when `isFilterBarVisible` is true.
+    var nameFilterText: String = ""
+
+    /// When true, the filter bar is shown (Cmd+F) and `visibleItems` applies `nameFilterText`.
+    /// Keystrokes are routed to `nameFilterText` by `MainWindowView` while visible; the list stays focused.
+    var isFilterBarVisible: Bool = false
+
+    // MARK: - Type-ahead (incremental search)
+
+    private var typeAheadBuffer: String = ""
+    private var typeAheadLastEvent: Date = .distantPast
+    private let typeAheadResetInterval: TimeInterval = 1.0
 
     // MARK: - Dependencies
 
@@ -205,8 +220,15 @@ final class PanelViewModel {
 
     // MARK: - Navigation
 
+    /// Items shown in the file list: full listing unless the filter bar is open, then `nameFilterText` is applied.
+    var visibleItems: [FileItem] {
+        guard isFilterBarVisible else { return state.items }
+        return Self.filteredItems(state.items, nameFilterText: nameFilterText)
+    }
+
     /// Navigates into a directory, pushing to history.
     func navigate(to url: URL) async {
+        clearDirectoryNavigationExtras()
         // When navigating to the parent of the current directory, remember
         // the child so `loadDirectory()` can focus it after loading.
         let currentDir = state.currentDirectory
@@ -238,6 +260,7 @@ final class PanelViewModel {
     /// Navigate back in history.
     func navigateBack() async {
         guard state.historyIndex > 0 else { return }
+        clearDirectoryNavigationExtras()
         state.historyIndex -= 1
         state.currentDirectory = state.history[state.historyIndex]
         await loadDirectory()
@@ -246,32 +269,42 @@ final class PanelViewModel {
     /// Navigate forward in history.
     func navigateForward() async {
         guard state.historyIndex < state.history.count - 1 else { return }
+        clearDirectoryNavigationExtras()
         state.historyIndex += 1
         state.currentDirectory = state.history[state.historyIndex]
         await loadDirectory()
     }
 
-    /// Opens the currently selected item — if it's a directory, navigate into it.
-    /// Uses the List selection (single selected item) rather than `focusedItemID`,
-    /// because arrow-key navigation in the List updates `selectedItemIDs`.
+    /// Opens a row: parent → up, directory → enter, file → default app.
+    func openItem(_ item: FileItem) async {
+        if item.isParentDirectory {
+            await navigateToParent()
+            return
+        }
+        if item.isDirectory {
+            await navigate(to: item.url)
+        } else {
+            NSWorkspace.shared.open(item.url)
+        }
+    }
+
+    /// Opens the currently selected item (Cmd+Down / double-click).
+    /// Uses the List selection when exactly one item is selected; otherwise `focusedItemID`.
     func openSelectedItem() async {
-        // Use selection if exactly one item is selected; fall back to focusedItemID.
         let targetID: UUID? = if state.selectedItemIDs.count == 1 {
             state.selectedItemIDs.first
         } else {
             state.focusedItemID
         }
 
-        guard let targetID,
-              let item = state.items.first(where: { $0.id == targetID }) else {
-            return
-        }
+        guard let targetID else { return }
 
-        if item.isDirectory {
-            await navigate(to: item.url)
-        }
-        // For files, Phase 1 only supports directory navigation.
-        // File opening (Quick Look, editor) is Phase 2+.
+        let item = visibleItems.first(where: { $0.id == targetID })
+            ?? state.items.first(where: { $0.id == targetID })
+
+        guard let item else { return }
+
+        await openItem(item)
     }
 
     // MARK: - Sorting
@@ -353,10 +386,10 @@ final class PanelViewModel {
         state.focusedItemID = itemID
     }
 
-    /// Selects all items (excluding ".." parent entry).
+    /// Selects all items (excluding ".." parent entry), respecting the name filter.
     func selectAll() {
         state.selectedItemIDs = Set(
-            state.items
+            visibleItems
                 .filter { !$0.isParentDirectory }
                 .map(\.id)
         )
@@ -365,6 +398,16 @@ final class PanelViewModel {
     /// Deselects all items.
     func deselectAll() {
         state.selectedItemIDs = []
+    }
+
+    /// Collapses a multi-selection to a single focused row (Cmd+Shift+A).
+    func deselectAllKeepingFocus() {
+        if let id = state.focusedItemID {
+            state.selectedItemIDs = [id]
+        } else if let first = visibleItems.first {
+            state.focusedItemID = first.id
+            state.selectedItemIDs = [first.id]
+        }
     }
 
     /// Call before a delete operation to remember which item should receive
@@ -377,17 +420,19 @@ final class PanelViewModel {
         let selectedIDs = state.selectedItemIDs
         guard !selectedIDs.isEmpty else { return }
 
-        // Find the index range occupied by selected items.
-        let selectedIndices = state.items.enumerated()
+        // Find the index range occupied by selected items (use visible order when filtered).
+        let selectedIndices = visibleItems.enumerated()
             .filter { selectedIDs.contains($0.element.id) }
             .map(\.offset)
 
         guard let lastSelectedIndex = selectedIndices.max() else { return }
 
+        let rowItems = visibleItems
+
         // Try the item right after the last selected item.
         let afterIndex = lastSelectedIndex + 1
-        if afterIndex < state.items.count {
-            let candidate = state.items[afterIndex]
+        if afterIndex < rowItems.count {
+            let candidate = rowItems[afterIndex]
             if !candidate.isParentDirectory {
                 pendingPostDeleteFocusID = candidate.id
                 return
@@ -399,7 +444,7 @@ final class PanelViewModel {
         guard let firstSelectedIndex = selectedIndices.min() else { return }
         let beforeIndex = firstSelectedIndex - 1
         if beforeIndex >= 0 {
-            let candidate = state.items[beforeIndex]
+            let candidate = rowItems[beforeIndex]
             if !candidate.isParentDirectory {
                 pendingPostDeleteFocusID = candidate.id
                 return
@@ -407,7 +452,7 @@ final class PanelViewModel {
         }
 
         // Fallback: focus the ".." entry if nothing else is available.
-        pendingPostDeleteFocusID = state.items.first?.id
+        pendingPostDeleteFocusID = rowItems.first?.id
     }
 
     // MARK: - Highlight
@@ -430,5 +475,195 @@ final class PanelViewModel {
     func toggleHiddenFiles() async {
         state.showHiddenFiles.toggle()
         await loadDirectory()
+    }
+
+    // MARK: - Name filter
+
+    /// Ensures focus and selection remain valid after the filter changes.
+    func syncFocusAfterFilterChange() {
+        let visible = visibleItems
+        guard !visible.isEmpty else { return }
+        if let f = state.focusedItemID, visible.contains(where: { $0.id == f }) {
+            return
+        }
+        let first = visible.first!
+        state.focusedItemID = first.id
+        state.selectedItemIDs = [first.id]
+    }
+
+    /// Shows the bottom filter bar (Cmd+F). The file list keeps keyboard focus; typing is routed to `nameFilterText`.
+    func showNameFilterBar() {
+        isFilterBarVisible = true
+    }
+
+    /// Hides the filter bar and clears the filter string.
+    func dismissNameFilterBar() {
+        isFilterBarVisible = false
+        nameFilterText = ""
+    }
+
+    /// Appends text to the name filter while the filter bar is visible (keyboard routing from `MainWindowView`).
+    func appendToNameFilter(_ text: String) {
+        guard isFilterBarVisible, !text.isEmpty else { return }
+        nameFilterText += text
+    }
+
+    /// Removes one character from the filter string (Backspace / Forward Delete). Returns false if nothing was removed.
+    @discardableResult
+    func deleteInNameFilter(backward: Bool) -> Bool {
+        guard isFilterBarVisible, !nameFilterText.isEmpty else { return false }
+        if backward {
+            nameFilterText.removeLast()
+        } else {
+            nameFilterText.removeFirst()
+        }
+        return true
+    }
+
+    func clearNameFilter() {
+        nameFilterText = ""
+    }
+
+    // MARK: - Type-ahead
+
+    func resetTypeAheadBuffer() {
+        typeAheadBuffer = ""
+        typeAheadLastEvent = .distantPast
+    }
+
+    /// Handles incremental search from printable text; returns true if focus moved.
+    func handleTypeAheadInsert(_ text: String, now: Date = .now) -> Bool {
+        guard !text.isEmpty else { return false }
+        if now.timeIntervalSince(typeAheadLastEvent) > typeAheadResetInterval {
+            typeAheadBuffer = ""
+        }
+        typeAheadLastEvent = now
+        typeAheadBuffer.append(contentsOf: text)
+
+        guard let matchID = Self.typeAheadMatchID(
+            items: visibleItems,
+            focusedID: state.focusedItemID,
+            buffer: typeAheadBuffer
+        ) else {
+            return false
+        }
+        state.focusedItemID = matchID
+        state.selectedItemIDs = [matchID]
+        return true
+    }
+
+    // MARK: - Commander Space
+
+    /// Toggles selection on the focused row and moves focus down one row.
+    func commanderSpaceSelect() {
+        let items = visibleItems
+        guard let focusID = state.focusedItemID,
+              let idx = items.firstIndex(where: { $0.id == focusID }) else {
+            return
+        }
+
+        let row = items[idx]
+        if !row.isParentDirectory {
+            toggleSelection(of: focusID)
+        }
+
+        let nextIndex = idx + 1
+        guard nextIndex < items.count else { return }
+        let nextItem = items[nextIndex]
+        state.focusedItemID = nextItem.id
+        state.selectedItemIDs = [nextItem.id]
+    }
+
+    // MARK: - Home / End
+
+    func focusFirstListItem() {
+        let items = visibleItems
+        guard let target = items.first(where: { !$0.isParentDirectory }) ?? items.first else {
+            return
+        }
+        state.focusedItemID = target.id
+        state.selectedItemIDs = [target.id]
+    }
+
+    func focusLastListItem() {
+        let items = visibleItems
+        guard let target = items.last(where: { !$0.isParentDirectory }) ?? items.last else {
+            return
+        }
+        state.focusedItemID = target.id
+        state.selectedItemIDs = [target.id]
+    }
+
+    // MARK: - Quick Look / open
+
+    /// URL for Quick Look (F3) when a single file is selected.
+    func previewURLForQuickLook() -> URL? {
+        guard let item = singleSelectedNonDirectoryItem() else { return nil }
+        guard !item.isDirectory else { return nil }
+        return item.url
+    }
+
+    /// Opens the selected file with the default application (F4).
+    func openSelectedFileWithDefaultApp() {
+        guard let item = singleSelectedNonDirectoryItem() else { return }
+        guard !item.isDirectory else { return }
+        NSWorkspace.shared.open(item.url)
+    }
+
+    private func singleSelectedNonDirectoryItem() -> FileItem? {
+        let ids = state.selectedItemIDs
+        guard ids.count == 1, let id = ids.first else { return nil }
+        return visibleItems.first(where: { $0.id == id && !$0.isParentDirectory })
+    }
+
+    // MARK: - Private
+
+    private func clearDirectoryNavigationExtras() {
+        isFilterBarVisible = false
+        nameFilterText = ""
+        resetTypeAheadBuffer()
+        isPathBarEditing = false
+    }
+
+    /// Filters the full listing; keeps `..` when the filter is non-empty.
+    static func filteredItems(_ items: [FileItem], nameFilterText: String) -> [FileItem] {
+        let trimmed = nameFilterText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return items }
+        return items.filter { item in
+            if item.isParentDirectory { return true }
+            return item.name.range(of: trimmed, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+        }
+    }
+
+    /// Next row whose name starts with `buffer` (localized), searching after `focusedID`, wrapping.
+    static func typeAheadMatchID(items: [FileItem], focusedID: UUID?, buffer: String) -> UUID? {
+        let trimmed = buffer.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        func matches(_ item: FileItem) -> Bool {
+            if item.isParentDirectory { return false }
+            return item.name.range(
+                of: trimmed,
+                options: [.anchored, .caseInsensitive, .diacriticInsensitive]
+            ) != nil
+        }
+
+        let startAfter: Int
+        if let focusedID,
+           let idx = items.firstIndex(where: { $0.id == focusedID }) {
+            startAfter = idx
+        } else {
+            startAfter = -1
+        }
+
+        if startAfter + 1 < items.count {
+            for i in (startAfter + 1)..<items.count where matches(items[i]) {
+                return items[i].id
+            }
+        }
+        for i in 0...min(startAfter, items.count - 1) where matches(items[i]) {
+            return items[i].id
+        }
+        return nil
     }
 }

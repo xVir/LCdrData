@@ -6,13 +6,13 @@ import SwiftUI
 struct PathBarView: View {
 
     @Bindable var viewModel: PanelViewModel
-    @State private var isEditing: Bool = false
+    @FocusState private var pathFieldFocused: Bool
     @State private var editedPath: String = ""
     @State private var showCopyConfirmation: Bool = false
 
     var body: some View {
         HStack(spacing: 2) {
-            if isEditing {
+            if viewModel.isPathBarEditing {
                 pathTextField
             } else {
                 breadcrumbs
@@ -25,6 +25,17 @@ struct PathBarView: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(.bar)
+        .onChange(of: viewModel.isPathBarEditing) { _, editing in
+            if editing {
+                editedPath = viewModel.state.currentDirectory.path
+                pathFieldFocused = true
+            }
+        }
+        .onChange(of: pathFieldFocused) { _, focused in
+            if !focused {
+                viewModel.isPathBarEditing = false
+            }
+        }
     }
 
     // MARK: - Breadcrumbs
@@ -88,6 +99,7 @@ struct PathBarView: View {
         TextField("Path", text: $editedPath)
             .textFieldStyle(.roundedBorder)
             .font(.system(.body, design: .monospaced))
+            .focused($pathFieldFocused)
             .onSubmit {
                 let url = URL(fileURLWithPath: editedPath)
                 var isDir: ObjCBool = false
@@ -97,10 +109,10 @@ struct PathBarView: View {
                         await viewModel.navigate(to: url)
                     }
                 }
-                isEditing = false
+                viewModel.isPathBarEditing = false
             }
             .onExitCommand {
-                isEditing = false
+                viewModel.isPathBarEditing = false
             }
     }
 
@@ -130,13 +142,5 @@ struct PathBarView: View {
         )
 
         return components
-    }
-
-    // MARK: - Actions
-
-    /// Call this to enter editing mode (e.g. from Cmd+L).
-    func startEditing() {
-        editedPath = viewModel.state.currentDirectory.path
-        isEditing = true
     }
 }

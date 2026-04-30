@@ -29,6 +29,12 @@ enum KeyboardShortcuts {
     /// Cmd+A — select all
     static let selectAll = KeyboardShortcut("a", modifiers: .command)
 
+    /// Cmd+Shift+A — collapse selection to focused item (deselect multi-select)
+    static let deselectAll = KeyboardShortcut("a", modifiers: [.command, .shift])
+
+    /// Cmd+F — find / filter in panel
+    static let findInPanel = KeyboardShortcut("f", modifiers: .command)
+
     // MARK: - File Operations (Function Keys)
     //
     // SwiftUI's KeyEquivalent doesn't expose F5–F8 as static properties.
@@ -37,6 +43,12 @@ enum KeyboardShortcuts {
 
     /// F2 key equivalent for Rename
     static let f2Key = KeyEquivalent(Character(UnicodeScalar(0xF705)!))
+
+    /// F3 key equivalent for Quick Look
+    static let f3Key = KeyEquivalent(Character(UnicodeScalar(0xF706)!))
+
+    /// F4 key equivalent for Edit / open
+    static let f4Key = KeyEquivalent(Character(UnicodeScalar(0xF707)!))
 
     /// F5 key equivalent for Copy
     static let f5Key = KeyEquivalent(Character(UnicodeScalar(0xF708)!))

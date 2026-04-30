@@ -7,6 +7,7 @@ struct FileTableView: View {
 
     @Bindable var viewModel: PanelViewModel
     let isActive: Bool
+    @Environment(\.nameFilterKeyPressHandler) private var nameFilterKeyPressHandler
 
     var body: some View {
         VStack(spacing: 0) {
@@ -21,7 +22,7 @@ struct FileTableView: View {
                     get: { viewModel.state.selectedItemIDs },
                     set: { viewModel.state.selectedItemIDs = $0 }
                 )) {
-                    ForEach(viewModel.state.items) { item in
+                    ForEach(viewModel.visibleItems) { item in
                         FileRowView(item: item, viewModel: viewModel)
                             .tag(item.id)
                             .id(item.id)
@@ -30,10 +31,17 @@ struct FileTableView: View {
                 }
                 .listStyle(.plain)
                 .environment(\.defaultMinListRowHeight, 24)
-                .onDeleteCommand {
+                // Avoid handling Delete here while the name filter is active — `MainWindowView` routes Delete to the filter.
+                .modifier(DeleteCommandWhenNotFiltering(isFilterBarVisible: viewModel.isFilterBarVisible) {
                     Task {
                         await viewModel.navigateToParent()
                     }
+                })
+                .onKeyPress(phases: .down) { press in
+                    guard isActive, viewModel.isFilterBarVisible, let handler = nameFilterKeyPressHandler else {
+                        return .ignored
+                    }
+                    return handler(press)
                 }
                 .onChange(of: viewModel.state.focusedItemID) { _, newID in
                     if let newID {
@@ -188,9 +196,7 @@ private struct FileRowView: View {
         .gesture(
             TapGesture(count: 2).onEnded {
                 Task {
-                    if item.isDirectory {
-                        await viewModel.navigate(to: item.url)
-                    }
+                    await viewModel.openItem(item)
                 }
             }
         )
@@ -223,6 +229,23 @@ private struct FileRowView: View {
         } else {
             Image(systemName: "doc")
                 .foregroundStyle(.secondary)
+        }
+    }
+}
+
+// MARK: - Delete command
+
+/// `List` `onDeleteCommand` handles Delete before window-level routing; skip it while the name filter is open
+/// so `MainWindowView` can use Delete for the filter string (or no-op when empty).
+private struct DeleteCommandWhenNotFiltering: ViewModifier {
+    let isFilterBarVisible: Bool
+    let action: () -> Void
+
+    func body(content: Content) -> some View {
+        if isFilterBarVisible {
+            content
+        } else {
+            content.onDeleteCommand(perform: action)
         }
     }
 }

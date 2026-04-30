@@ -5,7 +5,10 @@ import SwiftUI
 /// Wired to file operations via closures provided by the parent view.
 struct CommandBarView: View {
 
+    let canViewOrEditFile: Bool
     let hasSelection: Bool
+    let onView: () -> Void
+    let onEdit: () -> Void
     let onCopy: () -> Void
     let onMove: () -> Void
     let onMkdir: () -> Void
@@ -33,8 +36,8 @@ struct CommandBarView: View {
 
     private var commands: [CommandDef] {
         [
-            CommandDef(key: "F3", label: "View", isEnabled: false, action: {}),
-            CommandDef(key: "F4", label: "Edit", isEnabled: false, action: {}),
+            CommandDef(key: "F3", label: "View", isEnabled: canViewOrEditFile, action: onView),
+            CommandDef(key: "F4", label: "Edit", isEnabled: canViewOrEditFile, action: onEdit),
             CommandDef(key: "F5", label: "Copy", isEnabled: hasSelection, action: onCopy),
             CommandDef(key: "F6", label: "Move", isEnabled: hasSelection, action: onMove),
             CommandDef(key: "F7", label: "Mkdir", isEnabled: true, action: onMkdir),
@@ -71,7 +74,10 @@ struct CommandBarView: View {
 
 #Preview {
     CommandBarView(
+        canViewOrEditFile: true,
         hasSelection: true,
+        onView: {},
+        onEdit: {},
         onCopy: {},
         onMove: {},
         onMkdir: {},
