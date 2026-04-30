@@ -51,6 +51,22 @@ struct LCdrDataApp: App {
                 .keyboardShortcut(KeyboardShortcuts.toggleHidden)
             }
 
+            CommandMenu("Favorites") {
+                let entries = appState.configuration.current.bookmarkEntries
+                if entries.isEmpty {
+                    Button("No favorites — add in Settings") {}
+                        .disabled(true)
+                } else {
+                    ForEach(Array(entries.enumerated()), id: \.offset) { _, entry in
+                        Button(entry.label) {
+                            Task {
+                                await appState.navigateActivePanelToFavorite(path: entry.path)
+                            }
+                        }
+                    }
+                }
+            }
+
             // Navigation commands
             CommandGroup(after: .sidebar) {
                 Button("Go to Parent Directory") {

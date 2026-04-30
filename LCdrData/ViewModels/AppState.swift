@@ -141,4 +141,12 @@ final class AppState {
         pasteboard.clearContents()
         pasteboard.setString(lines.joined(separator: "\n"), forType: .string)
     }
+
+    /// Navigates the active panel to a configured favorite path (`~` expanded).
+    @MainActor
+    func navigateActivePanelToFavorite(path: String) async {
+        let expanded = (path as NSString).expandingTildeInPath
+        let url = URL(fileURLWithPath: expanded, isDirectory: true)
+        await activePanelViewModel.navigate(to: url)
+    }
 }
