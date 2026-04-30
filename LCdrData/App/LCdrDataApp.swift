@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 @main
@@ -18,37 +17,14 @@ struct LCdrDataApp: App {
         .defaultSize(width: 1100, height: 700)
         .windowResizability(.contentMinSize)
         .commands {
-            CommandMenu("File") {
+            // Merge into the system File / Edit / View menus — do not use CommandMenu("File") etc.,
+            // or macOS shows duplicate menu titles.
+
+            CommandGroup(after: .newItem) {
                 Button("Open Folder…") {
                     Task { await appState.presentOpenFolderPanel() }
                 }
                 .keyboardShortcut("o", modifiers: [.command, .shift])
-
-                Divider()
-
-                Button("Close Window") {
-                    NSApplication.shared.keyWindow?.close()
-                }
-                .keyboardShortcut("w", modifiers: .command)
-            }
-
-            CommandMenu("Edit") {
-                Button("Copy Selected Paths") {
-                    appState.copySelectedPathsToPasteboard()
-                }
-                .keyboardShortcut("c", modifiers: [.command, .option])
-            }
-
-            CommandMenu("View") {
-                Button("Refresh Panel") {
-                    Task { await appState.activePanelViewModel.loadDirectory() }
-                }
-                .keyboardShortcut(KeyboardShortcuts.refresh)
-
-                Button("Toggle Hidden Files") {
-                    Task { await appState.activePanelViewModel.toggleHiddenFiles() }
-                }
-                .keyboardShortcut(KeyboardShortcuts.toggleHidden)
             }
 
             CommandMenu("Favorites") {
@@ -83,6 +59,13 @@ struct LCdrDataApp: App {
                 }
                 .keyboardShortcut(KeyboardShortcuts.refresh)
 
+                Button("Toggle Hidden Files") {
+                    Task {
+                        await appState.activePanelViewModel.toggleHiddenFiles()
+                    }
+                }
+                .keyboardShortcut(KeyboardShortcuts.toggleHidden)
+
                 Divider()
 
                 Button("Back") {
@@ -114,8 +97,15 @@ struct LCdrDataApp: App {
                 .keyboardShortcut(KeyboardShortcuts.openItem)
             }
 
-            // Selection commands
+            // Selection commands (Edit menu, after Cut/Copy/Paste)
             CommandGroup(after: .pasteboard) {
+                Button("Copy Selected Paths") {
+                    appState.copySelectedPathsToPasteboard()
+                }
+                .keyboardShortcut("c", modifiers: [.command, .option])
+
+                Divider()
+
                 Button("Select All") {
                     appState.activePanelViewModel.selectAll()
                 }
