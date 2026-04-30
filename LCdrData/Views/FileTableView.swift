@@ -1,4 +1,6 @@
+import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Displays the file listing as a sortable table with columns for
 /// name, size, date modified, and kind.
@@ -15,6 +17,7 @@ struct FileTableView: View {
     /// Drives first responder to the `List` when this panel becomes active so arrow keys move the selection
     /// (Tab switches `focusedPanel` but does not always move keyboard focus off the path bar or column headers).
     @FocusState private var fileListFocused: Bool
+    @State private var isFileDropTargeted = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -40,6 +43,12 @@ struct FileTableView: View {
                             .id(item.id)
                             .listRowInsets(EdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8))
                     }
+                }
+                .onDrop(of: [.fileURL], isTargeted: $isFileDropTargeted) { providers in
+                    Task {
+                        await handleExternalFileDrop(providers: providers, into: viewModel)
+                    }
+                    return true
                 }
                 .focused($fileListFocused)
                 .listStyle(.plain)
@@ -87,6 +96,32 @@ struct FileTableView: View {
         DispatchQueue.main.async {
             fileListFocused = true
         }
+    }
+
+    private func handleExternalFileDrop(providers: [NSItemProvider], into viewModel: PanelViewModel) async {
+        let destinationDirectory = viewModel.state.currentDirectory
+        let fm = FileManager.default
+        for provider in providers {
+            do {
+                let object = try await provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier)
+                let sourceURL: URL? = {
+                    if let url = object as? URL { return url }
+                    if let data = object as? Data {
+                        return URL(dataRepresentation: data, relativeTo: nil)
+                    }
+                    return nil
+                }()
+                guard let url = sourceURL else { continue }
+                let name = url.lastPathComponent
+                let dest = destinationDirectory.appendingPathComponent(name)
+                if url.standardizedFileURL == dest.standardizedFileURL { continue }
+                if fm.fileExists(atPath: dest.path) { continue }
+                try fm.copyItem(at: url, to: dest)
+            } catch {
+                continue
+            }
+        }
+        await viewModel.reloadKeepingSelection()
     }
 
     // MARK: - Column Headers
@@ -230,6 +265,12 @@ private struct FileRowView: View {
                 viewModel.state.selectedItemIDs = [item.id]
             }
         )
+        .onDrag {
+            guard !item.isParentDirectory else {
+                return NSItemProvider()
+            }
+            return NSItemProvider(contentsOf: item.url) ?? NSItemProvider()
+        }
     }
 
     // MARK: - Helpers
