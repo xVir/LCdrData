@@ -93,6 +93,45 @@ struct FileOperationServiceTests {
         #expect(progressUpdates[1].completedItems == 2)
     }
 
+    /// Both panels show the same folder: destination path equals source path; must not delete-then-copy.
+    @Test func copyWhenDestinationDirectoryIsSameAsSourceIsNoOp() async throws {
+        let dir = try makeTempDir()
+        defer { cleanup(dir) }
+
+        let fileURL = try createFile(named: "adsf.txt", content: "keep", in: dir)
+        let service = FileOperationService()
+
+        try await service.copy(
+            sources: [fileURL],
+            to: dir,
+            onProgress: { _ in },
+            onConflict: { _ in .overwrite }
+        )
+
+        let content = try String(contentsOf: fileURL, encoding: .utf8)
+        #expect(content == "keep")
+        #expect(FileManager.default.fileExists(atPath: fileURL.path))
+    }
+
+    @Test func moveWhenDestinationDirectoryIsSameAsSourceIsNoOp() async throws {
+        let dir = try makeTempDir()
+        defer { cleanup(dir) }
+
+        let fileURL = try createFile(named: "same_dir.txt", content: "x", in: dir)
+        let service = FileOperationService()
+
+        try await service.move(
+            sources: [fileURL],
+            to: dir,
+            onProgress: { _ in },
+            onConflict: { _ in .overwrite }
+        )
+
+        #expect(FileManager.default.fileExists(atPath: fileURL.path))
+        let content = try String(contentsOf: fileURL, encoding: .utf8)
+        #expect(content == "x")
+    }
+
     @Test func copyWithConflictOverwrite() async throws {
         let sourceDir = try makeTempDir()
         let destDir = try makeTempDir()

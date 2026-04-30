@@ -178,8 +178,20 @@ nonisolated final class FileOperationService: FileOperationServiceProtocol, Send
             let itemName = source.lastPathComponent
             var destinationURL = destination.appendingPathComponent(itemName)
 
-            // Check for conflicts
             let fm = FileManager()
+
+            // Same resolved path (e.g. both panels point at the same folder): copying/moving is a no-op.
+            // Without this, "overwrite" removes the destination—which is the source—and the operation fails.
+            if Self.isSameResolvedFileURL(source, destinationURL) {
+                onProgress(FileOperationProgress(
+                    totalItems: totalItems,
+                    completedItems: index + 1,
+                    currentItemName: itemName
+                ))
+                continue
+            }
+
+            // Check for conflicts
             if fm.fileExists(atPath: destinationURL.path) {
                 let conflict = FileConflict.destinationExists(
                     source: source,
@@ -210,6 +222,11 @@ nonisolated final class FileOperationService: FileOperationServiceProtocol, Send
                 currentItemName: itemName
             ))
         }
+    }
+
+    /// True when `a` and `b` refer to the same filesystem object (normalized paths).
+    private static func isSameResolvedFileURL(_ a: URL, _ b: URL) -> Bool {
+        a.standardizedFileURL.path == b.standardizedFileURL.path
     }
 }
 
