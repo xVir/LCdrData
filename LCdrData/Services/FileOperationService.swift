@@ -17,6 +17,8 @@ enum FileOperationType: Sendable, Equatable {
     case copy(sources: [URL], destination: URL)
     case move(sources: [URL], destination: URL)
     case delete(items: [URL])
+    /// Removes items from disk without using Trash (Cmd+Delete).
+    case permanentDelete(items: [URL])
     case createFolder(at: URL, name: String)
     case rename(item: URL, newName: String)
 }
@@ -55,6 +57,9 @@ nonisolated protocol FileOperationServiceProtocol: Sendable {
 
     /// Moves files to Trash.
     func trash(items: [URL]) async throws -> [URL]
+
+    /// Removes files or folders from disk without moving them to Trash.
+    func deletePermanently(items: [URL]) async throws
 
     /// Creates a new folder at the specified URL with the given name.
     func createFolder(in directory: URL, name: String) async throws -> URL
@@ -114,6 +119,15 @@ nonisolated final class FileOperationService: FileOperationServiceProtocol, Send
             }
 
             return trashedURLs
+        }.value
+    }
+
+    func deletePermanently(items: [URL]) async throws {
+        try await Task.detached {
+            let fm = FileManager()
+            for item in items {
+                try fm.removeItem(at: item)
+            }
         }.value
     }
 

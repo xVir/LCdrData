@@ -29,6 +29,9 @@ enum KeyboardShortcuts {
     /// Cmd+A — select all
     static let selectAll = KeyboardShortcut("a", modifiers: .command)
 
+    /// Cmd+Delete — permanent delete (bypass Trash)
+    static let permanentDelete = KeyboardShortcut(.delete, modifiers: .command)
+
     /// Cmd+Shift+A — collapse selection to focused item (deselect multi-select)
     static let deselectAll = KeyboardShortcut("a", modifiers: [.command, .shift])
 

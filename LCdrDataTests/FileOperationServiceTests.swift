@@ -248,6 +248,18 @@ struct FileOperationServiceTests {
         #expect(trashedURLs.count == 1)
     }
 
+    @Test func deletePermanentlyRemovesFile() async throws {
+        let dir = try makeTempDir()
+        defer { cleanup(dir) }
+
+        let fileURL = try createFile(named: "gone.txt", in: dir)
+        let service = FileOperationService()
+
+        try await service.deletePermanently(items: [fileURL])
+
+        #expect(!FileManager.default.fileExists(atPath: fileURL.path))
+    }
+
     // MARK: - Create Folder Tests
 
     @Test func createFolder() async throws {

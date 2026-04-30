@@ -86,6 +86,7 @@ struct MainWindowView: View {
                 onF7: { performMkdir() },
                 onF8: { performDelete() },
                 onDelete: { performDelete() },
+                onPermanentDelete: { performPermanentDelete() },
                 pathEditingBlocksDelete: {
                     appState.activePanelViewModel.isPathBarEditing
                 },
@@ -109,10 +110,13 @@ struct MainWindowView: View {
                 // For delete and move operations, pre-compute which
                 // neighbouring item should receive focus after the
                 // selected items are removed from the source panel.
-                if case .delete = ops.pendingOperationType {
+                switch ops.pendingOperationType {
+                case .delete, .permanentDelete:
                     appState.activePanelViewModel.prepareForDeletion()
-                } else if case .move = ops.pendingOperationType {
+                case .move:
                     appState.activePanelViewModel.prepareForDeletion()
+                default:
+                    break
                 }
 
                 ops.confirmOperation(
@@ -285,6 +289,12 @@ struct MainWindowView: View {
         )
     }
 
+    private func performPermanentDelete() {
+        appState.fileOperations.requestPermanentDelete(
+            from: appState.activePanelViewModel
+        )
+    }
+
     private func performQuickLook() {
         guard let url = appState.activePanelViewModel.previewURLForQuickLook() else { return }
         quickLookController.show(url: url)
@@ -411,6 +421,7 @@ private struct KeyShortcutModifier: ViewModifier {
     let onF7: () -> Void
     let onF8: () -> Void
     let onDelete: () -> Void
+    let onPermanentDelete: () -> Void
     let pathEditingBlocksDelete: () -> Bool
     /// When filter bar is visible, Delete is consumed (removes a character if non-empty; if empty, no-op). Returns true so file delete does not run.
     let onFilterDelete: (_ backward: Bool) -> Bool
@@ -479,15 +490,25 @@ private struct KeyShortcutModifier: ViewModifier {
                 onF8()
                 return .handled
             }
-            .onKeyPress(.delete, phases: .down) { _ in
+            .onKeyPress(.delete, phases: .down) { press in
                 guard keyboardRoutingActive else { return .ignored }
+                if press.modifiers.contains(.command) {
+                    guard !pathEditingBlocksDelete() else { return .ignored }
+                    onPermanentDelete()
+                    return .handled
+                }
                 if onFilterDelete(true) { return .handled }
                 guard !pathEditingBlocksDelete() else { return .ignored }
                 onDelete()
                 return .handled
             }
-            .onKeyPress(.deleteForward, phases: .down) { _ in
+            .onKeyPress(.deleteForward, phases: .down) { press in
                 guard keyboardRoutingActive else { return .ignored }
+                if press.modifiers.contains(.command) {
+                    guard !pathEditingBlocksDelete() else { return .ignored }
+                    onPermanentDelete()
+                    return .handled
+                }
                 if onFilterDelete(false) { return .handled }
                 guard !pathEditingBlocksDelete() else { return .ignored }
                 onDelete()

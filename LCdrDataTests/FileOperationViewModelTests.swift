@@ -11,6 +11,7 @@ nonisolated final class MockFileOperationService: FileOperationServiceProtocol, 
     var copyCalled = false
     var moveCalled = false
     var trashCalled = false
+    var deletePermanentlyCalled = false
     var createFolderCalled = false
     var renameCalled = false
 
@@ -20,6 +21,7 @@ nonisolated final class MockFileOperationService: FileOperationServiceProtocol, 
     var lastMoveSources: [URL]?
     var lastMoveDestination: URL?
     var lastTrashItems: [URL]?
+    var lastDeletePermanentlyItems: [URL]?
     var lastCreateFolderDirectory: URL?
     var lastCreateFolderName: String?
     var lastRenameItem: URL?
@@ -29,6 +31,7 @@ nonisolated final class MockFileOperationService: FileOperationServiceProtocol, 
     var shouldThrowOnCopy = false
     var shouldThrowOnMove = false
     var shouldThrowOnTrash = false
+    var shouldThrowOnDeletePermanently = false
     var shouldThrowOnCreateFolder = false
     var shouldThrowOnRename = false
     var createFolderReturnURL: URL?
@@ -98,6 +101,14 @@ nonisolated final class MockFileOperationService: FileOperationServiceProtocol, 
         }
 
         return items
+    }
+
+    func deletePermanently(items: [URL]) async throws {
+        deletePermanentlyCalled = true
+        lastDeletePermanentlyItems = items
+        if shouldThrowOnDeletePermanently {
+            throw FileOperationError.invalidDestination
+        }
     }
 
     func createFolder(in directory: URL, name: String) async throws -> URL {
@@ -277,6 +288,28 @@ struct FileOperationViewModelTests {
 
         #expect(vm.showConfirmationDialog)
         #expect(vm.confirmationMessage.contains("Trash"))
+    }
+
+    @Test func requestPermanentDeleteSetsConfirmationState() {
+        let file = FileItem(
+            url: URL(fileURLWithPath: "/tmp/source/test.txt"),
+            name: "test.txt",
+            isDirectory: false
+        )
+
+        let mockService = MockFileOperationService()
+        let vm = FileOperationViewModel(operationService: mockService)
+
+        let panel = makeMockPanelViewModel(
+            items: [file],
+            selectedIDs: [file.id]
+        )
+
+        vm.requestPermanentDelete(from: panel)
+
+        #expect(vm.showConfirmationDialog)
+        #expect(vm.confirmationMessage.contains("Permanently delete"))
+        #expect(vm.confirmationMessage.contains("cannot be undone"))
     }
 
     // MARK: - Request New Folder

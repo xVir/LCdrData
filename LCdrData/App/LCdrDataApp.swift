@@ -90,6 +90,13 @@ struct LCdrDataApp: App {
                     appState.activePanelViewModel.deselectAllKeepingFocus()
                 }
                 .keyboardShortcut(KeyboardShortcuts.deselectAll)
+
+                Divider()
+
+                Button("Delete Immediately…") {
+                    appState.fileOperations.requestPermanentDelete(from: appState.activePanelViewModel)
+                }
+                .keyboardShortcut(KeyboardShortcuts.permanentDelete)
             }
         }
     }

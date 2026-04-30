@@ -45,6 +45,14 @@ struct FileOperationTests {
         #expect(op.displayDescription == "Deleting 3 items")
     }
 
+    @Test func displayDescriptionForPermanentDelete() {
+        let op = FileOperation(
+            kind: .permanentDelete,
+            sourceURLs: [URL(fileURLWithPath: "/a")]
+        )
+        #expect(op.displayDescription == "Permanently deleting 1 item")
+    }
+
     @Test func displayDescriptionForCreateFolder() {
         let op = FileOperation(
             kind: .createFolder,
@@ -129,6 +137,8 @@ struct FileOperationTests {
         #expect(FileOperationKind.copy == FileOperationKind.copy)
         #expect(FileOperationKind.copy != FileOperationKind.move)
         #expect(FileOperationKind.delete == FileOperationKind.delete)
+        #expect(FileOperationKind.permanentDelete == FileOperationKind.permanentDelete)
+        #expect(FileOperationKind.delete != FileOperationKind.permanentDelete)
         #expect(FileOperationKind.createFolder == FileOperationKind.createFolder)
         #expect(FileOperationKind.rename == FileOperationKind.rename)
     }

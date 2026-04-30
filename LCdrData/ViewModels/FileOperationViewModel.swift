@@ -136,6 +136,20 @@ final class FileOperationViewModel {
         showConfirmationDialog = true
     }
 
+    /// Initiates immediate removal from disk (not Trash). Requires confirmation.
+    func requestPermanentDelete(from panel: PanelViewModel) {
+        let items = selectedItems(from: panel)
+        guard !items.isEmpty else { return }
+
+        let sourceURLs = items.map(\.url)
+        let count = items.count
+        let itemWord = count == 1 ? "item" : "items"
+        confirmationMessage =
+            "Permanently delete \(count) \(itemWord)? This cannot be undone."
+        pendingOperationType = .permanentDelete(items: sourceURLs)
+        showConfirmationDialog = true
+    }
+
     // MARK: - New Folder
 
     /// Shows the new folder dialog.
@@ -238,6 +252,13 @@ final class FileOperationViewModel {
 
         case .delete(let items):
             await executeDelete(
+                items: items,
+                reloadSource: reloadSource,
+                reloadDestination: reloadDestination
+            )
+
+        case .permanentDelete(let items):
+            await executePermanentDelete(
                 items: items,
                 reloadSource: reloadSource,
                 reloadDestination: reloadDestination
@@ -368,6 +389,35 @@ final class FileOperationViewModel {
 
         do {
             _ = try await operationService.trash(items: items)
+            updateStatus(operationID: operationID, status: .completed)
+        } catch {
+            updateStatus(operationID: operationID, status: .failed(error.localizedDescription))
+            errorMessage = error.localizedDescription
+            showErrorAlert = true
+        }
+
+        await reloadSource()
+        await reloadDestination()
+
+        cleanUpCompletedOperations(operationID: operationID)
+    }
+
+    private func executePermanentDelete(
+        items: [URL],
+        reloadSource: @escaping () async -> Void,
+        reloadDestination: @escaping () async -> Void
+    ) async {
+        let operationID = UUID()
+        let operation = FileOperation(
+            id: operationID,
+            kind: .permanentDelete,
+            sourceURLs: items,
+            status: .inProgress
+        )
+        activeOperations.append(operation)
+
+        do {
+            try await operationService.deletePermanently(items: items)
             updateStatus(operationID: operationID, status: .completed)
         } catch {
             updateStatus(operationID: operationID, status: .failed(error.localizedDescription))

@@ -5,6 +5,7 @@ enum FileOperationKind: Sendable, Equatable {
     case copy
     case move
     case delete
+    case permanentDelete
     case createFolder
     case rename
 }
@@ -45,6 +46,8 @@ struct FileOperation: Identifiable, Sendable {
             return "Moving \(count) \(itemWord)"
         case .delete:
             return "Deleting \(count) \(itemWord)"
+        case .permanentDelete:
+            return "Permanently deleting \(count) \(itemWord)"
         case .createFolder:
             return "Creating folder"
         case .rename:
