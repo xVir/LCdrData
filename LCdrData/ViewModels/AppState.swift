@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Observation
 
@@ -117,5 +118,27 @@ final class AppState {
         async let left: Void = leftPanel.reloadKeepingSelection()
         async let right: Void = rightPanel.reloadKeepingSelection()
         _ = await (left, right)
+    }
+
+    @MainActor
+    func presentOpenFolderPanel() async {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = false
+        panel.directoryURL = activePanelViewModel.state.currentDirectory
+        panel.prompt = "Open"
+        let response = await panel.begin()
+        guard response == .OK, let url = panel.url else { return }
+        await activePanelViewModel.navigate(to: url)
+    }
+
+    func copySelectedPathsToPasteboard() {
+        let lines = activePanelViewModel.selectedNonParentURLs().map(\.path)
+        guard !lines.isEmpty else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(lines.joined(separator: "\n"), forType: .string)
     }
 }

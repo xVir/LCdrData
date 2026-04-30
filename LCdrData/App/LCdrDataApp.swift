@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 @main
@@ -17,6 +18,39 @@ struct LCdrDataApp: App {
         .defaultSize(width: 1100, height: 700)
         .windowResizability(.contentMinSize)
         .commands {
+            CommandMenu("File") {
+                Button("Open Folder…") {
+                    Task { await appState.presentOpenFolderPanel() }
+                }
+                .keyboardShortcut("o", modifiers: [.command, .shift])
+
+                Divider()
+
+                Button("Close Window") {
+                    NSApplication.shared.keyWindow?.close()
+                }
+                .keyboardShortcut("w", modifiers: .command)
+            }
+
+            CommandMenu("Edit") {
+                Button("Copy Selected Paths") {
+                    appState.copySelectedPathsToPasteboard()
+                }
+                .keyboardShortcut("c", modifiers: [.command, .option])
+            }
+
+            CommandMenu("View") {
+                Button("Refresh Panel") {
+                    Task { await appState.activePanelViewModel.loadDirectory() }
+                }
+                .keyboardShortcut(KeyboardShortcuts.refresh)
+
+                Button("Toggle Hidden Files") {
+                    Task { await appState.activePanelViewModel.toggleHiddenFiles() }
+                }
+                .keyboardShortcut(KeyboardShortcuts.toggleHidden)
+            }
+
             // Navigation commands
             CommandGroup(after: .sidebar) {
                 Button("Go to Parent Directory") {
@@ -62,16 +96,6 @@ struct LCdrDataApp: App {
                     }
                 }
                 .keyboardShortcut(KeyboardShortcuts.openItem)
-            }
-
-            // View commands
-            CommandGroup(after: .toolbar) {
-                Button("Toggle Hidden Files") {
-                    Task {
-                        await appState.activePanelViewModel.toggleHiddenFiles()
-                    }
-                }
-                .keyboardShortcut(KeyboardShortcuts.toggleHidden)
             }
 
             // Selection commands
