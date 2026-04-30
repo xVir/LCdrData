@@ -17,10 +17,15 @@ struct FileItem: Identifiable, Hashable, Sendable {
     let creationDate: Date?
     let isHidden: Bool
     let isSymlink: Bool
+    let isSymlinkToDirectory: Bool
     let permissions: UInt16
 
     /// A synthetic ".." entry for navigating to the parent directory.
     let isParentDirectory: Bool
+
+    /// True when activating this row should navigate into a directory —
+    /// either it is a real directory, or it is a symlink whose target is one.
+    var isNavigableDirectory: Bool { isDirectory || isSymlinkToDirectory }
 
     nonisolated init(
         url: URL,
@@ -31,6 +36,7 @@ struct FileItem: Identifiable, Hashable, Sendable {
         creationDate: Date? = nil,
         isHidden: Bool = false,
         isSymlink: Bool = false,
+        isSymlinkToDirectory: Bool = false,
         permissions: UInt16 = 0,
         isParentDirectory: Bool = false
     ) {
@@ -43,6 +49,7 @@ struct FileItem: Identifiable, Hashable, Sendable {
         self.creationDate = creationDate
         self.isHidden = isHidden
         self.isSymlink = isSymlink
+        self.isSymlinkToDirectory = isSymlinkToDirectory
         self.permissions = permissions
         self.isParentDirectory = isParentDirectory
     }

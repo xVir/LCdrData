@@ -344,7 +344,7 @@ final class PanelViewModel {
             await navigateToParent()
             return
         }
-        if item.isDirectory {
+        if item.isNavigableDirectory {
             await navigate(to: item.url)
         } else {
             NSWorkspace.shared.open(item.url)

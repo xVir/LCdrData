@@ -123,6 +123,58 @@ struct FileItemTests {
         #expect(item1.id != item2.id)
     }
 
+    @Test func isNavigableDirectoryForRealDirectory() {
+        // Arrange
+        let item = FileItem(
+            url: URL(fileURLWithPath: "/tmp/folder"),
+            name: "folder",
+            isDirectory: true
+        )
+
+        // Assert
+        #expect(item.isNavigableDirectory == true)
+    }
+
+    @Test func isNavigableDirectoryForRegularFile() {
+        // Arrange
+        let item = FileItem(
+            url: URL(fileURLWithPath: "/tmp/file.txt"),
+            name: "file.txt",
+            isDirectory: false
+        )
+
+        // Assert
+        #expect(item.isNavigableDirectory == false)
+    }
+
+    @Test func isNavigableDirectoryForSymlinkToDirectory() {
+        // Arrange — a symlink whose target is a directory
+        let item = FileItem(
+            url: URL(fileURLWithPath: "/tmp/link-to-dir"),
+            name: "link-to-dir",
+            isDirectory: false,
+            isSymlink: true,
+            isSymlinkToDirectory: true
+        )
+
+        // Assert
+        #expect(item.isNavigableDirectory == true)
+    }
+
+    @Test func isNavigableDirectoryForSymlinkToFile() {
+        // Arrange — a symlink whose target is a file (or broken)
+        let item = FileItem(
+            url: URL(fileURLWithPath: "/tmp/link-to-file"),
+            name: "link-to-file",
+            isDirectory: false,
+            isSymlink: true,
+            isSymlinkToDirectory: false
+        )
+
+        // Assert
+        #expect(item.isNavigableDirectory == false)
+    }
+
     @Test func parentEntryHasDifferentIDFromRegularDirectory() {
         // Arrange — a regular directory and a ".." entry pointing to the same URL
         let url = URL(fileURLWithPath: "/tmp")

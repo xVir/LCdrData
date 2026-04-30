@@ -240,7 +240,7 @@ struct MainWindowView: View {
             return
         }
 
-        if item.isDirectory {
+        if item.isNavigableDirectory {
             Task { await panel.navigate(to: item.url) }
         } else {
             // Rename on Enter for non-directory items (macOS convention)

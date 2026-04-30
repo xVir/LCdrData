@@ -38,6 +38,15 @@ nonisolated final class FileSystemService: FileSystemServiceProtocol, Sendable {
                     forKeys: Set(resourceKeys)
                 )
 
+                let isSymlink = resourceValues?.isSymbolicLink ?? false
+                var isSymlinkToDirectory = false
+                if isSymlink {
+                    var isDir: ObjCBool = false
+                    if fm.fileExists(atPath: itemURL.path, isDirectory: &isDir) {
+                        isSymlinkToDirectory = isDir.boolValue
+                    }
+                }
+
                 return FileItem(
                     url: itemURL,
                     name: resourceValues?.name ?? itemURL.lastPathComponent,
@@ -46,7 +55,8 @@ nonisolated final class FileSystemService: FileSystemServiceProtocol, Sendable {
                     modificationDate: resourceValues?.contentModificationDate,
                     creationDate: resourceValues?.creationDate,
                     isHidden: resourceValues?.isHidden ?? false,
-                    isSymlink: resourceValues?.isSymbolicLink ?? false,
+                    isSymlink: isSymlink,
+                    isSymlinkToDirectory: isSymlinkToDirectory,
                     permissions: 0 // Detailed permissions require stat() — deferred
                 )
             }
