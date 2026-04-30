@@ -20,7 +20,13 @@ struct PanelView: View {
             if let error = viewModel.errorMessage {
                 errorView(error)
             } else {
-                FileTableView(viewModel: viewModel, isActive: isActive)
+                FileTableView(
+                    viewModel: viewModel,
+                    isActive: isActive,
+                    onDeleteSelection: isActive
+                        ? { appState.fileOperations.requestDelete(from: viewModel) }
+                        : nil
+                )
                     .overlay {
                         if viewModel.isLoading {
                             ProgressView("Loading...")

@@ -7,6 +7,8 @@ struct FileTableView: View {
 
     @Bindable var viewModel: PanelViewModel
     let isActive: Bool
+    /// When set (typically for the active panel), the standard Delete menu / command moves selection to Trash.
+    var onDeleteSelection: (() -> Void)? = nil
     @Environment(\.nameFilterKeyPressHandler) private var nameFilterKeyPressHandler
 
     var body: some View {
@@ -31,12 +33,11 @@ struct FileTableView: View {
                 }
                 .listStyle(.plain)
                 .environment(\.defaultMinListRowHeight, 24)
-                // Avoid handling Delete here while the name filter is active — `MainWindowView` routes Delete to the filter.
-                .modifier(DeleteCommandWhenNotFiltering(isFilterBarVisible: viewModel.isFilterBarVisible) {
-                    Task {
-                        await viewModel.navigateToParent()
-                    }
-                })
+                // While the name filter is active, `MainWindowView` routes Delete to the filter string.
+                .modifier(DeleteCommandWhenNotFiltering(
+                    isFilterBarVisible: viewModel.isFilterBarVisible,
+                    onDelete: onDeleteSelection
+                ))
                 .onKeyPress(phases: .down) { press in
                     guard isActive, viewModel.isFilterBarVisible, let handler = nameFilterKeyPressHandler else {
                         return .ignored
@@ -235,17 +236,18 @@ private struct FileRowView: View {
 
 // MARK: - Delete command
 
-/// `List` `onDeleteCommand` handles Delete before window-level routing; skip it while the name filter is open
-/// so `MainWindowView` can use Delete for the filter string (or no-op when empty).
+/// `List` `onDeleteCommand` wires the Edit > Delete menu to Trash; skip while the name filter is open.
 private struct DeleteCommandWhenNotFiltering: ViewModifier {
     let isFilterBarVisible: Bool
-    let action: () -> Void
+    let onDelete: (() -> Void)?
 
     func body(content: Content) -> some View {
         if isFilterBarVisible {
             content
+        } else if let onDelete {
+            content.onDeleteCommand(perform: onDelete)
         } else {
-            content.onDeleteCommand(perform: action)
+            content
         }
     }
 }
