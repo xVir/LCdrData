@@ -39,6 +39,7 @@ final class AppState {
             initialDirectory: leftDir,
             sortDescriptor: cfg.sortDescriptor,
             showHiddenFiles: cfg.panelShowHiddenFiles,
+            directoryWatchingEnabled: true,
             sandboxAccessService: sandboxAccess
         )
         self.rightPanel = PanelViewModel(
@@ -46,6 +47,7 @@ final class AppState {
             initialDirectory: rightDir,
             sortDescriptor: cfg.sortDescriptor,
             showHiddenFiles: cfg.panelShowHiddenFiles,
+            directoryWatchingEnabled: true,
             sandboxAccessService: sandboxAccess
         )
         self.activePanel = .left

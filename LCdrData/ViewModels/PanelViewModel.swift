@@ -38,6 +38,7 @@ final class PanelViewModel {
     let side: PanelSide
     private let fileSystemService: FileSystemServiceProtocol
     private let sandboxAccessService: SandboxAccessService
+    private let directoryWatchingEnabled: Bool
 
     // MARK: - Init
 
@@ -46,10 +47,12 @@ final class PanelViewModel {
         initialDirectory: URL,
         sortDescriptor: FileSortDescriptor? = nil,
         showHiddenFiles: Bool? = nil,
+        directoryWatchingEnabled: Bool = false,
         fileSystemService: FileSystemServiceProtocol = FileSystemService(),
         sandboxAccessService: SandboxAccessService = SandboxAccessService()
     ) {
         self.side = side
+        self.directoryWatchingEnabled = directoryWatchingEnabled
         self.state = PanelState(
             currentDirectory: initialDirectory,
             sortDescriptor: sortDescriptor ?? FileSortDescriptor(column: .name, ascending: true),
@@ -72,6 +75,9 @@ final class PanelViewModel {
 
     /// Directory for which `startAccessingSecurityScopedResource()` is active (if any).
     private var accessedSecurityScopedDirectory: URL?
+
+    private var directoryWatcher: DirectoryWatcher?
+    private var directoryWatchGeneration: UInt64 = 0
 
     /// Loads the contents of the current directory.
     func loadDirectory() async {
@@ -115,12 +121,15 @@ final class PanelViewModel {
             }
             state.focusedItemID = targetID
             adoptSecurityScopedAccessForCurrentDirectory()
+            restartDirectoryWatcher()
         } catch {
             isPermissionError = SandboxAccessService.isPermissionError(error)
             errorMessage = isPermissionError
                 ? "The app doesn't have permission to access this folder."
                 : error.localizedDescription
             state.items = []
+            directoryWatcher?.cancel()
+            directoryWatcher = nil
         }
 
         isLoading = false
@@ -199,17 +208,29 @@ final class PanelViewModel {
                 }
             }
             adoptSecurityScopedAccessForCurrentDirectory()
+            restartDirectoryWatcher()
         } catch {
             isPermissionError = SandboxAccessService.isPermissionError(error)
             errorMessage = isPermissionError
                 ? "The app doesn't have permission to access this folder."
                 : error.localizedDescription
             state.items = []
+            directoryWatcher?.cancel()
+            directoryWatcher = nil
         }
+    }
+
+    /// File URLs for the current selection excluding the parent (`..`) entry.
+    func selectedNonParentURLs() -> [URL] {
+        state.items
+            .filter { state.selectedItemIDs.contains($0.id) && !$0.isParentDirectory }
+            .map(\.url)
     }
 
     /// Stops security-scoped access for the directory this panel was browsing.
     func releaseDirectorySecurityScope() {
+        directoryWatcher?.cancel()
+        directoryWatcher = nil
         accessedSecurityScopedDirectory?.stopAccessingSecurityScopedResource()
         accessedSecurityScopedDirectory = nil
     }
@@ -224,6 +245,28 @@ final class PanelViewModel {
             accessedSecurityScopedDirectory = url
         } else {
             accessedSecurityScopedDirectory = nil
+        }
+    }
+
+    private func restartDirectoryWatcher() {
+        directoryWatcher?.cancel()
+        directoryWatcher = nil
+        guard directoryWatchingEnabled else { return }
+        let path = state.currentDirectory.path
+        directoryWatcher = DirectoryWatcher(path: path) { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.scheduleDebouncedDirectoryReload()
+            }
+        }
+    }
+
+    private func scheduleDebouncedDirectoryReload() {
+        directoryWatchGeneration &+= 1
+        let token = directoryWatchGeneration
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(280))
+            guard let self, token == self.directoryWatchGeneration else { return }
+            await self.reloadKeepingSelection()
         }
     }
 
