@@ -15,10 +15,12 @@ nonisolated final class MockPanelPathStore: PanelPathStoreProtocol, @unchecked S
         self._restoreResult = restoreResult
     }
 
-    func save(leftPath: String, rightPath: String) {
+    func save(leftPath: String, rightPath: String, leftBookmark: Data?, rightBookmark: Data?) {
         lock.withLock {
             _savedLeft = leftPath
             _savedRight = rightPath
+            _ = leftBookmark
+            _ = rightBookmark
         }
     }
 

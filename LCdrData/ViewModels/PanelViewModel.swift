@@ -70,6 +70,9 @@ final class PanelViewModel {
     /// so the cursor lands on the neighbouring item rather than resetting.
     private var pendingPostDeleteFocusID: UUID?
 
+    /// Directory for which `startAccessingSecurityScopedResource()` is active (if any).
+    private var accessedSecurityScopedDirectory: URL?
+
     /// Loads the contents of the current directory.
     func loadDirectory() async {
         isLoading = true
@@ -111,6 +114,7 @@ final class PanelViewModel {
                 state.selectedItemIDs = []
             }
             state.focusedItemID = targetID
+            adoptSecurityScopedAccessForCurrentDirectory()
         } catch {
             isPermissionError = SandboxAccessService.isPermissionError(error)
             errorMessage = isPermissionError
@@ -194,12 +198,32 @@ final class PanelViewModel {
                     state.selectedItemIDs = []
                 }
             }
+            adoptSecurityScopedAccessForCurrentDirectory()
         } catch {
             isPermissionError = SandboxAccessService.isPermissionError(error)
             errorMessage = isPermissionError
                 ? "The app doesn't have permission to access this folder."
                 : error.localizedDescription
             state.items = []
+        }
+    }
+
+    /// Stops security-scoped access for the directory this panel was browsing.
+    func releaseDirectorySecurityScope() {
+        accessedSecurityScopedDirectory?.stopAccessingSecurityScopedResource()
+        accessedSecurityScopedDirectory = nil
+    }
+
+    private func adoptSecurityScopedAccessForCurrentDirectory() {
+        let url = state.currentDirectory
+        if accessedSecurityScopedDirectory?.path == url.path {
+            return
+        }
+        accessedSecurityScopedDirectory?.stopAccessingSecurityScopedResource()
+        if url.startAccessingSecurityScopedResource() {
+            accessedSecurityScopedDirectory = url
+        } else {
+            accessedSecurityScopedDirectory = nil
         }
     }
 

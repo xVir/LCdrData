@@ -74,10 +74,20 @@ final class AppState {
     /// Persists the current panel directories so they can be restored on
     /// the next launch.
     func savePanelPaths() {
+        let leftBM = BookmarkService.bookmarkData(for: leftPanel.state.currentDirectory)
+        let rightBM = BookmarkService.bookmarkData(for: rightPanel.state.currentDirectory)
         panelPathStore.save(
             leftPath: leftPanel.state.currentDirectory.path,
-            rightPath: rightPanel.state.currentDirectory.path
+            rightPath: rightPanel.state.currentDirectory.path,
+            leftBookmark: leftBM,
+            rightBookmark: rightBM
         )
+    }
+
+    /// Stops security-scoped access for both panels (call before exit).
+    func releasePanelSecurityScope() {
+        leftPanel.releaseDirectorySecurityScope()
+        rightPanel.releaseDirectorySecurityScope()
     }
 
     /// Returns the currently active panel view model.
