@@ -22,10 +22,7 @@ struct PanelView: View {
             } else {
                 FileTableView(
                     viewModel: viewModel,
-                    isActive: isActive,
-                    onDeleteSelection: isActive
-                        ? { appState.fileOperations.requestDelete(from: viewModel) }
-                        : nil
+                    isActive: isActive
                 )
                     .overlay {
                         if viewModel.isLoading {

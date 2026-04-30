@@ -118,6 +118,10 @@ struct LCdrDataApp: App {
 
                 Divider()
 
+                Button("Move to Trash…") {
+                    appState.fileOperations.requestDelete(from: appState.activePanelViewModel)
+                }
+
                 Button("Delete Immediately…") {
                     appState.fileOperations.requestPermanentDelete(from: appState.activePanelViewModel)
                 }

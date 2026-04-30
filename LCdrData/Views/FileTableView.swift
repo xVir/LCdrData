@@ -11,8 +11,6 @@ struct FileTableView: View {
     let isActive: Bool
     @Environment(\.lcPanelDateFormat) private var panelDateFormat
     @Environment(\.lcPanelFontSize) private var panelFontSize
-    /// When set (typically for the active panel), the standard Delete menu / command moves selection to Trash.
-    var onDeleteSelection: (() -> Void)? = nil
 
     /// Drives first responder to the `List` when this panel becomes active so arrow keys move the selection
     /// (Tab switches `focusedPanel` but does not always move keyboard focus off the path bar or column headers).
@@ -53,7 +51,13 @@ struct FileTableView: View {
                 .focused($fileListFocused)
                 .listStyle(.plain)
                 .environment(\.defaultMinListRowHeight, 24)
-                .modifier(ListDeleteCommandModifier(onDelete: onDeleteSelection))
+                // The Delete key is consumed by the underlying NSTableView before
+                // window-level .onKeyPress can see it. Claim the responder-chain
+                // delete: action here so it routes to parent navigation instead
+                // of NSTableView's default handling.
+                .onDeleteCommand {
+                    Task { await viewModel.navigateToParent() }
+                }
                 .onChange(of: viewModel.state.focusedItemID) { _, newID in
                     if let newID {
                         proxy.scrollTo(newID)
@@ -299,17 +303,3 @@ private struct FileRowView: View {
     }
 }
 
-// MARK: - Delete command
-
-/// Wires the Edit > Delete menu to Trash for the active panel’s list.
-private struct ListDeleteCommandModifier: ViewModifier {
-    let onDelete: (() -> Void)?
-
-    func body(content: Content) -> some View {
-        if let onDelete {
-            content.onDeleteCommand(perform: onDelete)
-        } else {
-            content
-        }
-    }
-}
