@@ -76,7 +76,7 @@ LCdrData/
 │   ├── CommandBarView.swift            # Bottom command/quick-action bar
 │   ├── StatusBarView.swift             # Per-panel status: item count, selection size
 │   ├── FileOperationProgressView.swift # Operation progress sheet/overlay
-│   └── ConfigurationView.swift         # KDL text editor with Apply/Cancel
+│   └── ConfigurationView.swift         # Dual-pane KDL: defaults (read-only) + user overrides, Apply/Cancel
 ├── Utilities/
 │   ├── KeyboardShortcuts.swift         # Centralized shortcut definitions
 │   ├── FileFormatter.swift             # Size, date, permissions formatting
@@ -286,31 +286,47 @@ keyboard {
 ### Configuration Window
 
 The configuration window is a dedicated macOS window (opened via Cmd+, or the app menu)
-containing:
+laid out as **two side-by-side panels** (split view), consistent with the app’s dual-panel
+metaphor:
 
-1. **A text editor view** — a scrollable, monospaced text area displaying the raw KDL
-   config file with KDL syntax highlighting (keywords, strings, numbers, comments,
-   node names in distinct colors)
-2. **"Apply" button** — parses the KDL text, validates it, and applies the new
-   configuration to the running app. If parsing fails, an inline error message is shown
-   with the line number and description of the problem; the config is not applied.
-3. **"Cancel" button** — discards all edits and closes the window, reverting the text
-   to the last-applied configuration.
+1. **Left panel — default configuration (read-only)** — A scrollable, monospaced view of
+   the **full default** configuration expressed in KDL, with the same syntax highlighting
+   as the editable side (keywords, strings, numbers, comments, node names in distinct
+   colors). It lists **every** supported option together with its built-in default value.
+   This pane is not editable; it is the reference for “what the app assumes” when the user
+   file does not override something.
+
+2. **Right panel — your customizations** — A scrollable, monospaced **editable** KDL text
+   area for the user’s overrides. Only what appears here is persisted as the user config
+   (see path above). Any option or value you set in the right panel **overwrites** the
+   corresponding default from the left panel for the running app; options you omit keep
+   their defaults.
+
+3. **"Apply" button** — Parses the right panel’s KDL, validates it, merges it on top of the
+   defaults, and applies the **effective** configuration to the running app. If parsing
+   fails, an inline error message is shown with the line number and description of the
+   problem; the config is not applied.
+
+4. **"Cancel" button** — Discards unsaved edits in the right panel and closes the window,
+   reverting that panel to the last-applied user configuration.
 
 The window does **not** auto-save. Changes only take effect when the user explicitly
-clicks "Apply". On successful apply, the config file is written to disk and all
-observable state that depends on configuration is updated immediately.
+clicks "Apply". On successful apply, the right panel’s KDL is written to the config file
+on disk and all observable state that depends on configuration is updated immediately.
 
 ### Configuration Data Flow
 
+Effective configuration is **defaults ∪ user file**: bundled default KDL (shown read-only
+in the configuration window’s left panel) is merged with `config.kdl` from disk (edited
+in the right panel); user values win on conflict.
+
 ```
-config.kdl on disk
-       │
-       ▼
- ConfigurationService          ← reads/writes file, parses KDL via kdl-swift
-       │
-       ▼
- AppConfiguration (model)      ← strongly-typed Swift struct
+bundled default KDL  ──┐
+                       ├──► merge ──► AppConfiguration (effective)
+config.kdl on disk  ───┘
+       ▲
+       │ read on launch; write on Apply
+ ConfigurationService          ← reads/writes user file, parses KDL via kdl-swift
        │
        ▼
  AppState / ViewModels         ← observe configuration changes
@@ -323,9 +339,10 @@ config.kdl on disk
 final class ConfigurationService {
     var current: AppConfiguration
     
-    func load() throws                       // Read & parse config.kdl from disk
-    func apply(from kdlText: String) throws  // Parse text, validate, update current, write to disk
-    func rawText() -> String                 // Current config as KDL text for the editor
+    func load() throws                       // Read user file, merge with bundled defaults
+    func apply(fromUserKDL kdlText: String) throws  // Parse overrides, merge, validate, write user file
+    func defaultKDLText() -> String          // Bundled full defaults (left pane, read-only)
+    func userKDLText() -> String             // Last-applied user overrides (right pane)
 }
 ```
 
@@ -480,7 +497,7 @@ across launches.
 
 ### Phase 4 — Configuration and Polish
 - KDL 2.0 configuration system (ConfigurationService, AppConfiguration model)
-- Configuration window with KDL text editor, syntax highlighting, Apply/Cancel
+- Configuration window: dual-pane KDL (read-only defaults, editable overrides), syntax highlighting, Apply/Cancel
 - Security-scoped bookmarks (remember folders across launches)
 - Bookmarks sidebar / favorites
 - File watching with auto-refresh
