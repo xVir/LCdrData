@@ -44,7 +44,10 @@ let project = Project(
             bundleId: "com.xvir.LCdrData",
             deploymentTargets: .macOS("26.4"),
             sources: ["LCdrData/**"],
-            resources: ["LCdrData/Assets.xcassets"],
+            resources: [
+                "LCdrData/Assets.xcassets",
+                "LCdrData/Resources/DefaultConfig.kdl",
+            ],
             dependencies: [
                 .external(name: "KDL"),
             ],

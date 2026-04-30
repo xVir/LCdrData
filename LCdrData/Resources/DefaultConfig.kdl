@@ -1,0 +1,21 @@
+// LCdrData default configuration (reference). User overrides live in Application Support.
+
+panel {
+    show-hidden-files #false
+    sort-by name
+    sort-ascending #true
+}
+
+appearance {
+    font-size 13
+    date-format "yyyy-MM-dd HH:mm"
+}
+
+bookmarks {
+    - "Projects|~/Projects"
+    - "Downloads|~/Downloads"
+}
+
+editor {
+    default-app "com.apple.TextEdit"
+}

@@ -9,16 +9,23 @@ final class AppState {
     var rightPanel: PanelViewModel
     var activePanel: PanelSide
     var fileOperations: FileOperationViewModel
+    let configuration: ConfigurationService
 
     private let panelPathStore: PanelPathStoreProtocol
 
+    @MainActor
     init(
         leftDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
         rightDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
         fileOperationService: FileOperationServiceProtocol = FileOperationService(),
-        panelPathStore: PanelPathStoreProtocol = PanelPathStore()
+        panelPathStore: PanelPathStoreProtocol = PanelPathStore(),
+        configuration: ConfigurationService
     ) {
         self.panelPathStore = panelPathStore
+        self.configuration = configuration
+        try? configuration.load()
+
+        let cfg = configuration.current
 
         // Restore saved paths if they still exist, otherwise use the
         // supplied defaults (home directory).
@@ -30,16 +37,37 @@ final class AppState {
         self.leftPanel = PanelViewModel(
             side: .left,
             initialDirectory: leftDir,
+            sortDescriptor: cfg.sortDescriptor,
+            showHiddenFiles: cfg.panelShowHiddenFiles,
             sandboxAccessService: sandboxAccess
         )
         self.rightPanel = PanelViewModel(
             side: .right,
             initialDirectory: rightDir,
+            sortDescriptor: cfg.sortDescriptor,
+            showHiddenFiles: cfg.panelShowHiddenFiles,
             sandboxAccessService: sandboxAccess
         )
         self.activePanel = .left
         self.fileOperations = FileOperationViewModel(
             operationService: fileOperationService
+        )
+    }
+
+    /// Convenience initializer with a default `ConfigurationService` (must run on the main actor).
+    @MainActor
+    convenience init(
+        leftDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
+        rightDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
+        fileOperationService: FileOperationServiceProtocol = FileOperationService(),
+        panelPathStore: PanelPathStoreProtocol = PanelPathStore()
+    ) {
+        self.init(
+            leftDirectory: leftDirectory,
+            rightDirectory: rightDirectory,
+            fileOperationService: fileOperationService,
+            panelPathStore: panelPathStore,
+            configuration: ConfigurationService()
         )
     }
 

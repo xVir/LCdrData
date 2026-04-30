@@ -44,11 +44,17 @@ final class PanelViewModel {
     init(
         side: PanelSide,
         initialDirectory: URL,
+        sortDescriptor: FileSortDescriptor? = nil,
+        showHiddenFiles: Bool? = nil,
         fileSystemService: FileSystemServiceProtocol = FileSystemService(),
         sandboxAccessService: SandboxAccessService = SandboxAccessService()
     ) {
         self.side = side
-        self.state = PanelState(currentDirectory: initialDirectory)
+        self.state = PanelState(
+            currentDirectory: initialDirectory,
+            sortDescriptor: sortDescriptor ?? FileSortDescriptor(column: .name, ascending: true),
+            showHiddenFiles: showHiddenFiles ?? false
+        )
         self.fileSystemService = fileSystemService
         self.sandboxAccessService = sandboxAccessService
     }
