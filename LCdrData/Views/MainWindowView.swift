@@ -333,15 +333,20 @@ struct MainWindowView: View {
         ZStack {
             VStack(spacing: 0) {
                 HSplitView {
-                    PanelView(viewModel: appState.leftPanel)
-                        .focusSection()
-                        .focused($focusedPanel, equals: .left)
-                        .frame(minWidth: 300)
+                    BookmarksSidebarView()
+                        .frame(minWidth: 140, idealWidth: 180, maxWidth: 260)
 
-                    PanelView(viewModel: appState.rightPanel)
-                        .focusSection()
-                        .focused($focusedPanel, equals: .right)
-                        .frame(minWidth: 300)
+                    HSplitView {
+                        PanelView(viewModel: appState.leftPanel)
+                            .focusSection()
+                            .focused($focusedPanel, equals: .left)
+                            .frame(minWidth: 300)
+
+                        PanelView(viewModel: appState.rightPanel)
+                            .focusSection()
+                            .focused($focusedPanel, equals: .right)
+                            .frame(minWidth: 300)
+                    }
                 }
 
                 Divider()
