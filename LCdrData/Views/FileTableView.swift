@@ -11,6 +11,10 @@ struct FileTableView: View {
     var onDeleteSelection: (() -> Void)? = nil
     @Environment(\.nameFilterKeyPressHandler) private var nameFilterKeyPressHandler
 
+    /// Drives first responder to the `List` when this panel becomes active so arrow keys move the selection
+    /// (Tab switches `focusedPanel` but does not always move keyboard focus off the path bar or column headers).
+    @FocusState private var fileListFocused: Bool
+
     var body: some View {
         VStack(spacing: 0) {
             // Column headers with sort indicators
@@ -31,6 +35,7 @@ struct FileTableView: View {
                             .listRowInsets(EdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8))
                     }
                 }
+                .focused($fileListFocused)
                 .listStyle(.plain)
                 .environment(\.defaultMinListRowHeight, 24)
                 // While the name filter is active, `MainWindowView` routes Delete to the filter string.
@@ -63,7 +68,28 @@ struct FileTableView: View {
                         viewModel.state.focusedItemID = newValue.first
                     }
                 }
+                .onChange(of: isActive) { _, active in
+                    if active {
+                        focusFileListIfAppropriate()
+                    } else {
+                        fileListFocused = false
+                    }
+                }
+                .onChange(of: viewModel.isPathBarEditing) { _, editing in
+                    if editing {
+                        fileListFocused = false
+                    } else if isActive {
+                        focusFileListIfAppropriate()
+                    }
+                }
             }
+        }
+    }
+
+    private func focusFileListIfAppropriate() {
+        guard !viewModel.isPathBarEditing else { return }
+        DispatchQueue.main.async {
+            fileListFocused = true
         }
     }
 
