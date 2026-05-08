@@ -94,30 +94,6 @@ struct Cursor: Sendable, Equatable {
         selected = [target.id]
     }
 
-    /// Toggles the focused row's selection, then advances focus to the next row
-    /// (the next row's selection becomes `[next.id]`). When already at the last
-    /// row, the toggle survives but focus does not move.
-    mutating func commanderSpaceSelectAndAdvance(in listing: [FileItem]) {
-        guard let focusedID = focused,
-              let idx = listing.firstIndex(where: { $0.id == focusedID }) else {
-            return
-        }
-
-        if !listing[idx].isParentDirectory {
-            if selected.contains(focusedID) {
-                selected.remove(focusedID)
-            } else {
-                selected.insert(focusedID)
-            }
-        }
-
-        let nextIndex = idx + 1
-        guard nextIndex < listing.count else { return }
-        let nextItem = listing[nextIndex]
-        focused = nextItem.id
-        selected = [nextItem.id]
-    }
-
     // MARK: - Reload-time resolution
 
     /// Computes the cursor for a freshly fetched listing.

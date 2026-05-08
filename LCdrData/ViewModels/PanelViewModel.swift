@@ -411,13 +411,6 @@ final class PanelViewModel {
         return true
     }
 
-    // MARK: - Commander Space
-
-    /// Toggles selection on the focused row and moves focus down one row.
-    func commanderSpaceSelect() {
-        state.cursor.commanderSpaceSelectAndAdvance(in: visibleItems)
-    }
-
     // MARK: - Home / End
 
     func focusFirstListItem() {

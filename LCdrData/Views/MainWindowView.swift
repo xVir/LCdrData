@@ -62,7 +62,7 @@ struct MainWindowView: View {
                     guard !panel.isPathBarEditing else {
                         return false
                     }
-                    panel.commanderSpaceSelect()
+                    performQuickLook()
                     return true
                 },
                 onHome: { appState.activePanelViewModel.focusFirstListItem() },

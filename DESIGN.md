@@ -187,7 +187,7 @@ Menu commands (same shortcuts where shown in the menu bar) also expose **Go to P
 
 - Arrow keys navigate the file list
 - Type-ahead / incremental search: start typing to jump to matching filename
-- Space selects/deselects the focused item and moves down (Commander-style)
+- Space opens Quick Look preview for the focused file (same as F3)
 - Cmd+A selects all; Cmd+Shift+A collapses multi-selection to the focused row
 - Home / End: first / last row in the list; Cmd+Down opens the focused item (same as double-click)
 
@@ -443,7 +443,7 @@ WindowGroup {
 | Cmd+Shift+A       | Collapse selection to focused row |
 | Cmd+Option+C      | Copy selected paths to clipboard |
 | Cmd+Delete        | Permanent delete (with confirmation) |
-| Space             | Select item and move down       |
+| Space             | Quick Look preview (same as F3) |
 | F3                | Quick Look preview              |
 | F4                | Open in editor                  |
 | F5                | Copy to other panel             |
@@ -496,7 +496,7 @@ across launches.
 ### Phase 3 — Power User Features
 - Keyboard shortcut system (full map above)
 - Type-ahead incremental search
-- Space-to-select (Commander style)
+- Space-to-preview (mirrors F3 Quick Look)
 - Hidden files toggle
 - Back/forward history
 - Command bar with function key labels

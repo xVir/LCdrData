@@ -166,23 +166,6 @@ struct CursorTests {
         #expect(cursor.selected == [alpha.id])
     }
 
-    @Test func commanderSpaceAdvancesFocusToNextRow() {
-        // Arrange — focused on alpha, beta is next.
-        let parent = Self.parentEntry()
-        let alpha = Self.dir("alpha")
-        let beta = Self.file("beta")
-        var cursor = Cursor(focused: alpha.id, selected: [alpha.id])
-
-        // Act
-        cursor.commanderSpaceSelectAndAdvance(in: [parent, alpha, beta])
-
-        // Assert — focus moves to next row; selection is replaced with the
-        // newly focused row (matches the existing `commanderSpaceSelect`
-        // behaviour where the post-toggle selection is overwritten).
-        #expect(cursor.focused == beta.id)
-        #expect(cursor.selected == [beta.id])
-    }
-
     @Test func focusLastSkipsParentRow() {
         // Arrange — non-parent items in middle/end; ".." is at front
         let parent = Self.parentEntry()
