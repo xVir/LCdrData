@@ -201,16 +201,10 @@ reminiscent of classic orthodox file managers. Clickable and acts as keyboard hi
 These are explicitly out of scope for the initial implementation but inform
 architectural decisions (keep extension points open):
 
+- **Dependency injection** - use Swinject https://github.com/swinject/swinject for dependency injectsion management in the app
 - **Tabs** — multiple tabs per panel
-- **Archive support** — browse zip/tar/gz as virtual directories
-- **Remote filesystems** — SFTP, FTP, S3 via a VFS abstraction
-- **Terminal panel** — embedded terminal below the panels
-- **File preview panel** — Quick Look-style inline preview
-- **Batch rename** — regex-based multi-file rename tool
-- **Custom themes** — color scheme customization
-- **Column/tree view modes** — alternative to the flat table
-- **File comparison** — diff selected files across panels
-- **Spotlight integration** — system-wide search from command bar
+- **Archive support** — browse zip/tar/gz as directories
+- **File preview panel** — Quick Look-style inline preview using QLPreviewView in the file panel
 
 ## State Management
 
@@ -518,7 +512,4 @@ across launches.
 
 ### Phase 5 — Advanced Features
 - Tabs per panel
-- Batch rename tool
-- Quick Look integration (F3)
-- Spotlight search from command bar
-- Volume list in path bar
+
