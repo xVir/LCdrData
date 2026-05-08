@@ -91,7 +91,7 @@ struct PanelViewModelTests {
         )
 
         // Act
-        await vm.loadDirectory()
+        await vm.reload(.fresh)
 
         // Assert — should have ".." plus the 3 items
         #expect(vm.state.items.count == 4)
@@ -110,7 +110,7 @@ struct PanelViewModelTests {
         )
 
         // Act
-        await vm.loadDirectory()
+        await vm.reload(.fresh)
 
         // Assert — root should not have ".." entry
         #expect(vm.state.items.isEmpty)
@@ -217,11 +217,11 @@ struct PanelViewModelTests {
 
         // Act — select
         vm.toggleSelection(of: item.id)
-        #expect(vm.state.selectedItemIDs.contains(item.id))
+        #expect(vm.state.cursor.selected.contains(item.id))
 
         // Act — deselect
         vm.toggleSelection(of: item.id)
-        #expect(!vm.state.selectedItemIDs.contains(item.id))
+        #expect(!vm.state.cursor.selected.contains(item.id))
     }
 
     @Test func selectAllExcludesParentEntry() async {
@@ -233,7 +233,7 @@ struct PanelViewModelTests {
             initialDirectory: URL(fileURLWithPath: "/tmp"),
             fileSystemService: service
         )
-        await vm.loadDirectory()
+        await vm.reload(.fresh)
 
         // Act
         vm.selectAll()
@@ -241,9 +241,9 @@ struct PanelViewModelTests {
         // Assert — parent entry should not be selected
         let parentItem = vm.state.items.first { $0.isParentDirectory }
         if let parentItem {
-            #expect(!vm.state.selectedItemIDs.contains(parentItem.id))
+            #expect(!vm.state.cursor.selected.contains(parentItem.id))
         }
-        #expect(vm.state.selectedItemIDs.count == 3)
+        #expect(vm.state.cursor.selected.count == 3)
     }
 
     @Test func deselectAll() async {
@@ -255,14 +255,14 @@ struct PanelViewModelTests {
             initialDirectory: URL(fileURLWithPath: "/tmp"),
             fileSystemService: service
         )
-        await vm.loadDirectory()
+        await vm.reload(.fresh)
         vm.selectAll()
 
         // Act
         vm.deselectAll()
 
         // Assert
-        #expect(vm.state.selectedItemIDs.isEmpty)
+        #expect(vm.state.cursor.selected.isEmpty)
     }
 
     @Test func toggleHiddenFiles() async {
@@ -296,7 +296,7 @@ struct PanelViewModelTests {
         vm.setFocused(itemID)
 
         // Assert
-        #expect(vm.state.focusedItemID == itemID)
+        #expect(vm.state.cursor.focused == itemID)
     }
 
     // MARK: - Navigate to Parent Focuses Child Folder
@@ -337,8 +337,8 @@ struct PanelViewModelTests {
         // Assert — focused and selected item should be "subdir", not the first item
         let subdirItem = vm.state.items.first { $0.name == "subdir" }
         #expect(subdirItem != nil)
-        #expect(vm.state.focusedItemID == subdirItem?.id)
-        #expect(vm.state.selectedItemIDs == [subdirItem!.id])
+        #expect(vm.state.cursor.focused == subdirItem?.id)
+        #expect(vm.state.cursor.selected == [subdirItem!.id])
     }
 
     @Test func navigateToParentViaNavigateFocusesChildFolder() async {
@@ -371,8 +371,8 @@ struct PanelViewModelTests {
         // Assert — focused item should be "docs"
         let docsItem = vm.state.items.first { $0.name == "docs" }
         #expect(docsItem != nil)
-        #expect(vm.state.focusedItemID == docsItem?.id)
-        #expect(vm.state.selectedItemIDs == [docsItem!.id])
+        #expect(vm.state.cursor.focused == docsItem?.id)
+        #expect(vm.state.cursor.selected == [docsItem!.id])
     }
 
     @Test func navigateToNonParentDoesNotFocusChild() async {
@@ -401,7 +401,7 @@ struct PanelViewModelTests {
         // Assert — should focus the first item (default behavior), which is ".."
         let firstItem = vm.state.items.first
         #expect(firstItem != nil)
-        #expect(vm.state.focusedItemID == firstItem?.id)
+        #expect(vm.state.cursor.focused == firstItem?.id)
     }
 
     @Test func navigateToParentWhenChildNotFoundFallsBackToFirst() async {
@@ -431,7 +431,7 @@ struct PanelViewModelTests {
         let firstItem = vm.state.items.first
         #expect(firstItem != nil)
         #expect(firstItem?.isParentDirectory == true)
-        #expect(vm.state.focusedItemID == firstItem?.id)
+        #expect(vm.state.cursor.focused == firstItem?.id)
     }
 
     // MARK: - Reload Keeping Selection
@@ -457,12 +457,12 @@ struct PanelViewModelTests {
             initialDirectory: URL(fileURLWithPath: "/tmp"),
             fileSystemService: service
         )
-        await vm.loadDirectory()
+        await vm.reload(.fresh)
 
         // Select beta.txt
         let betaItem = vm.state.items.first { $0.name == "beta.txt" }!
-        vm.state.selectedItemIDs = [betaItem.id]
-        vm.state.focusedItemID = betaItem.id
+        vm.state.cursor.selected = [betaItem.id]
+        vm.state.cursor.focused = betaItem.id
 
         // Simulate external change: a new file appears
         service.items = initialItems + [
@@ -475,14 +475,14 @@ struct PanelViewModelTests {
         ]
 
         // Act — reload keeping selection
-        await vm.reloadKeepingSelection()
+        await vm.reload(.keepSelection)
 
         // Assert — beta.txt should still be selected and focused
         // (IDs are deterministic from URL, so the same file keeps the same ID)
         let newBeta = vm.state.items.first { $0.name == "beta.txt" }
         #expect(newBeta != nil)
-        #expect(vm.state.selectedItemIDs == [newBeta!.id])
-        #expect(vm.state.focusedItemID == newBeta!.id)
+        #expect(vm.state.cursor.selected == [newBeta!.id])
+        #expect(vm.state.cursor.focused == newBeta!.id)
         // New file should be in the list
         #expect(vm.state.items.contains { $0.name == "new_file.txt" })
     }
@@ -515,22 +515,22 @@ struct PanelViewModelTests {
             initialDirectory: URL(fileURLWithPath: "/tmp"),
             fileSystemService: service
         )
-        await vm.loadDirectory()
+        await vm.reload(.fresh)
 
         // Select a.txt and c.txt, focus on c.txt
         let aItem = vm.state.items.first { $0.name == "a.txt" }!
         let cItem = vm.state.items.first { $0.name == "c.txt" }!
-        vm.state.selectedItemIDs = [aItem.id, cItem.id]
-        vm.state.focusedItemID = cItem.id
+        vm.state.cursor.selected = [aItem.id, cItem.id]
+        vm.state.cursor.focused = cItem.id
 
         // Act
-        await vm.reloadKeepingSelection()
+        await vm.reload(.keepSelection)
 
         // Assert — both items restored, focus on c.txt
         let newA = vm.state.items.first { $0.name == "a.txt" }!
         let newC = vm.state.items.first { $0.name == "c.txt" }!
-        #expect(vm.state.selectedItemIDs == [newA.id, newC.id])
-        #expect(vm.state.focusedItemID == newC.id)
+        #expect(vm.state.cursor.selected == [newA.id, newC.id])
+        #expect(vm.state.cursor.focused == newC.id)
     }
 
     @Test func reloadKeepingSelectionFallsBackToSamePositionWhenLastItemDeleted() async {
@@ -556,25 +556,25 @@ struct PanelViewModelTests {
             initialDirectory: URL(fileURLWithPath: "/tmp"),
             fileSystemService: service
         )
-        await vm.loadDirectory()
+        await vm.reload(.fresh)
         // Items after load: ["..", "keep.txt", "gone.txt"]  (sorted by name)
 
         // Select gone.txt (last item, index 2)
         let goneItem = vm.state.items.first { $0.name == "gone.txt" }!
-        vm.state.selectedItemIDs = [goneItem.id]
-        vm.state.focusedItemID = goneItem.id
+        vm.state.cursor.selected = [goneItem.id]
+        vm.state.cursor.focused = goneItem.id
 
         // Simulate deletion
         service.items = [items[0]]
 
         // Act
-        await vm.reloadKeepingSelection()
+        await vm.reload(.keepSelection)
 
         // Assert — cursor clamps to new last item: "keep.txt"
         let keepItem = vm.state.items.first { $0.name == "keep.txt" }
         #expect(keepItem != nil)
-        #expect(vm.state.focusedItemID == keepItem?.id)
-        #expect(vm.state.selectedItemIDs == [keepItem!.id])
+        #expect(vm.state.cursor.focused == keepItem?.id)
+        #expect(vm.state.cursor.selected == [keepItem!.id])
     }
 
     @Test func reloadKeepingSelectionFallsBackToSamePositionWhenMiddleItemDeleted() async {
@@ -606,26 +606,26 @@ struct PanelViewModelTests {
             initialDirectory: URL(fileURLWithPath: "/tmp"),
             fileSystemService: service
         )
-        await vm.loadDirectory()
+        await vm.reload(.fresh)
         // Items after load: ["..", "a.txt", "b.txt", "c.txt"]
 
         // Select b.txt (index 2)
         let bItem = vm.state.items.first { $0.name == "b.txt" }!
-        vm.state.selectedItemIDs = [bItem.id]
-        vm.state.focusedItemID = bItem.id
+        vm.state.cursor.selected = [bItem.id]
+        vm.state.cursor.focused = bItem.id
 
         // Simulate deletion of b.txt
         service.items = [items[0], items[2]]
 
         // Act
-        await vm.reloadKeepingSelection()
+        await vm.reload(.keepSelection)
         // Items after reload: ["..", "a.txt", "c.txt"]
 
         // Assert — cursor stays at index 2, which is now "c.txt"
         let cItem = vm.state.items.first { $0.name == "c.txt" }
         #expect(cItem != nil)
-        #expect(vm.state.focusedItemID == cItem?.id)
-        #expect(vm.state.selectedItemIDs == [cItem!.id])
+        #expect(vm.state.cursor.focused == cItem?.id)
+        #expect(vm.state.cursor.selected == [cItem!.id])
     }
 
     @Test func reloadKeepingSelectionFallsBackToSamePositionWhenFirstNonParentItemDeleted() async {
@@ -651,26 +651,26 @@ struct PanelViewModelTests {
             initialDirectory: URL(fileURLWithPath: "/tmp"),
             fileSystemService: service
         )
-        await vm.loadDirectory()
+        await vm.reload(.fresh)
         // Items after load: ["..", "a.txt", "b.txt"]
 
         // Select a.txt (index 1)
         let aItem = vm.state.items.first { $0.name == "a.txt" }!
-        vm.state.selectedItemIDs = [aItem.id]
-        vm.state.focusedItemID = aItem.id
+        vm.state.cursor.selected = [aItem.id]
+        vm.state.cursor.focused = aItem.id
 
         // Simulate deletion of a.txt
         service.items = [items[1]]
 
         // Act
-        await vm.reloadKeepingSelection()
+        await vm.reload(.keepSelection)
         // Items after reload: ["..", "b.txt"]
 
         // Assert — cursor stays at index 1, which is now "b.txt"
         let bItem = vm.state.items.first { $0.name == "b.txt" }
         #expect(bItem != nil)
-        #expect(vm.state.focusedItemID == bItem?.id)
-        #expect(vm.state.selectedItemIDs == [bItem!.id])
+        #expect(vm.state.cursor.focused == bItem?.id)
+        #expect(vm.state.cursor.selected == [bItem!.id])
     }
 
     // MARK: - prepareForDeletion + reload
@@ -688,22 +688,22 @@ struct PanelViewModelTests {
             initialDirectory: URL(fileURLWithPath: "/tmp"),
             fileSystemService: service
         )
-        await vm.loadDirectory()
+        await vm.reload(.fresh)
 
         // Select b.txt
         let bItem = vm.state.items.first { $0.name == "b.txt" }!
-        vm.state.selectedItemIDs = [bItem.id]
-        vm.state.focusedItemID = bItem.id
+        vm.state.cursor.selected = [bItem.id]
+        vm.state.cursor.focused = bItem.id
 
-        // Act — prepare then simulate delete
-        vm.prepareForDeletion()
+        // Act — simulate delete then reload with the neighbour intent
+        let bURL = bItem.url
         service.items = [items[0], items[2]]
-        await vm.reloadKeepingSelection()
+        await vm.reload(.landOnNeighbourOf([bURL]))
 
         // Assert — focus moved to c.txt (next item after b.txt)
         let cItem = vm.state.items.first { $0.name == "c.txt" }!
-        #expect(vm.state.focusedItemID == cItem.id)
-        #expect(vm.state.selectedItemIDs == [cItem.id])
+        #expect(vm.state.cursor.focused == cItem.id)
+        #expect(vm.state.cursor.selected == [cItem.id])
     }
 
     @Test func prepareForDeletionLastItemThenReloadFocusesPreviousItem() async {
@@ -718,22 +718,22 @@ struct PanelViewModelTests {
             initialDirectory: URL(fileURLWithPath: "/tmp"),
             fileSystemService: service
         )
-        await vm.loadDirectory()
+        await vm.reload(.fresh)
 
         // Select b.txt (last item)
         let bItem = vm.state.items.first { $0.name == "b.txt" }!
-        vm.state.selectedItemIDs = [bItem.id]
-        vm.state.focusedItemID = bItem.id
+        vm.state.cursor.selected = [bItem.id]
+        vm.state.cursor.focused = bItem.id
 
         // Act
-        vm.prepareForDeletion()
+        let bURL = bItem.url
         service.items = [items[0]]
-        await vm.reloadKeepingSelection()
+        await vm.reload(.landOnNeighbourOf([bURL]))
 
         // Assert — focus moved to a.txt (previous item)
         let aItem = vm.state.items.first { $0.name == "a.txt" }!
-        #expect(vm.state.focusedItemID == aItem.id)
-        #expect(vm.state.selectedItemIDs == [aItem.id])
+        #expect(vm.state.cursor.focused == aItem.id)
+        #expect(vm.state.cursor.selected == [aItem.id])
     }
 
     @Test func prepareForDeletionMultipleItemsThenReloadFocusesNextAfterLast() async {
@@ -750,23 +750,24 @@ struct PanelViewModelTests {
             initialDirectory: URL(fileURLWithPath: "/tmp"),
             fileSystemService: service
         )
-        await vm.loadDirectory()
+        await vm.reload(.fresh)
 
         // Select b.txt and c.txt
         let bItem = vm.state.items.first { $0.name == "b.txt" }!
         let cItem = vm.state.items.first { $0.name == "c.txt" }!
-        vm.state.selectedItemIDs = [bItem.id, cItem.id]
-        vm.state.focusedItemID = cItem.id
+        vm.state.cursor.selected = [bItem.id, cItem.id]
+        vm.state.cursor.focused = cItem.id
 
         // Act
-        vm.prepareForDeletion()
+        let bURL = bItem.url
+        let cURL = cItem.url
         service.items = [items[0], items[3]]
-        await vm.reloadKeepingSelection()
+        await vm.reload(.landOnNeighbourOf([bURL, cURL]))
 
         // Assert — focus moved to d.txt (next item after the last selected)
         let dItem = vm.state.items.first { $0.name == "d.txt" }!
-        #expect(vm.state.focusedItemID == dItem.id)
-        #expect(vm.state.selectedItemIDs == [dItem.id])
+        #expect(vm.state.cursor.focused == dItem.id)
+        #expect(vm.state.cursor.selected == [dItem.id])
     }
 
     @Test func prepareForDeletionFirstItemThenReloadFocusesNextItem() async {
@@ -781,21 +782,21 @@ struct PanelViewModelTests {
             initialDirectory: URL(fileURLWithPath: "/tmp"),
             fileSystemService: service
         )
-        await vm.loadDirectory()
+        await vm.reload(.fresh)
 
         // Select a.txt
         let aItem = vm.state.items.first { $0.name == "a.txt" }!
-        vm.state.selectedItemIDs = [aItem.id]
-        vm.state.focusedItemID = aItem.id
+        vm.state.cursor.selected = [aItem.id]
+        vm.state.cursor.focused = aItem.id
 
         // Act
-        vm.prepareForDeletion()
+        let aURL = aItem.url
         service.items = [items[1]]
-        await vm.reloadKeepingSelection()
+        await vm.reload(.landOnNeighbourOf([aURL]))
 
         // Assert — focus moved to b.txt (next item)
         let bItem = vm.state.items.first { $0.name == "b.txt" }!
-        #expect(vm.state.focusedItemID == bItem.id)
-        #expect(vm.state.selectedItemIDs == [bItem.id])
+        #expect(vm.state.cursor.focused == bItem.id)
+        #expect(vm.state.cursor.selected == [bItem.id])
     }
 }

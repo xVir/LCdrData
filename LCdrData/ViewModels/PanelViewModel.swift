@@ -64,26 +64,22 @@ final class PanelViewModel {
 
     // MARK: - Directory Loading
 
-    /// URL of a child directory to focus after the next directory load.
-    /// Set before navigating to a parent so the cursor lands on the folder
-    /// the user just left instead of resetting to the first item.
-    private var pendingFocusChildURL: URL?
+    /// The panel's grip on its current directory: holds security-scoped
+    /// access, watches the FD, and debounces background reloads. Replaced
+    /// (not mutated) every time the panel navigates to a new URL.
+    private var currentSession: DirectorySession?
 
-    /// Item ID to focus after the next reload, set before a delete operation
-    /// so the cursor lands on the neighbouring item rather than resetting.
-    private var pendingPostDeleteFocusID: UUID?
-
-    /// Directory for which `startAccessingSecurityScopedResource()` is active (if any).
-    private var accessedSecurityScopedDirectory: URL?
-
-    private var directoryWatcher: DirectoryWatcher?
-    private var directoryWatchGeneration: UInt64 = 0
-
-    /// Loads the contents of the current directory.
-    func loadDirectory() async {
+    /// Fetches a fresh listing for the panel's current directory and
+    /// repositions the cursor according to `intent`. The single canonical
+    /// load path — every navigation, refresh, and file-operation completion
+    /// goes through here.
+    func reload(_ intent: Cursor.Intent) async {
         isLoading = true
         errorMessage = nil
         isPermissionError = false
+
+        let previousListing = state.items
+        let previousCursor = state.cursor
 
         do {
             let items = try await fileSystemService.listDirectory(
@@ -92,8 +88,6 @@ final class PanelViewModel {
             )
 
             let sorted = sortItems(items)
-
-            // Prepend ".." entry unless we're at the root
             var displayItems: [FileItem] = []
             if state.currentDirectory.path != "/" {
                 displayItems.append(FileItem.parentEntry(for: state.currentDirectory))
@@ -101,172 +95,57 @@ final class PanelViewModel {
             displayItems.append(contentsOf: sorted)
 
             state.items = displayItems
-
-            // If we're returning from a child directory, focus that folder;
-            // otherwise default to the first item.
-            let targetID: UUID? = if let childURL = pendingFocusChildURL {
-                displayItems.first(where: {
-                    !$0.isParentDirectory && $0.isDirectory
-                        && $0.url.standardizedFileURL.path == childURL.standardizedFileURL.path
-                })?.id ?? displayItems.first?.id
-            } else {
-                displayItems.first?.id
-            }
-            pendingFocusChildURL = nil
-
-            if let targetID {
-                state.selectedItemIDs = [targetID]
-            } else {
-                state.selectedItemIDs = []
-            }
-            state.focusedItemID = targetID
-            adoptSecurityScopedAccessForCurrentDirectory()
-            restartDirectoryWatcher()
+            state.cursor = Cursor.resolve(
+                intent: intent,
+                listing: displayItems,
+                previousListing: previousListing,
+                previousCursor: previousCursor
+            )
+            adoptDirectorySession()
         } catch {
             isPermissionError = SandboxAccessService.isPermissionError(error)
             errorMessage = isPermissionError
                 ? "The app doesn't have permission to access this folder."
                 : error.localizedDescription
             state.items = []
-            directoryWatcher?.cancel()
-            directoryWatcher = nil
+            currentSession = nil
         }
 
         isLoading = false
     }
 
-    /// Reloads the current directory while preserving the user's selection.
-    /// Used for background refreshes (e.g. when the app regains focus) and
-    /// after file operations where the selection should stay in place.
-    ///
-    /// Because `FileItem` IDs are deterministic (derived from the file URL),
-    /// items that still exist keep the same UUID after a reload and SwiftUI
-    /// preserves the corresponding `List` rows without flicker.  Only items
-    /// that were removed need special handling: the cursor moves to the item
-    /// now at the same position, or the last item if the list shrank.
-    func reloadKeepingSelection() async {
-        // Snapshot the current focused item ID and its index so we can
-        // fall back to the same position when the focused item is removed.
-        let previousFocusedID = state.focusedItemID
-        let previousFocusedIndex = state.items
-            .firstIndex { $0.id == previousFocusedID }
-        let previousSelectedIDs = state.selectedItemIDs
-
-        errorMessage = nil
-        isPermissionError = false
-
-        do {
-            let items = try await fileSystemService.listDirectory(
-                at: state.currentDirectory,
-                showHidden: state.showHiddenFiles
-            )
-
-            let sorted = sortItems(items)
-
-            var displayItems: [FileItem] = []
-            if state.currentDirectory.path != "/" {
-                displayItems.append(FileItem.parentEntry(for: state.currentDirectory))
-            }
-            displayItems.append(contentsOf: sorted)
-
-            state.items = displayItems
-
-            let newIDs = Set(displayItems.map(\.id))
-
-            // If a pre-delete focus target was set and still exists, use it.
-            if let pendingID = pendingPostDeleteFocusID, newIDs.contains(pendingID) {
-                pendingPostDeleteFocusID = nil
-                state.focusedItemID = pendingID
-                state.selectedItemIDs = [pendingID]
-            } else {
-                pendingPostDeleteFocusID = nil
-
-                // Keep only the selected IDs that still exist in the new listing.
-                let survivingSelection = previousSelectedIDs.intersection(newIDs)
-
-                if let previousFocusedID, newIDs.contains(previousFocusedID) {
-                    // Focused item still exists — keep it focused.
-                    state.focusedItemID = previousFocusedID
-                    state.selectedItemIDs = survivingSelection.isEmpty
-                        ? [previousFocusedID]
-                        : survivingSelection
-                } else if !displayItems.isEmpty {
-                    // Focused item was removed without a pre-set target.
-                    // Fall back to the same index position.
-                    let fallbackIndex: Int
-                    if let prevIndex = previousFocusedIndex {
-                        fallbackIndex = min(prevIndex, displayItems.count - 1)
-                    } else {
-                        fallbackIndex = 0
-                    }
-                    let fallbackItem = displayItems[fallbackIndex]
-                    state.focusedItemID = fallbackItem.id
-                    state.selectedItemIDs = [fallbackItem.id]
-                } else {
-                    state.focusedItemID = nil
-                    state.selectedItemIDs = []
-                }
-            }
-            adoptSecurityScopedAccessForCurrentDirectory()
-            restartDirectoryWatcher()
-        } catch {
-            isPermissionError = SandboxAccessService.isPermissionError(error)
-            errorMessage = isPermissionError
-                ? "The app doesn't have permission to access this folder."
-                : error.localizedDescription
-            state.items = []
-            directoryWatcher?.cancel()
-            directoryWatcher = nil
-        }
-    }
-
     /// File URLs for the current selection excluding the parent (`..`) entry.
     func selectedNonParentURLs() -> [URL] {
         state.items
-            .filter { state.selectedItemIDs.contains($0.id) && !$0.isParentDirectory }
+            .filter { state.cursor.selected.contains($0.id) && !$0.isParentDirectory }
             .map(\.url)
     }
 
-    /// Stops security-scoped access for the directory this panel was browsing.
+    /// Releases the panel's session — security scope and watcher are torn down.
+    /// Called from the app delegate's `applicationWillTerminate`.
     func releaseDirectorySecurityScope() {
-        directoryWatcher?.cancel()
-        directoryWatcher = nil
-        accessedSecurityScopedDirectory?.stopAccessingSecurityScopedResource()
-        accessedSecurityScopedDirectory = nil
+        currentSession?.cancel()
+        currentSession = nil
     }
 
-    private func adoptSecurityScopedAccessForCurrentDirectory() {
-        let url = state.currentDirectory
-        if accessedSecurityScopedDirectory?.path == url.path {
+    /// Replaces `currentSession` with a fresh one for the panel's directory.
+    /// The old session's `deinit` releases scope and cancels the watcher.
+    /// Background fs changes trigger a reload through the same path used after
+    /// file operations.
+    private func adoptDirectorySession() {
+        guard directoryWatchingEnabled else {
+            currentSession = nil
             return
         }
-        accessedSecurityScopedDirectory?.stopAccessingSecurityScopedResource()
-        if url.startAccessingSecurityScopedResource() {
-            accessedSecurityScopedDirectory = url
-        } else {
-            accessedSecurityScopedDirectory = nil
+        let url = state.currentDirectory
+        if let session = currentSession,
+           session.url == url {
+            return
         }
-    }
-
-    private func restartDirectoryWatcher() {
-        directoryWatcher?.cancel()
-        directoryWatcher = nil
-        guard directoryWatchingEnabled else { return }
-        let path = state.currentDirectory.path
-        directoryWatcher = DirectoryWatcher(path: path) { [weak self] in
+        currentSession = DirectorySession(url: url) { [weak self] in
             Task { @MainActor [weak self] in
-                self?.scheduleDebouncedDirectoryReload()
+                await self?.reload(.keepSelection)
             }
-        }
-    }
-
-    private func scheduleDebouncedDirectoryReload() {
-        directoryWatchGeneration &+= 1
-        let token = directoryWatchGeneration
-        Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .milliseconds(280))
-            guard let self, token == self.directoryWatchGeneration else { return }
-            await self.reloadKeepingSelection()
         }
     }
 
@@ -292,11 +171,15 @@ final class PanelViewModel {
     /// Navigates into a directory, pushing to history.
     func navigate(to url: URL) async {
         clearDirectoryNavigationExtras()
-        // When navigating to the parent of the current directory, remember
-        // the child so `loadDirectory()` can focus it after loading.
+
+        // If the destination is the parent of the current directory, focus the
+        // folder we just left after loading. Otherwise it's a fresh load.
         let currentDir = state.currentDirectory
+        let intent: Cursor.Intent
         if url.standardizedFileURL.path == currentDir.deletingLastPathComponent().standardizedFileURL.path {
-            pendingFocusChildURL = currentDir
+            intent = .landOnChild(currentDir)
+        } else {
+            intent = .fresh
         }
 
         // Truncate forward history if we navigated back previously
@@ -308,7 +191,7 @@ final class PanelViewModel {
         state.history.append(url)
         state.historyIndex = state.history.count - 1
 
-        await loadDirectory()
+        await reload(intent)
     }
 
     /// Navigate to the parent directory.
@@ -326,7 +209,7 @@ final class PanelViewModel {
         clearDirectoryNavigationExtras()
         state.historyIndex -= 1
         state.currentDirectory = state.history[state.historyIndex]
-        await loadDirectory()
+        await reload(.fresh)
     }
 
     /// Navigate forward in history.
@@ -335,7 +218,7 @@ final class PanelViewModel {
         clearDirectoryNavigationExtras()
         state.historyIndex += 1
         state.currentDirectory = state.history[state.historyIndex]
-        await loadDirectory()
+        await reload(.fresh)
     }
 
     /// Opens a row: parent → up, directory → enter, file → default app.
@@ -352,12 +235,12 @@ final class PanelViewModel {
     }
 
     /// Opens the currently selected item (Cmd+Down / double-click).
-    /// Uses the List selection when exactly one item is selected; otherwise `focusedItemID`.
+    /// Uses the List selection when exactly one item is selected; otherwise the cursor focus.
     func openSelectedItem() async {
-        let targetID: UUID? = if state.selectedItemIDs.count == 1 {
-            state.selectedItemIDs.first
+        let targetID: UUID? = if state.cursor.selected.count == 1 {
+            state.cursor.selected.first
         } else {
-            state.focusedItemID
+            state.cursor.focused
         }
 
         guard let targetID else { return }
@@ -380,7 +263,7 @@ final class PanelViewModel {
 
     /// Re-sorts and refreshes the current listing without re-fetching from disk.
     private func reloadCurrentListing() async {
-        await loadDirectory()
+        await reload(.keepSelection)
     }
 
     /// Sorts items according to the current sort descriptor.
@@ -437,93 +320,54 @@ final class PanelViewModel {
 
     /// Toggles selection of a specific item.
     func toggleSelection(of itemID: UUID) {
-        if state.selectedItemIDs.contains(itemID) {
-            state.selectedItemIDs.remove(itemID)
+        if state.cursor.selected.contains(itemID) {
+            state.cursor.selected.remove(itemID)
         } else {
-            state.selectedItemIDs.insert(itemID)
+            state.cursor.selected.insert(itemID)
         }
     }
 
     /// Sets the focused item.
     func setFocused(_ itemID: UUID?) {
-        state.focusedItemID = itemID
+        state.cursor.focused = itemID
     }
 
-    /// Selects all items (excluding ".." parent entry), respecting the name filter.
+    /// Reacts to user-driven selection changes from the file list (clicks,
+    /// arrow keys, Cmd-click). Routed through `Cursor.userDidSelect` so that
+    /// rules like "empty selection restores from focused" live on the cursor.
+    func cursorDidChangeSelection(to newSelection: Set<UUID>) {
+        state.cursor.userDidSelect(newSelection)
+    }
+
+    /// Selects all items (excluding ".." parent entry).
     func selectAll() {
-        state.selectedItemIDs = Set(
-            visibleItems
-                .filter { !$0.isParentDirectory }
-                .map(\.id)
-        )
+        state.cursor.selectAll(in: visibleItems)
     }
 
     /// Deselects all items.
     func deselectAll() {
-        state.selectedItemIDs = []
+        state.cursor.selected = []
     }
 
     /// Collapses a multi-selection to a single focused row (Cmd+Shift+A).
     func deselectAllKeepingFocus() {
-        if let id = state.focusedItemID {
-            state.selectedItemIDs = [id]
-        } else if let first = visibleItems.first {
-            state.focusedItemID = first.id
-            state.selectedItemIDs = [first.id]
-        }
-    }
-
-    /// Call before a delete operation to remember which item should receive
-    /// focus after the deleted items are gone.
-    ///
-    /// The rule: pick the next item after the last selected item. If the
-    /// selected items are at the end of the list, pick the item just before
-    /// the first selected item. The ".." parent entry is skipped.
-    func prepareForDeletion() {
-        let selectedIDs = state.selectedItemIDs
-        guard !selectedIDs.isEmpty else { return }
-
-        // Find the index range occupied by selected items (use visible order when filtered).
-        let selectedIndices = visibleItems.enumerated()
-            .filter { selectedIDs.contains($0.element.id) }
-            .map(\.offset)
-
-        guard let lastSelectedIndex = selectedIndices.max() else { return }
-
-        let rowItems = visibleItems
-
-        // Try the item right after the last selected item.
-        let afterIndex = lastSelectedIndex + 1
-        if afterIndex < rowItems.count {
-            let candidate = rowItems[afterIndex]
-            if !candidate.isParentDirectory {
-                pendingPostDeleteFocusID = candidate.id
-                return
-            }
-        }
-
-        // All selected items are at the end — try the item before the first
-        // selected item.
-        guard let firstSelectedIndex = selectedIndices.min() else { return }
-        let beforeIndex = firstSelectedIndex - 1
-        if beforeIndex >= 0 {
-            let candidate = rowItems[beforeIndex]
-            if !candidate.isParentDirectory {
-                pendingPostDeleteFocusID = candidate.id
-                return
-            }
-        }
-
-        // Fallback: focus the ".." entry if nothing else is available.
-        pendingPostDeleteFocusID = rowItems.first?.id
+        state.cursor.deselectAllKeepingFocus(in: visibleItems)
     }
 
     // MARK: - Highlight
 
-    /// Briefly highlights a row to draw the user's attention (e.g. after
-    /// creating a new folder). The highlight fades out automatically.
-    func highlightItem(id: UUID) {
-        highlightedItemID = id
+    /// Briefly highlights the row matching `url` in the current listing — used
+    /// after rename / mkdir to draw the user's eye to the new item.
+    /// No-op if no row in the current listing maps to that URL.
+    func highlight(url: URL) {
+        let standardized = url.standardizedFileURL.path
+        guard let item = visibleItems.first(where: {
+            !$0.isParentDirectory
+                && $0.url.standardizedFileURL.path == standardized
+        }) else { return }
+
+        highlightedItemID = item.id
+        let id = item.id
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(1.5))
             if highlightedItemID == id {
@@ -537,7 +381,7 @@ final class PanelViewModel {
     /// Toggles visibility of hidden files and reloads.
     func toggleHiddenFiles() async {
         state.showHiddenFiles.toggle()
-        await loadDirectory()
+        await reload(.keepSelection)
     }
 
     // MARK: - Type-ahead
@@ -558,13 +402,12 @@ final class PanelViewModel {
 
         guard let matchID = Self.typeAheadMatchID(
             items: visibleItems,
-            focusedID: state.focusedItemID,
+            focusedID: state.cursor.focused,
             buffer: typeAheadBuffer
         ) else {
             return false
         }
-        state.focusedItemID = matchID
-        state.selectedItemIDs = [matchID]
+        state.cursor = Cursor(focused: matchID, selected: [matchID])
         return true
     }
 
@@ -572,42 +415,17 @@ final class PanelViewModel {
 
     /// Toggles selection on the focused row and moves focus down one row.
     func commanderSpaceSelect() {
-        let items = visibleItems
-        guard let focusID = state.focusedItemID,
-              let idx = items.firstIndex(where: { $0.id == focusID }) else {
-            return
-        }
-
-        let row = items[idx]
-        if !row.isParentDirectory {
-            toggleSelection(of: focusID)
-        }
-
-        let nextIndex = idx + 1
-        guard nextIndex < items.count else { return }
-        let nextItem = items[nextIndex]
-        state.focusedItemID = nextItem.id
-        state.selectedItemIDs = [nextItem.id]
+        state.cursor.commanderSpaceSelectAndAdvance(in: visibleItems)
     }
 
     // MARK: - Home / End
 
     func focusFirstListItem() {
-        let items = visibleItems
-        guard let target = items.first(where: { !$0.isParentDirectory }) ?? items.first else {
-            return
-        }
-        state.focusedItemID = target.id
-        state.selectedItemIDs = [target.id]
+        state.cursor.focusFirst(in: visibleItems)
     }
 
     func focusLastListItem() {
-        let items = visibleItems
-        guard let target = items.last(where: { !$0.isParentDirectory }) ?? items.last else {
-            return
-        }
-        state.focusedItemID = target.id
-        state.selectedItemIDs = [target.id]
+        state.cursor.focusLast(in: visibleItems)
     }
 
     // MARK: - Quick Look / open
@@ -627,7 +445,7 @@ final class PanelViewModel {
     }
 
     private func singleSelectedNonDirectoryItem() -> FileItem? {
-        let ids = state.selectedItemIDs
+        let ids = state.cursor.selected
         guard ids.count == 1, let id = ids.first else { return nil }
         return visibleItems.first(where: { $0.id == id && !$0.isParentDirectory })
     }

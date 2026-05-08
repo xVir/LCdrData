@@ -19,8 +19,8 @@ struct MainWindowView: View {
             .environment(\.lcPanelFontSize, fontSize)
             .focusedSceneValue(\.activePanel, appState.activePanelViewModel)
             .task {
-                async let leftLoad: Void = appState.leftPanel.loadDirectory()
-                async let rightLoad: Void = appState.rightPanel.loadDirectory()
+                async let leftLoad: Void = appState.leftPanel.reload(.fresh)
+                async let rightLoad: Void = appState.rightPanel.reload(.fresh)
                 _ = await (leftLoad, rightLoad)
                 focusedPanel = .left
             }
@@ -31,8 +31,8 @@ struct MainWindowView: View {
                     return
                 }
                 Task {
-                    async let left: Void = appState.leftPanel.reloadKeepingSelection()
-                    async let right: Void = appState.rightPanel.reloadKeepingSelection()
+                    async let left: Void = appState.leftPanel.reload(.keepSelection)
+                    async let right: Void = appState.rightPanel.reload(.keepSelection)
                     _ = await (left, right)
                 }
             }
@@ -90,24 +90,25 @@ struct MainWindowView: View {
             titleVisibility: .visible
         ) {
             Button("Confirm") {
-                // For delete and move operations, pre-compute which
-                // neighbouring item should receive focus after the
-                // selected items are removed from the source panel.
+                // Source-panel intent depends on the operation: delete / move
+                // need to land on the neighbour of the doomed URLs; copy
+                // (which doesn't remove rows from the source) keeps selection.
+                let sourceIntent: Cursor.Intent
                 switch ops.pendingOperationType {
-                case .delete, .permanentDelete:
-                    appState.activePanelViewModel.prepareForDeletion()
-                case .move:
-                    appState.activePanelViewModel.prepareForDeletion()
+                case .delete(let urls), .permanentDelete(let urls):
+                    sourceIntent = .landOnNeighbourOf(urls)
+                case .move(let urls, _):
+                    sourceIntent = .landOnNeighbourOf(urls)
                 default:
-                    break
+                    sourceIntent = .keepSelection
                 }
 
                 ops.confirmOperation(
                     reloadSource: { [weak appState] in
-                        await appState?.activePanelViewModel.reloadKeepingSelection()
+                        await appState?.activePanelViewModel.reload(sourceIntent)
                     },
                     reloadDestination: { [weak appState] in
-                        await appState?.inactivePanelViewModel.reloadKeepingSelection()
+                        await appState?.inactivePanelViewModel.reload(.keepSelection)
                     }
                 )
             }
@@ -140,18 +141,15 @@ struct MainWindowView: View {
                         .trimmingCharacters(in: .whitespacesAndNewlines)
 
                     await ops.performCreateFolder(in: dir)
-                    await panel.reloadKeepingSelection()
-                    await appState.inactivePanelViewModel.reloadKeepingSelection()
 
-                    // Highlight the newly created folder and select it.
-                    if !folderName.isEmpty {
+                    if folderName.isEmpty {
+                        await panel.reload(.keepSelection)
+                        await appState.inactivePanelViewModel.reload(.keepSelection)
+                    } else {
                         let newFolderURL = dir.appendingPathComponent(folderName)
-                        let newItem = FileItem(
-                            url: newFolderURL, name: folderName, isDirectory: true
-                        )
-                        panel.state.selectedItemIDs = [newItem.id]
-                        panel.state.focusedItemID = newItem.id
-                        panel.highlightItem(id: newItem.id)
+                        await panel.reload(.landOnNew(newFolderURL))
+                        await appState.inactivePanelViewModel.reload(.keepSelection)
+                        panel.highlight(url: newFolderURL)
                     }
                 }
             }
@@ -168,20 +166,12 @@ struct MainWindowView: View {
                     Task {
                         let panel = appState.activePanelViewModel
                         await ops.performRename(newName: newName)
-                        await panel.reloadKeepingSelection()
-                        await appState.inactivePanelViewModel.reloadKeepingSelection()
 
-                        // Select and highlight the renamed item.
                         let parentDir = item.url.deletingLastPathComponent()
                         let newURL = parentDir.appendingPathComponent(newName)
-                        let newItem = FileItem(
-                            url: newURL,
-                            name: newName,
-                            isDirectory: item.isDirectory
-                        )
-                        panel.state.selectedItemIDs = [newItem.id]
-                        panel.state.focusedItemID = newItem.id
-                        panel.highlightItem(id: newItem.id)
+                        await panel.reload(.landOnNew(newURL))
+                        await appState.inactivePanelViewModel.reload(.keepSelection)
+                        panel.highlight(url: newURL)
                     }
                 }
             }
@@ -213,7 +203,7 @@ struct MainWindowView: View {
     private var hasSelection: Bool {
         let panel = appState.activePanelViewModel
         return panel.visibleItems.contains { item in
-            panel.state.selectedItemIDs.contains(item.id) && !item.isParentDirectory
+            panel.state.cursor.selected.contains(item.id) && !item.isParentDirectory
         }
     }
 
@@ -229,10 +219,10 @@ struct MainWindowView: View {
 
         // If exactly one non-parent, non-directory item is selected, rename it.
         // If a directory or parent is selected, navigate into it.
-        let targetID: UUID? = if panel.state.selectedItemIDs.count == 1 {
-            panel.state.selectedItemIDs.first
+        let targetID: UUID? = if panel.state.cursor.selected.count == 1 {
+            panel.state.cursor.selected.first
         } else {
-            panel.state.focusedItemID
+            panel.state.cursor.focused
         }
 
         guard let targetID,
@@ -315,10 +305,10 @@ struct MainWindowView: View {
     private func performRename() {
         let panel = appState.activePanelViewModel
 
-        let targetID: UUID? = if panel.state.selectedItemIDs.count == 1 {
-            panel.state.selectedItemIDs.first
+        let targetID: UUID? = if panel.state.cursor.selected.count == 1 {
+            panel.state.cursor.selected.first
         } else {
-            panel.state.focusedItemID
+            panel.state.cursor.focused
         }
 
         guard let targetID,

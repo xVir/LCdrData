@@ -1,11 +1,10 @@
 import Foundation
 
-/// The state of one file panel, including its current directory, items, selection, and sort.
+/// The state of one file panel, including its current directory, items, cursor, and sort.
 struct PanelState {
     var currentDirectory: URL
     var items: [FileItem]
-    var selectedItemIDs: Set<UUID>
-    var focusedItemID: UUID?
+    var cursor: Cursor
     var sortDescriptor: FileSortDescriptor
     var showHiddenFiles: Bool
 
@@ -17,8 +16,7 @@ struct PanelState {
     init(
         currentDirectory: URL,
         items: [FileItem] = [],
-        selectedItemIDs: Set<UUID> = [],
-        focusedItemID: UUID? = nil,
+        cursor: Cursor = Cursor(),
         sortDescriptor: FileSortDescriptor = FileSortDescriptor(column: .name, ascending: true),
         showHiddenFiles: Bool = false,
         history: [URL]? = nil,
@@ -26,8 +24,7 @@ struct PanelState {
     ) {
         self.currentDirectory = currentDirectory
         self.items = items
-        self.selectedItemIDs = selectedItemIDs
-        self.focusedItemID = focusedItemID
+        self.cursor = cursor
         self.sortDescriptor = sortDescriptor
         self.showHiddenFiles = showHiddenFiles
         self.history = history ?? [currentDirectory]

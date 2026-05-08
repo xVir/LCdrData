@@ -30,11 +30,11 @@ struct StatusBarView: View {
     }
 
     private var selectionText: String {
-        let selectedCount = viewModel.state.selectedItemIDs.count
+        let selectedCount = viewModel.state.cursor.selected.count
         guard selectedCount > 0 else { return "" }
 
         let selectedItems = viewModel.state.items.filter {
-            viewModel.state.selectedItemIDs.contains($0.id)
+            viewModel.state.cursor.selected.contains($0.id)
         }
         let totalSize = selectedItems.compactMap(\.size).reduce(0, +)
 

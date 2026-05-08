@@ -77,7 +77,7 @@ final class FileOperationViewModel {
     /// Returns the selected non-parent items from the active panel.
     func selectedItems(from panel: PanelViewModel) -> [FileItem] {
         panel.state.items.filter { item in
-            panel.state.selectedItemIDs.contains(item.id) && !item.isParentDirectory
+            panel.state.cursor.selected.contains(item.id) && !item.isParentDirectory
         }
     }
 

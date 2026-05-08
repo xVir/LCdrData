@@ -54,7 +54,7 @@ struct LCdrDataApp: App {
 
                 Button("Refresh") {
                     Task {
-                        await appState.activePanelViewModel.loadDirectory()
+                        await appState.activePanelViewModel.reload(.fresh)
                     }
                 }
                 .keyboardShortcut(KeyboardShortcuts.refresh)

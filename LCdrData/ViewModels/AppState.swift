@@ -115,8 +115,8 @@ final class AppState {
         rightPanel.state.sortDescriptor = cfg.sortDescriptor
         leftPanel.state.showHiddenFiles = cfg.panelShowHiddenFiles
         rightPanel.state.showHiddenFiles = cfg.panelShowHiddenFiles
-        async let left: Void = leftPanel.reloadKeepingSelection()
-        async let right: Void = rightPanel.reloadKeepingSelection()
+        async let left: Void = leftPanel.reload(.keepSelection)
+        async let right: Void = rightPanel.reload(.keepSelection)
         _ = await (left, right)
     }
 

@@ -25,7 +25,10 @@ struct PanelView: View {
                     isActive: isActive
                 )
                     .overlay {
-                        if viewModel.isLoading {
+                        // Only show the spinner on a genuinely empty load — for
+                        // reloads where existing rows are still visible, let
+                        // SwiftUI swap them in place to avoid a blink.
+                        if viewModel.isLoading && viewModel.state.items.isEmpty {
                             ProgressView("Loading...")
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                                 .background(.background.opacity(0.6))
@@ -85,7 +88,7 @@ struct PanelView: View {
                     .multilineTextAlignment(.center)
                 Button("Retry") {
                     Task {
-                        await viewModel.loadDirectory()
+                        await viewModel.reload(.fresh)
                     }
                 }
             }

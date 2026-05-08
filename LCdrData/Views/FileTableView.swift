@@ -27,8 +27,8 @@ struct FileTableView: View {
             // File listing
             ScrollViewReader { proxy in
                 List(selection: Binding(
-                    get: { viewModel.state.selectedItemIDs },
-                    set: { viewModel.state.selectedItemIDs = $0 }
+                    get: { viewModel.state.cursor.selected },
+                    set: { viewModel.cursorDidChangeSelection(to: $0) }
                 )) {
                     ForEach(viewModel.visibleItems) { item in
                         FileRowView(
@@ -58,23 +58,9 @@ struct FileTableView: View {
                 .onDeleteCommand {
                     Task { await viewModel.navigateToParent() }
                 }
-                .onChange(of: viewModel.state.focusedItemID) { _, newID in
+                .onChange(of: viewModel.state.cursor.focused) { _, newID in
                     if let newID {
                         proxy.scrollTo(newID)
-                    }
-                }
-                // Track the user's cursor position: when arrow-key navigation
-                // or a click changes the selection to a single item, update
-                // focusedItemID so it always reflects the current position.
-                // When clicking empty space clears the selection, restore it
-                // from focusedItemID so the cursor never disappears.
-                .onChange(of: viewModel.state.selectedItemIDs) { _, newValue in
-                    if newValue.isEmpty {
-                        if let focusedID = viewModel.state.focusedItemID {
-                            viewModel.state.selectedItemIDs = [focusedID]
-                        }
-                    } else if newValue.count == 1 {
-                        viewModel.state.focusedItemID = newValue.first
                     }
                 }
                 .onChange(of: isActive) { _, active in
@@ -125,7 +111,7 @@ struct FileTableView: View {
                 continue
             }
         }
-        await viewModel.reloadKeepingSelection()
+        await viewModel.reload(.keepSelection)
     }
 
     // MARK: - Column Headers
@@ -266,7 +252,7 @@ private struct FileRowView: View {
         )
         .simultaneousGesture(
             TapGesture(count: 1).onEnded {
-                viewModel.state.selectedItemIDs = [item.id]
+                viewModel.cursorDidChangeSelection(to: [item.id])
             }
         )
         .onDrag {

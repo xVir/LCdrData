@@ -13,8 +13,8 @@ struct PanelStateTests {
         // Assert
         #expect(state.currentDirectory == url)
         #expect(state.items.isEmpty)
-        #expect(state.selectedItemIDs.isEmpty)
-        #expect(state.focusedItemID == nil)
+        #expect(state.cursor.selected.isEmpty)
+        #expect(state.cursor.focused == nil)
         #expect(state.sortDescriptor == FileSortDescriptor(column: .name, ascending: true))
         #expect(state.showHiddenFiles == false)
         #expect(state.history == [url])
@@ -34,16 +34,15 @@ struct PanelStateTests {
         let state = PanelState(
             currentDirectory: url,
             items: [item],
-            selectedItemIDs: [item.id],
-            focusedItemID: item.id,
+            cursor: Cursor(focused: item.id, selected: [item.id]),
             sortDescriptor: FileSortDescriptor(column: .size, ascending: false),
             showHiddenFiles: true
         )
 
         // Assert
         #expect(state.items.count == 1)
-        #expect(state.selectedItemIDs.contains(item.id))
-        #expect(state.focusedItemID == item.id)
+        #expect(state.cursor.selected.contains(item.id))
+        #expect(state.cursor.focused == item.id)
         #expect(state.sortDescriptor.column == .size)
         #expect(state.sortDescriptor.ascending == false)
         #expect(state.showHiddenFiles == true)

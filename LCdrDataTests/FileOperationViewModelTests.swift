@@ -153,7 +153,7 @@ struct FileOperationViewModelTests {
             fileSystemService: service
         )
         vm.state.items = items
-        vm.state.selectedItemIDs = selectedIDs
+        vm.state.cursor.selected = selectedIDs
         return vm
     }
 
