@@ -12,32 +12,20 @@ final class AppState {
     var fileOperations: FileOperationViewModel
     let configuration: ConfigurationService
 
-    private let panelPathStore: PanelPathStoreProtocol
-
     @MainActor
     init(
         leftDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
         rightDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
         fileOperationService: FileOperationServiceProtocol = FileOperationService(),
-        panelPathStore: PanelPathStoreProtocol = PanelPathStore(),
         configuration: ConfigurationService
     ) {
-        self.panelPathStore = panelPathStore
         self.configuration = configuration
-        try? configuration.load()
 
         let cfg = configuration.current
-
-        // Restore saved paths if they still exist, otherwise use the
-        // supplied defaults (home directory).
-        let restored = panelPathStore.restore()
-        let leftDir = restored?.left ?? leftDirectory
-        let rightDir = restored?.right ?? rightDirectory
-
         let sandboxAccess = SandboxAccessService()
         self.leftPanel = PanelViewModel(
             side: .left,
-            initialDirectory: leftDir,
+            initialDirectory: leftDirectory,
             sortDescriptor: cfg.sortDescriptor,
             showHiddenFiles: cfg.panelShowHiddenFiles,
             directoryWatchingEnabled: true,
@@ -45,7 +33,7 @@ final class AppState {
         )
         self.rightPanel = PanelViewModel(
             side: .right,
-            initialDirectory: rightDir,
+            initialDirectory: rightDirectory,
             sortDescriptor: cfg.sortDescriptor,
             showHiddenFiles: cfg.panelShowHiddenFiles,
             directoryWatchingEnabled: true,
@@ -62,28 +50,15 @@ final class AppState {
     convenience init(
         leftDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
         rightDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
-        fileOperationService: FileOperationServiceProtocol = FileOperationService(),
-        panelPathStore: PanelPathStoreProtocol = PanelPathStore()
+        fileOperationService: FileOperationServiceProtocol = FileOperationService()
     ) {
+        let configuration = ConfigurationService()
+        try? configuration.load()
         self.init(
             leftDirectory: leftDirectory,
             rightDirectory: rightDirectory,
             fileOperationService: fileOperationService,
-            panelPathStore: panelPathStore,
-            configuration: ConfigurationService()
-        )
-    }
-
-    /// Persists the current panel directories so they can be restored on
-    /// the next launch.
-    func savePanelPaths() {
-        let leftBM = BookmarkService.bookmarkData(for: leftPanel.state.currentDirectory)
-        let rightBM = BookmarkService.bookmarkData(for: rightPanel.state.currentDirectory)
-        panelPathStore.save(
-            leftPath: leftPanel.state.currentDirectory.path,
-            rightPath: rightPanel.state.currentDirectory.path,
-            leftBookmark: leftBM,
-            rightBookmark: rightBM
+            configuration: configuration
         )
     }
 

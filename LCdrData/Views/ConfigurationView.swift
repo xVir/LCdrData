@@ -3,7 +3,7 @@ import SwiftUI
 /// Dual-pane KDL editor: read-only defaults (left) and user overrides (right), with Apply / Cancel.
 struct ConfigurationView: View {
 
-    @Environment(AppState.self) private var appState
+    let configuration: ConfigurationService
 
     @State private var userKDL: String = ""
     @State private var applyError: String?
@@ -98,7 +98,7 @@ struct ConfigurationView: View {
 
     @MainActor
     private func loadPanes() async {
-        let cfg = appState.configuration
+        let cfg = configuration
         do {
             let defaultKDL = try cfg.defaultKDLText()
             defaultAttributed = KDLSyntaxHighlighter.attributedString(from: defaultKDL)
@@ -111,7 +111,7 @@ struct ConfigurationView: View {
     }
 
     private func syncUserFromDisk() {
-        let cfg = appState.configuration
+        let cfg = configuration
         do {
             userKDL = try cfg.userKDLText()
             if userKDL.isEmpty {
@@ -125,11 +125,9 @@ struct ConfigurationView: View {
 
     private func applyFromEditor() {
         do {
-            try appState.configuration.apply(fromUserKDL: userKDL)
+            try configuration.apply(fromUserKDL: userKDL)
             applyError = nil
-            Task {
-                await appState.applyEffectiveConfiguration()
-            }
+            NotificationCenter.default.post(name: .lcdrConfigurationApplied, object: nil)
         } catch let err as ConfigurationServiceError {
             switch err {
             case .invalidKDL(let message):

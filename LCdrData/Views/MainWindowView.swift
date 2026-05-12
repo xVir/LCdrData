@@ -17,7 +17,6 @@ struct MainWindowView: View {
         mainContentLayer(showProgressOverlay: ops.showProgressOverlay, operations: ops.activeOperations)
             .environment(\.lcPanelDateFormat, dateFormat)
             .environment(\.lcPanelFontSize, fontSize)
-            .focusedSceneValue(\.activePanel, appState.activePanelViewModel)
             .task {
                 async let leftLoad: Void = appState.leftPanel.reload(.fresh)
                 async let rightLoad: Void = appState.rightPanel.reload(.fresh)
@@ -515,19 +514,6 @@ private struct KeyShortcutModifier: ViewModifier {
             return .handled
         }
         return .ignored
-    }
-}
-
-// MARK: - Focused Scene Value for Active Panel
-
-struct ActivePanelKey: FocusedValueKey {
-    typealias Value = PanelViewModel
-}
-
-extension FocusedValues {
-    var activePanel: PanelViewModel? {
-        get { self[ActivePanelKey.self] }
-        set { self[ActivePanelKey.self] = newValue }
     }
 }
 
