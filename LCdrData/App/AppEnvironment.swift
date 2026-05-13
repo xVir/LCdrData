@@ -59,7 +59,8 @@ final class AppEnvironment {
         self.scopeActivator = scopeActivator
     }
 
-    /// Acquires security scope on every bookmark currently in the store.
+    /// Acquires security scope on every bookmark currently in the store, then
+    /// presents the startup Home prompt if no stored bookmark covers `~`.
     /// Idempotent — subsequent calls are no-ops. Bookmarks that fail to start
     /// scope are silently skipped (they remain in the store and may succeed
     /// on a later launch — e.g. an unmounted volume).
@@ -69,6 +70,13 @@ final class AppEnvironment {
         let urls = bookmarkStore.allBookmarkURLs()
         for url in urls where scopeActivator.startAccessing(url) {
             activeScopes.append(url)
+        }
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        if bookmarkStore.bookmarkCovering(url: home) == nil {
+            if let granted = await sandboxAccess.requestAccessIfNeeded(context: .startup),
+               scopeActivator.startAccessing(granted) {
+                activeScopes.append(granted)
+            }
         }
     }
 
