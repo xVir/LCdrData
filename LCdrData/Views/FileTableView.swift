@@ -276,16 +276,34 @@ private struct FileRowView: View {
         if item.isParentDirectory {
             Image(systemName: "arrow.up.doc")
                 .foregroundStyle(.secondary)
-        } else if item.isSymlink {
-            Image(systemName: "arrow.triangle.turn.up.right.diamond")
-                .foregroundStyle(.orange)
+        } else if item.isSymlinkToDirectory {
+            folderIcon.overlay(alignment: .bottomLeading) { aliasBadge }
         } else if item.isDirectory {
-            Image(systemName: "folder.fill")
-                .foregroundStyle(.blue)
+            folderIcon
+        } else if item.isSymlink {
+            docIcon.overlay(alignment: .bottomLeading) { aliasBadge }
         } else {
-            Image(systemName: "doc")
-                .foregroundStyle(.secondary)
+            docIcon
         }
+    }
+
+    private var folderIcon: some View {
+        Image(systemName: "folder.fill")
+            .foregroundStyle(.blue)
+    }
+
+    private var docIcon: some View {
+        Image(systemName: "doc")
+            .foregroundStyle(.secondary)
+    }
+
+    /// Finder-style alias badge: white-circle background with a small black
+    /// up-curving arrow, anchored to the bottom-leading corner of the base icon.
+    private var aliasBadge: some View {
+        Image(systemName: "arrowshape.turn.up.left.circle.fill")
+            .font(.system(size: 9))
+            .foregroundStyle(.black, .white)
+            .offset(x: -1, y: 1)
     }
 }
 
