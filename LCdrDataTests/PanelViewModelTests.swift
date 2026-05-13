@@ -825,6 +825,60 @@ struct PanelViewModelTests {
         #expect(vm.state.cursor.selected == [bItem.id])
     }
 
+    @Test func initialReloadPermissionErrorDoesNotInvokeReactivePrompt() async {
+        // Arrange — initial directory throws permission error.
+        let service = ThrowingMockFileSystemService(
+            itemsByPath: [:],
+            failingPaths: ["/a"],
+            error: NSError(domain: NSCocoaErrorDomain, code: 257)
+        )
+        let presenter = FakeAccessPresenter(result: nil)
+        let sandbox = SandboxAccessService(presenter: presenter, bookmarkStore: FakeBookmarkStore())
+        let vm = PanelViewModel(
+            side: .left,
+            initialDirectory: URL(fileURLWithPath: "/a"),
+            fileSystemService: service,
+            sandboxAccessService: sandbox
+        )
+
+        // Act — direct reload (the initial-load code path), NOT a user navigation.
+        await vm.reload(.fresh)
+
+        // Assert — the reactive prompt was never invoked; isPermissionError is set
+        // so PanelView can render the empty-state hint, but the user isn't prompted.
+        #expect(presenter.presentedContexts.isEmpty)
+        #expect(vm.isPermissionError == true)
+    }
+
+    @Test func navigatePermissionErrorInvokesReactivePromptWithDisplayURL() async {
+        // Arrange
+        let service = ThrowingMockFileSystemService(
+            itemsByPath: ["/a": []],
+            failingPaths: ["/b"],
+            error: NSError(domain: NSCocoaErrorDomain, code: 257)
+        )
+        let presenter = FakeAccessPresenter(result: nil)
+        let sandbox = SandboxAccessService(presenter: presenter, bookmarkStore: FakeBookmarkStore())
+        let vm = PanelViewModel(
+            side: .left,
+            initialDirectory: URL(fileURLWithPath: "/a"),
+            fileSystemService: service,
+            sandboxAccessService: sandbox
+        )
+        await vm.reload(.fresh)
+
+        // Act — user navigation to denied path.
+        await vm.navigate(to: URL(fileURLWithPath: "/b"))
+
+        // Assert — exactly one .reactive prompt, with the clicked URL as displayURL.
+        #expect(presenter.presentedContexts.count == 1)
+        if case .reactive(let displayURL, _) = presenter.presentedContexts.first {
+            #expect(displayURL.path == "/b")
+        } else {
+            Issue.record("Expected a .reactive presentation context")
+        }
+    }
+
     @Test func navigateBackPermissionErrorRevertsHistoryIndex() async {
         // Arrange — panel at /b, with /a as the previous history entry,
         // but /a now denies access.
