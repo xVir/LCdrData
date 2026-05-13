@@ -17,12 +17,12 @@ final class AppState {
         leftDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
         rightDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
         fileOperationService: FileOperationServiceProtocol = FileOperationService(),
-        configuration: ConfigurationService
+        configuration: ConfigurationService,
+        sandboxAccess: SandboxAccessService
     ) {
         self.configuration = configuration
 
         let cfg = configuration.current
-        let sandboxAccess = SandboxAccessService()
         self.leftPanel = PanelViewModel(
             side: .left,
             initialDirectory: leftDirectory,
@@ -54,11 +54,16 @@ final class AppState {
     ) {
         let configuration = ConfigurationService()
         try? configuration.load()
+        let sandboxAccess = SandboxAccessService(
+            presenter: NSOpenPanelAccessPresenter(),
+            bookmarkStore: BookmarkStore()
+        )
         self.init(
             leftDirectory: leftDirectory,
             rightDirectory: rightDirectory,
             fileOperationService: fileOperationService,
-            configuration: configuration
+            configuration: configuration,
+            sandboxAccess: sandboxAccess
         )
     }
 

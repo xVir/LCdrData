@@ -23,7 +23,8 @@ struct WindowRootView: View {
         let state = AppState(
             leftDirectory: leftURL,
             rightDirectory: rightURL,
-            configuration: env.configuration
+            configuration: env.configuration,
+            sandboxAccess: env.sandboxAccess
         )
         _appState = State(initialValue: state)
         env.mostRecentAppState = state

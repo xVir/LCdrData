@@ -1,45 +1,50 @@
-import AppKit
 import Foundation
 
-/// Manages sandbox file-access permissions by presenting an NSOpenPanel when
-/// the app lacks access to a directory, and tracking which URLs the user has
-/// already granted access to during the current session.
-@Observable
-final class SandboxAccessService {
+/// Coordinates user-facing sandbox-access requests. Owns single-flight dedup
+/// for concurrent callers asking for the same resolved target — the actor
+/// guarantees only one presenter invocation per in-flight key.
+actor SandboxAccessService {
 
-    /// URLs the user has granted access to during this session.
-    private(set) var grantedURLs: Set<URL> = []
+    private let presenter: AccessPresenter
+    private let bookmarkStore: BookmarkStoreProtocol
 
-    /// Presents an NSOpenPanel pre-navigated to the requested directory so the
-    /// user can grant access. Returns the selected URL on success, or nil if
-    /// the user cancels.
-    ///
-    /// - Parameter directoryURL: The directory the app wants to access.
-    /// - Returns: The URL the user selected (granting sandbox access), or nil.
-    @MainActor
-    func requestAccess(to directoryURL: URL) async -> URL? {
-        let panel = NSOpenPanel()
-        panel.title = "Grant Access to Folder"
-        panel.message = "LCdrData needs permission to access \"\(directoryURL.lastPathComponent)\". "
-            + "Select the folder to grant access."
-        panel.prompt = "Grant Access"
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = false
-        panel.canCreateDirectories = false
-        panel.directoryURL = directoryURL
+    private var inFlight: [URL: [CheckedContinuation<URL?, Never>]] = [:]
 
-        let response = await panel.begin()
-
-        guard response == .OK, let selectedURL = panel.url else {
-            return nil
-        }
-
-        grantedURLs.insert(selectedURL)
-        return selectedURL
+    init(presenter: AccessPresenter, bookmarkStore: BookmarkStoreProtocol) {
+        self.presenter = presenter
+        self.bookmarkStore = bookmarkStore
     }
 
-    /// Checks whether a given POSIX error indicates a sandbox permission denial.
+    /// Requests access for the given context. If another request for the same
+    /// resolved-target key is already in flight, awaits its result instead of
+    /// presenting again. On a successful grant, persists the bookmark.
+    func requestAccessIfNeeded(context: AccessRequestContext) async -> URL? {
+        let key = context.dedupKey
+
+        if inFlight[key] != nil {
+            return await withCheckedContinuation { continuation in
+                inFlight[key, default: []].append(continuation)
+            }
+        }
+
+        // Mark as in-flight before the suspension so concurrent callers dedup.
+        inFlight[key] = []
+        let granted = await presenter.present(context)
+
+        if let granted {
+            bookmarkStore.save(url: granted)
+        }
+
+        let awaiters = inFlight[key] ?? []
+        inFlight[key] = nil
+        for continuation in awaiters {
+            continuation.resume(returning: granted)
+        }
+
+        return granted
+    }
+
+    /// Checks whether a given error indicates a sandbox permission denial.
     nonisolated static func isPermissionError(_ error: Error) -> Bool {
         let nsError = error as NSError
 
@@ -60,7 +65,6 @@ final class SandboxAccessService {
             }
         }
 
-        // Check underlying error
         if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? Error {
             return isPermissionError(underlying)
         }
