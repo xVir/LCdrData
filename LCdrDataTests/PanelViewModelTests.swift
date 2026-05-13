@@ -825,6 +825,37 @@ struct PanelViewModelTests {
         #expect(vm.state.cursor.selected == [bItem.id])
     }
 
+    @Test func navigateBackPermissionErrorRevertsHistoryIndex() async {
+        // Arrange — panel at /b, with /a as the previous history entry,
+        // but /a now denies access.
+        let service = ThrowingMockFileSystemService(
+            itemsByPath: ["/b": []],
+            failingPaths: ["/a"],
+            error: NSError(domain: NSCocoaErrorDomain, code: 257)
+        )
+        let sandbox = SandboxAccessService(
+            presenter: NoopAccessPresenter(),
+            bookmarkStore: FakeBookmarkStore()
+        )
+        let vm = PanelViewModel(
+            side: .left,
+            initialDirectory: URL(fileURLWithPath: "/b"),
+            fileSystemService: service,
+            sandboxAccessService: sandbox
+        )
+        vm.state.history = [URL(fileURLWithPath: "/a"), URL(fileURLWithPath: "/b")]
+        vm.state.historyIndex = 1
+        await vm.reload(.fresh)
+        #expect(vm.state.currentDirectory.path == "/b")
+
+        // Act — back to /a; denied; user cancels.
+        await vm.navigateBack()
+
+        // Assert — panel stays at /b, historyIndex stays at 1.
+        #expect(vm.state.currentDirectory.path == "/b")
+        #expect(vm.state.historyIndex == 1)
+    }
+
     @Test func navigatePermissionErrorWhenAccessDeniedRevertsCurrentDirectory() async {
         // Arrange — start at /a (success), navigation to /b throws permission error.
         let service = ThrowingMockFileSystemService(

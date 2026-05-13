@@ -177,16 +177,6 @@ final class PanelViewModel {
     func navigate(to url: URL) async {
         clearDirectoryNavigationExtras()
 
-        // Snapshot for atomic revert on permission failure.
-        let snapshot = NavigationSnapshot(
-            currentDirectory: state.currentDirectory,
-            history: state.history,
-            historyIndex: state.historyIndex,
-            cursor: state.cursor
-        )
-
-        // If the destination is the parent of the current directory, focus the
-        // folder we just left after loading. Otherwise it's a fresh load.
         let currentDir = state.currentDirectory
         let intent: Cursor.Intent
         if url.standardizedFileURL.path == currentDir.deletingLastPathComponent().standardizedFileURL.path {
@@ -195,24 +185,41 @@ final class PanelViewModel {
             intent = .fresh
         }
 
-        // Truncate forward history if we navigated back previously
-        if state.historyIndex < state.history.count - 1 {
-            state.history = Array(state.history.prefix(state.historyIndex + 1))
+        await performAtomicNavigation(intent: intent, displayURL: url) {
+            // Truncate forward history if we navigated back previously
+            if self.state.historyIndex < self.state.history.count - 1 {
+                self.state.history = Array(self.state.history.prefix(self.state.historyIndex + 1))
+            }
+            self.state.currentDirectory = url
+            self.state.history.append(url)
+            self.state.historyIndex = self.state.history.count - 1
         }
+    }
 
-        state.currentDirectory = url
-        state.history.append(url)
-        state.historyIndex = state.history.count - 1
+    /// Mutates state via `mutate`, reloads, and on permission failure offers
+    /// the reactive grant prompt; if access still isn't granted, restores the
+    /// pre-mutation snapshot atomically (panel behaves as if `mutate` never ran).
+    private func performAtomicNavigation(
+        intent: Cursor.Intent,
+        displayURL: URL,
+        mutate: () -> Void
+    ) async {
+        let snapshot = NavigationSnapshot(
+            currentDirectory: state.currentDirectory,
+            history: state.history,
+            historyIndex: state.historyIndex,
+            cursor: state.cursor
+        )
 
+        mutate()
         await reload(intent)
 
         guard isPermissionError else { return }
 
-        // Offer the user the reactive grant prompt.
         let granted = await sandboxAccessService.requestAccessIfNeeded(
             context: .reactive(
-                displayURL: url,
-                resolvedTarget: url.resolvingSymlinksInPath()
+                displayURL: displayURL,
+                resolvedTarget: displayURL.resolvingSymlinksInPath()
             )
         )
         if granted != nil {
@@ -220,8 +227,6 @@ final class PanelViewModel {
         }
 
         if isPermissionError {
-            // Revert to the pre-navigation snapshot — navigation behaves as
-            // if the user had cancelled the original click.
             state.currentDirectory = snapshot.currentDirectory
             state.history = snapshot.history
             state.historyIndex = snapshot.historyIndex
@@ -246,22 +251,28 @@ final class PanelViewModel {
         await navigate(to: parent)
     }
 
-    /// Navigate back in history.
+    /// Navigate back in history. On permission denial of the back-target,
+    /// the navigation reverts atomically.
     func navigateBack() async {
         guard state.historyIndex > 0 else { return }
         clearDirectoryNavigationExtras()
-        state.historyIndex -= 1
-        state.currentDirectory = state.history[state.historyIndex]
-        await reload(.fresh)
+        let target = state.history[state.historyIndex - 1]
+        await performAtomicNavigation(intent: .fresh, displayURL: target) {
+            self.state.historyIndex -= 1
+            self.state.currentDirectory = target
+        }
     }
 
-    /// Navigate forward in history.
+    /// Navigate forward in history. On permission denial of the forward-target,
+    /// the navigation reverts atomically.
     func navigateForward() async {
         guard state.historyIndex < state.history.count - 1 else { return }
         clearDirectoryNavigationExtras()
-        state.historyIndex += 1
-        state.currentDirectory = state.history[state.historyIndex]
-        await reload(.fresh)
+        let target = state.history[state.historyIndex + 1]
+        await performAtomicNavigation(intent: .fresh, displayURL: target) {
+            self.state.historyIndex += 1
+            self.state.currentDirectory = target
+        }
     }
 
     /// Opens a row: parent → up, directory → enter, file → default app.
