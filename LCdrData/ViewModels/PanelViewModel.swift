@@ -152,20 +152,6 @@ final class PanelViewModel {
         }
     }
 
-    /// Presents an open panel so the user can grant sandbox access to the
-    /// current directory, then reloads if access was granted.
-    func requestAccessAndReload() async {
-        guard let grantedURL = await sandboxAccessService.requestAccessIfNeeded(
-            context: .manualGrant(suggestedURL: state.currentDirectory)
-        ) else {
-            return // User cancelled
-        }
-
-        // Navigate to the folder the user actually selected (may differ from
-        // the originally requested one if they chose a parent).
-        await navigate(to: grantedURL)
-    }
-
     // MARK: - Navigation
 
     /// Items shown in the file list (same as `state.items`; kept for call sites).

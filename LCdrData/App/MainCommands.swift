@@ -19,6 +19,18 @@ struct MainCommands: Commands {
             .disabled(focused == nil)
         }
 
+        CommandGroup(after: .appInfo) {
+            Button("Grant Folder Access\u{2026}") {
+                let suggested = focused?.activePanelViewModel.state.currentDirectory
+                    ?? FileManager.default.homeDirectoryForCurrentUser
+                Task {
+                    _ = await env.sandboxAccess.requestAccessIfNeeded(
+                        context: .manualGrant(suggestedURL: suggested)
+                    )
+                }
+            }
+        }
+
         CommandMenu("Favorites") {
             let entries = env.configuration.current.bookmarkEntries
             if entries.isEmpty {

@@ -64,18 +64,14 @@ struct PanelView: View {
                 Image(systemName: "lock.shield")
                     .font(.largeTitle)
                     .foregroundStyle(.orange)
-                Text("Access Denied")
+                Text("No access to this folder")
                     .font(.headline)
-                Text(message)
+                Text("Press \u{2318}L to navigate elsewhere, or grant access via "
+                     + "LCdrData → Grant Folder Access\u{2026}")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-                Button("Grant Access\u{2026}") {
-                    Task {
-                        await viewModel.requestAccessAndReload()
-                    }
-                }
-                .buttonStyle(.borderedProminent)
+                    .padding(.horizontal)
             } else {
                 Image(systemName: "exclamationmark.triangle")
                     .font(.largeTitle)
