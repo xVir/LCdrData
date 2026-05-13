@@ -2,13 +2,12 @@ import Darwin
 import Dispatch
 import Foundation
 
-/// A panel's grip on one directory: while the session exists it holds
-/// security-scoped access to the URL, watches the FD for filesystem changes,
+/// A panel's grip on one directory: watches the FD for filesystem changes
 /// and debounces those changes before notifying via `onChange`.
 ///
 /// Sessions are short-lived — replaced (not mutated) when the panel navigates
-/// to a different URL. `deinit` releases the security scope and cancels the
-/// underlying watcher.
+/// to a different URL. Security scope is managed app-wide by
+/// `AppEnvironment` from at-launch bookmark activation, not per-session.
 final class DirectorySession: @unchecked Sendable {
 
     let url: URL
@@ -20,7 +19,6 @@ final class DirectorySession: @unchecked Sendable {
     private let queue = DispatchQueue(label: "com.xvir.LCdrData.DirectorySession")
 
     private var debounceGeneration: UInt64 = 0
-    private var hasSecurityScope: Bool = false
     private var isCancelled: Bool = false
 
     init(
@@ -31,14 +29,6 @@ final class DirectorySession: @unchecked Sendable {
         self.url = url
         self.debounceInterval = debounceInterval
         self.onChange = onChange
-
-        // Acquire security-scoped access for the duration of the session.
-        // `startAccessingSecurityScopedResource()` returns false for URLs that
-        // don't need a scope (e.g. files inside the app's container) — that's
-        // fine; we just remember whether we own a scope to release.
-        if url.startAccessingSecurityScopedResource() {
-            hasSecurityScope = true
-        }
 
         fileDescriptor = open(url.path, O_EVTONLY)
         guard fileDescriptor >= 0 else { return }
@@ -66,18 +56,13 @@ final class DirectorySession: @unchecked Sendable {
         cancel()
     }
 
-    /// Stops watching, closes the file descriptor, and releases security scope.
-    /// Idempotent — safe to call from `deinit` even if the caller already
-    /// invoked it.
+    /// Stops watching and closes the file descriptor. Idempotent — safe to
+    /// call from `deinit` even if the caller already invoked it.
     func cancel() {
         guard !isCancelled else { return }
         isCancelled = true
         source?.cancel()
         source = nil
-        if hasSecurityScope {
-            url.stopAccessingSecurityScopedResource()
-            hasSecurityScope = false
-        }
     }
 
     private func scheduleDebouncedNotification() {

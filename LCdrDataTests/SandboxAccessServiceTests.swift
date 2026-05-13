@@ -44,6 +44,25 @@ nonisolated final class FakeBookmarkStore: BookmarkStoreProtocol, @unchecked Sen
     func resolve(path: String) -> URL? {
         lock.withLock { bookmarks[path] }
     }
+
+    func allBookmarkURLs() -> [URL] {
+        lock.withLock { Array(bookmarks.values) }
+    }
+
+    func bookmarkCovering(url: URL) -> URL? {
+        let target = url.resolvingSymlinksInPath().standardizedFileURL.path
+        return lock.withLock {
+            var best: URL?
+            for (path, bookmarkURL) in bookmarks {
+                if target == path || target.hasPrefix(path + "/") {
+                    if (best?.path.count ?? -1) < path.count {
+                        best = bookmarkURL
+                    }
+                }
+            }
+            return best
+        }
+    }
 }
 
 // MARK: - Tests

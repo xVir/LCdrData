@@ -34,6 +34,7 @@ struct WindowRootView: View {
         MainWindowView()
             .environment(appState)
             .focusedSceneValue(\.appState, appState)
+            .task { await env.start() }
             .onChange(of: controlActiveState) { _, newValue in
                 if newValue == .key {
                     env.mostRecentAppState = appState

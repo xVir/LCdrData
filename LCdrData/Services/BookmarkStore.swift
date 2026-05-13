@@ -28,6 +28,8 @@ struct SecurityScopedBookmarkSerializer: BookmarkSerializing {
 protocol BookmarkStoreProtocol: Sendable {
     func save(url: URL)
     func resolve(path: String) -> URL?
+    func allBookmarkURLs() -> [URL]
+    func bookmarkCovering(url: URL) -> URL?
 }
 
 final class BookmarkStore: BookmarkStoreProtocol, @unchecked Sendable {
