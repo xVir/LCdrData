@@ -28,6 +28,31 @@ nonisolated final class MockFileSystemService: FileSystemServiceProtocol, Sendab
     }
 }
 
+/// A mock that lists items for some paths and throws a configured error for
+/// others — used to exercise permission-error handling in `navigate(to:)`.
+nonisolated final class ThrowingMockFileSystemService: FileSystemServiceProtocol, Sendable {
+    let itemsByPath: [String: [FileItem]]
+    let failingPaths: Set<String>
+    let error: NSError
+
+    nonisolated init(
+        itemsByPath: [String: [FileItem]] = [:],
+        failingPaths: Set<String>,
+        error: NSError
+    ) {
+        self.itemsByPath = itemsByPath
+        self.failingPaths = failingPaths
+        self.error = error
+    }
+
+    func listDirectory(at url: URL, showHidden: Bool) async throws -> [FileItem] {
+        if failingPaths.contains(url.path) {
+            throw error
+        }
+        return itemsByPath[url.path] ?? []
+    }
+}
+
 /// A mutable mock whose items can be changed between calls to simulate
 /// external file system changes (e.g. files created while the app was
 /// in the background).
@@ -798,5 +823,32 @@ struct PanelViewModelTests {
         let bItem = vm.state.items.first { $0.name == "b.txt" }!
         #expect(vm.state.cursor.focused == bItem.id)
         #expect(vm.state.cursor.selected == [bItem.id])
+    }
+
+    @Test func navigatePermissionErrorWhenAccessDeniedRevertsCurrentDirectory() async {
+        // Arrange — start at /a (success), navigation to /b throws permission error.
+        let service = ThrowingMockFileSystemService(
+            itemsByPath: ["/a": []],
+            failingPaths: ["/b"],
+            error: NSError(domain: NSCocoaErrorDomain, code: 257)
+        )
+        let sandbox = SandboxAccessService(
+            presenter: NoopAccessPresenter(),  // user cancels
+            bookmarkStore: FakeBookmarkStore()
+        )
+        let vm = PanelViewModel(
+            side: .left,
+            initialDirectory: URL(fileURLWithPath: "/a"),
+            fileSystemService: service,
+            sandboxAccessService: sandbox
+        )
+        await vm.reload(.fresh)
+        #expect(vm.state.currentDirectory.path == "/a")
+
+        // Act — user navigates to /b, which is denied; presenter cancels.
+        await vm.navigate(to: URL(fileURLWithPath: "/b"))
+
+        // Assert — panel atomically reverts to /a.
+        #expect(vm.state.currentDirectory.path == "/a")
     }
 }

@@ -171,9 +171,19 @@ final class PanelViewModel {
     /// Items shown in the file list (same as `state.items`; kept for call sites).
     var visibleItems: [FileItem] { state.items }
 
-    /// Navigates into a directory, pushing to history.
+    /// Navigates into a directory, pushing to history. On permission error
+    /// the panel offers the user the reactive grant prompt; if access isn't
+    /// granted the navigation is atomically reverted to the prior state.
     func navigate(to url: URL) async {
         clearDirectoryNavigationExtras()
+
+        // Snapshot for atomic revert on permission failure.
+        let snapshot = NavigationSnapshot(
+            currentDirectory: state.currentDirectory,
+            history: state.history,
+            historyIndex: state.historyIndex,
+            cursor: state.cursor
+        )
 
         // If the destination is the parent of the current directory, focus the
         // folder we just left after loading. Otherwise it's a fresh load.
@@ -195,6 +205,36 @@ final class PanelViewModel {
         state.historyIndex = state.history.count - 1
 
         await reload(intent)
+
+        guard isPermissionError else { return }
+
+        // Offer the user the reactive grant prompt.
+        let granted = await sandboxAccessService.requestAccessIfNeeded(
+            context: .reactive(
+                displayURL: url,
+                resolvedTarget: url.resolvingSymlinksInPath()
+            )
+        )
+        if granted != nil {
+            await reload(intent)
+        }
+
+        if isPermissionError {
+            // Revert to the pre-navigation snapshot — navigation behaves as
+            // if the user had cancelled the original click.
+            state.currentDirectory = snapshot.currentDirectory
+            state.history = snapshot.history
+            state.historyIndex = snapshot.historyIndex
+            state.cursor = snapshot.cursor
+            await reload(.keepSelection)
+        }
+    }
+
+    private struct NavigationSnapshot {
+        let currentDirectory: URL
+        let history: [URL]
+        let historyIndex: Int
+        let cursor: Cursor
     }
 
     /// Navigate to the parent directory.
