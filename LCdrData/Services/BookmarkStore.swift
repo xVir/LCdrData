@@ -4,7 +4,13 @@ import Foundation
 /// security-scoped bookmarks; tests inject a fake.
 protocol BookmarkSerializing: Sendable {
     func bookmarkData(for url: URL) -> Data?
-    func url(fromBookmarkData data: Data) -> URL?
+    func resolve(_ data: Data) -> (url: URL?, refreshedData: Data?)
+}
+
+extension BookmarkSerializing {
+    func url(fromBookmarkData data: Data) -> URL? {
+        resolve(data).url
+    }
 }
 
 /// Production serializer backed by the macOS app-scope security bookmark API.
@@ -13,8 +19,8 @@ struct SecurityScopedBookmarkSerializer: BookmarkSerializing {
         BookmarkService.bookmarkData(for: url)
     }
 
-    func url(fromBookmarkData data: Data) -> URL? {
-        BookmarkService.url(fromBookmarkData: data)
+    func resolve(_ data: Data) -> (url: URL?, refreshedData: Data?) {
+        BookmarkService.resolve(data)
     }
 }
 
@@ -53,6 +59,54 @@ final class BookmarkStore: BookmarkStoreProtocol, @unchecked Sendable {
         let data: Data? = lock.withLock { currentMap()[path] }
         guard let data else { return nil }
         return serializer.url(fromBookmarkData: data)
+    }
+
+    func allBookmarkURLs() -> [URL] {
+        let map = lock.withLock { currentMap() }
+        var refreshes: [String: Data] = [:]
+        var doomedPaths: [String] = []
+        var urls: [URL] = []
+        for (path, data) in map {
+            let resolved = serializer.resolve(data)
+            guard let url = resolved.url else {
+                doomedPaths.append(path)
+                continue
+            }
+            urls.append(url)
+            if let refreshed = resolved.refreshedData {
+                refreshes[path] = refreshed
+            }
+        }
+        if !refreshes.isEmpty || !doomedPaths.isEmpty {
+            lock.withLock {
+                var current = currentMap()
+                for (path, data) in refreshes {
+                    current[path] = data
+                }
+                for path in doomedPaths {
+                    current.removeValue(forKey: path)
+                }
+                defaults.set(current, forKey: Self.storageKey)
+            }
+        }
+        return urls
+    }
+
+    func bookmarkCovering(url: URL) -> URL? {
+        let target = url.resolvingSymlinksInPath().standardizedFileURL.path
+        let map = lock.withLock { currentMap() }
+
+        var bestPath: String?
+        for storedPath in map.keys {
+            if target == storedPath || target.hasPrefix(storedPath + "/") {
+                if (bestPath?.count ?? -1) < storedPath.count {
+                    bestPath = storedPath
+                }
+            }
+        }
+
+        guard let bestPath else { return nil }
+        return resolve(path: bestPath)
     }
 
     private func currentMap() -> [String: Data] {
