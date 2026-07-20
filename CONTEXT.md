@@ -134,3 +134,39 @@ Incremental row search driven by printable keystrokes typed into the active pane
 A 1-second pause resets the buffer. Type-ahead mutates the cursor (focused +
 selected ← matched row) on the **current listing** — it never triggers a reload,
 so it has no `Cursor.Intent`.
+
+## Secondary click
+
+The macOS term for a right-click / two-finger / Control-click — the trigger for
+the **context menu**. Prefer "secondary click" over "right click" in code and
+conversation (matches AppKit's `rightMouseDown` / `.secondaryAction`).
+
+A secondary click on a panel row does three things, in order, before the menu is
+visible:
+
+1. **Activates the panel** (sets it as the **active panel**).
+2. **Moves the cursor**: if the clicked row is not part of the current
+   **selection**, the selection collapses to just that row (previously selected
+   rows are deselected); if the row is already in a multi-selection, the whole
+   selection is kept. This reuses the existing `Cursor.userDidSelect(_:)` path —
+   it is **not** a new cursor mutation.
+3. **Presents the context menu** for the resulting selection.
+
+## Context menu
+
+The menu shown on **secondary click** of a panel. It has three variants,
+determined by what the click resolves to:
+
+- **Selection context menu** — one or more real (non-`..`) rows are selected.
+  Offers file actions (Open — single selection only; Move to Trash; Rename —
+  single only; Copy / Move to the inactive panel; Copy Path; Reveal in Finder)
+  plus an extension section reserved for LCdrData-specific actions.
+- **Parent context menu** — the click resolves to only the synthetic `..` row.
+  A single "Open" item that navigates to the parent directory.
+- **Background context menu** — a click on empty space below the rows (empty
+  selection). Directory-scoped actions (New Folder, Select All, Toggle Hidden
+  Files, Reload).
+
+The menu is built from a pure `FileContextMenuModel` (which variant, and the
+resolved non-parent items), so the decision logic is testable independently of
+the SwiftUI view.
