@@ -9,6 +9,7 @@ struct FileTableView: View {
 
     @Bindable var viewModel: PanelViewModel
     let isActive: Bool
+    @Environment(AppState.self) private var appState
     @Environment(\.lcPanelDateFormat) private var panelDateFormat
     @Environment(\.lcPanelFontSize) private var panelFontSize
 
@@ -28,7 +29,14 @@ struct FileTableView: View {
             ScrollViewReader { proxy in
                 List(selection: Binding(
                     get: { viewModel.state.cursor.selected },
-                    set: { viewModel.cursorDidChangeSelection(to: $0) }
+                    set: { newSelection in
+                        // Any user-driven selection on this list (including the
+                        // implicit select-under-pointer from a secondary click)
+                        // makes this the active panel first, then mutates the
+                        // cursor — so the order is activate -> select -> menu.
+                        appState.activePanel = viewModel.side
+                        viewModel.cursorDidChangeSelection(to: newSelection)
+                    }
                 )) {
                     ForEach(viewModel.visibleItems) { item in
                         FileRowView(
@@ -41,6 +49,13 @@ struct FileTableView: View {
                             .id(item.id)
                             .listRowInsets(EdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8))
                     }
+                }
+                .contextMenu(forSelectionType: UUID.self) { ids in
+                    FileContextMenu(
+                        model: FileContextMenuModel.resolve(selection: ids, in: viewModel.visibleItems),
+                        panel: viewModel,
+                        appState: appState
+                    )
                 }
                 .onDrop(of: [.fileURL], isTargeted: $isFileDropTargeted) { providers in
                     Task {
