@@ -111,10 +111,22 @@ highlighted. Triggered via `PanelViewModel.highlight(url:)`.
 
 LCdrData runs sandboxed; access to a directory requires the user to have granted
 it via an `NSOpenPanel` (or via a stored security-scoped bookmark resolved at
-launch). `DirectorySession` is responsible for `startAccessingSecurityScopedResource()`
-on construction and the matching `stopAccessingSecurityScopedResource()` on
-teardown. `SandboxAccessService` owns the **prompt** flow shown in the panel's
-error view when a listing fails with EPERM / NSFileReadNoPermissionError.
+launch). **Scope is owned app-wide by `AppEnvironment`**, not by individual panels:
+`AppEnvironment.start()` iterates `BookmarkStore`, calls
+`startAccessingSecurityScopedResource()` on every resolved bookmark URL, and
+tracks them in `activeScopes`; `applicationWillTerminate` releases them.
+`DirectorySession` is a pure FD watcher and does not touch scope.
+
+`SandboxAccessService` (an actor on `AppEnvironment`) owns the app-modal
+**reactive grant prompt** (`NSOpenPanel` pre-navigated to the resolved target).
+The prompt is triggered when `PanelViewModel` detects no `bookmarkStore.bookmarkCovering(url:)`
+match for the navigation target (**bookmark-coverage gate** — primary trigger);
+a permission-error classifier remains as a safety net for the rare
+covered-but-still-denied race. The pre-redesign embedded "Access Denied" panel
+view is gone.
+
+_Avoid_: "permission error trigger" (it's a *fallback*, not the primary signal);
+"DirectorySession holds scope" (no longer true since the redesign).
 
 ## Type-ahead
 
