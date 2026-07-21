@@ -6,6 +6,10 @@ struct LCdrDataApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var env = AppEnvironment()
 
+    init() {
+        appDelegate.environment = env
+    }
+
     var body: some Scene {
         WindowGroup(for: PanelSession.self) { $session in
             WindowRootView(session: $session, env: env)

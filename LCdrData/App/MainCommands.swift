@@ -48,95 +48,44 @@ struct MainCommands: Commands {
         }
 
         CommandGroup(after: .sidebar) {
-            Button("Go to Parent Directory") {
-                guard let focused else { return }
-                Task { await focused.activePanelViewModel.navigateToParent() }
-            }
-            .keyboardShortcut(KeyboardShortcuts.goToParent)
-            .disabled(focused == nil)
-
-            Button("Refresh") {
-                guard let focused else { return }
-                Task { await focused.activePanelViewModel.reload(.fresh) }
-            }
-            .keyboardShortcut(KeyboardShortcuts.refresh)
-            .disabled(focused == nil)
-
-            Button("Toggle Hidden Files") {
-                guard let focused else { return }
-                Task { await focused.activePanelViewModel.toggleHiddenFiles() }
-            }
-            .keyboardShortcut(KeyboardShortcuts.toggleHidden)
-            .disabled(focused == nil)
+            commandButton("Go to Parent Directory", .goToParent)
+            commandButton("Refresh", .refresh)
+            commandButton("Toggle Hidden Files", .toggleHidden)
 
             Divider()
 
-            Button("Back") {
-                guard let focused else { return }
-                Task { await focused.activePanelViewModel.navigateBack() }
-            }
-            .keyboardShortcut(KeyboardShortcuts.historyBack)
-            .disabled(focused == nil)
-
-            Button("Forward") {
-                guard let focused else { return }
-                Task { await focused.activePanelViewModel.navigateForward() }
-            }
-            .keyboardShortcut(KeyboardShortcuts.historyForward)
-            .disabled(focused == nil)
+            commandButton("Back", .back)
+            commandButton("Forward", .forward)
 
             Divider()
 
-            Button("Go to Path…") {
-                guard let focused else { return }
-                focused.activePanelViewModel.isPathBarEditing = true
-            }
-            .keyboardShortcut(KeyboardShortcuts.goToPath)
-            .disabled(focused == nil)
-
-            Button("Open") {
-                guard let focused else { return }
-                Task { await focused.activePanelViewModel.openSelectedItem() }
-            }
-            .keyboardShortcut(KeyboardShortcuts.openItem)
-            .disabled(focused == nil)
+            commandButton("Go to Path…", .goToPath)
+            commandButton("Open", .open)
         }
 
         CommandGroup(after: .pasteboard) {
-            Button("Copy Selected Paths") {
-                focused?.copySelectedPathsToPasteboard()
-            }
-            .keyboardShortcut("c", modifiers: [.command, .option])
-            .disabled(focused == nil)
+            commandButton("Copy Selected Paths", .copyPaths)
 
             Divider()
 
-            Button("Select All") {
-                focused?.activePanelViewModel.selectAll()
-            }
-            .keyboardShortcut(KeyboardShortcuts.selectAll)
-            .disabled(focused == nil)
-
-            Button("Deselect All") {
-                focused?.activePanelViewModel.deselectAllKeepingFocus()
-            }
-            .keyboardShortcut(KeyboardShortcuts.deselectAll)
-            .disabled(focused == nil)
+            commandButton("Select All", .selectAll)
+            commandButton("Deselect All", .deselectAll)
 
             Divider()
 
-            Button("Move to Trash…") {
-                guard let focused else { return }
-                focused.fileOperations.requestDelete(from: focused.activePanelViewModel)
-            }
-            .disabled(focused == nil)
-
-            Button("Delete Immediately…") {
-                guard let focused else { return }
-                focused.fileOperations.requestPermanentDelete(from: focused.activePanelViewModel)
-            }
-            .keyboardShortcut(KeyboardShortcuts.permanentDelete)
-            .disabled(focused == nil)
+            commandButton("Move to Trash…", .trash)
+            commandButton("Delete Immediately…", .permanentDelete)
         }
+    }
+
+    /// A menu-bar button that runs a `Command` through the focused window's
+    /// runner, with its shortcut sourced from `CommandCatalog`.
+    @ViewBuilder
+    private func commandButton(_ title: String, _ command: Command) -> some View {
+        Button(title) {
+            focused?.commands.perform(command)
+        }
+        .keyboardShortcut(CommandCatalog.shortcut(for: command))
+        .disabled(focused == nil)
     }
 }

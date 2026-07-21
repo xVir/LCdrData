@@ -170,3 +170,30 @@ determined by what the click resolves to:
 The menu is built from a pure `FileContextMenuModel` (which variant, and the
 resolved non-parent items), so the decision logic is testable independently of
 the SwiftUI view.
+
+## Command
+
+A user action that can be triggered from any UI surface — the window key
+handler, the menu bar (`MainCommands`), the command bar (`CommandBarView`), or a
+**context menu** — modelled as the `Command` enum. Most cases are parameterless
+(the target is resolved from the active panel's **cursor**); `.openItem` and
+`.rename` carry an explicit `FileItem` for surfaces that already have the row in
+hand (row double-click, context menu on a specific row).
+
+UI surfaces never assemble file-operation calls or decide which panel is source
+vs. destination — they name a `Command` and hand it to the **command runner**.
+
+## Command runner
+
+`CommandRunner` — the single place that *executes* a **Command** against a
+window's `AppState`. It resolves the **active panel** / **inactive panel**, reads
+the **cursor** for targets, and delegates to `PanelViewModel` /
+`FileOperationViewModel` / `AppState`. It also answers `isEnabled(_:)` (the one
+source of truth for whether an action is currently available) and resolves the
+Rename target from the cursor. Exposed as `AppState.commands`, a lightweight
+value recreated per access (no retained state, no cycle with `AppState`).
+
+Keyboard shortcuts for commands live in `CommandCatalog` (the single
+command-to-shortcut map that every surface reads); titles stay per-surface
+because the same command is labelled differently in different places
+(e.g. "Copy" in the command bar vs. "Copy to Other Panel" in a context menu).

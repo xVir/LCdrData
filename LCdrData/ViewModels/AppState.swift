@@ -12,6 +12,14 @@ final class AppState {
     var fileOperations: FileOperationViewModel
     let configuration: ConfigurationService
 
+    /// Presents the system Quick Look panel. Owned per-window here (rather than
+    /// as view `@State`) so `CommandRunner` can drive it.
+    let quickLook = QuickLookPreviewController()
+
+    /// The single entry point every UI surface uses to run user actions.
+    /// A lightweight value recreated on access — no retain cycle with `self`.
+    var commands: CommandRunner { CommandRunner(appState: self) }
+
     @MainActor
     init(
         leftDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,

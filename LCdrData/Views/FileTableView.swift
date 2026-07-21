@@ -53,7 +53,6 @@ struct FileTableView: View {
                 .contextMenu(forSelectionType: UUID.self) { ids in
                     FileContextMenu(
                         model: FileContextMenuModel.resolve(selection: ids, in: viewModel.visibleItems),
-                        panel: viewModel,
                         appState: appState
                     )
                 }

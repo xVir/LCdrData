@@ -7,7 +7,8 @@ struct MainWindowView: View {
 
     @Environment(AppState.self) private var appState
     @FocusState private var focusedPanel: PanelSide?
-    @State private var quickLookController = QuickLookPreviewController()
+
+    private var runner: CommandRunner { appState.commands }
 
     var body: some View {
         @Bindable var ops = appState.fileOperations
@@ -50,33 +51,30 @@ struct MainWindowView: View {
                     focusedPanel = appState.activePanel
                 },
                 onReturn: { handleReturn() },
-                onCmdL: { appState.activePanelViewModel.isPathBarEditing = true },
-                onCmdDown: { Task { await appState.activePanelViewModel.openSelectedItem() } },
-                onCmdShiftA: { appState.activePanelViewModel.deselectAllKeepingFocus() },
+                onCmdL: { runner.perform(.goToPath) },
+                onCmdDown: { runner.perform(.open) },
+                onCmdShiftA: { runner.perform(.deselectAll) },
                 onEscape: {
                     false
                 },
                 onSpace: {
-                    let panel = appState.activePanelViewModel
-                    guard !panel.isPathBarEditing else {
+                    guard !appState.activePanelViewModel.isPathBarEditing else {
                         return false
                     }
-                    performQuickLook()
+                    runner.perform(.quickLook)
                     return true
                 },
                 onHome: { appState.activePanelViewModel.focusFirstListItem() },
                 onEnd: { appState.activePanelViewModel.focusLastListItem() },
-                onF3: { performQuickLook() },
-                onF4: { performEditFile() },
-                onF2: { performRename() },
-                onF5: { performCopy() },
-                onF6: { performMove() },
-                onF7: { performMkdir() },
-                onF8: { performDelete() },
-                onDeleteKeyNavigateParent: {
-                    Task { await appState.activePanelViewModel.navigateToParent() }
-                },
-                onPermanentDelete: { performPermanentDelete() },
+                onF3: { runner.perform(.quickLook) },
+                onF4: { runner.perform(.edit) },
+                onF2: { if let item = runner.renameTarget { runner.perform(.rename(item)) } },
+                onF5: { runner.perform(.copy) },
+                onF6: { runner.perform(.move) },
+                onF7: { runner.perform(.newFolder) },
+                onF8: { runner.perform(.trash) },
+                onDeleteKeyNavigateParent: { runner.perform(.goToParent) },
+                onPermanentDelete: { runner.perform(.permanentDelete) },
                 pathEditingBlocksDelete: {
                     appState.activePanelViewModel.isPathBarEditing
                 },
@@ -199,22 +197,10 @@ struct MainWindowView: View {
             && !ops.showConflictDialog
     }
 
-    private var hasSelection: Bool {
-        let panel = appState.activePanelViewModel
-        return panel.visibleItems.contains { item in
-            panel.state.cursor.selected.contains(item.id) && !item.isParentDirectory
-        }
-    }
-
-    private var canViewOrEditFile: Bool {
-        appState.activePanelViewModel.previewURLForQuickLook() != nil
-    }
-
     // MARK: - Actions
 
     private func handleReturn() {
         let panel = appState.activePanelViewModel
-        let ops = appState.fileOperations
 
         // If exactly one non-parent, non-directory item is selected, rename it.
         // If a directory or parent is selected, navigate into it.
@@ -230,50 +216,11 @@ struct MainWindowView: View {
         }
 
         if item.isNavigableDirectory {
-            Task { await panel.navigate(to: item.url) }
+            runner.perform(.openItem(item))
         } else {
             // Rename on Enter for non-directory items (macOS convention)
-            ops.requestRename(item: item)
+            runner.perform(.rename(item))
         }
-    }
-
-    private func performCopy() {
-        appState.fileOperations.requestCopy(
-            from: appState.activePanelViewModel,
-            to: appState.inactivePanelViewModel
-        )
-    }
-
-    private func performMove() {
-        appState.fileOperations.requestMove(
-            from: appState.activePanelViewModel,
-            to: appState.inactivePanelViewModel
-        )
-    }
-
-    private func performMkdir() {
-        appState.fileOperations.requestNewFolder()
-    }
-
-    private func performDelete() {
-        appState.fileOperations.requestDelete(
-            from: appState.activePanelViewModel
-        )
-    }
-
-    private func performPermanentDelete() {
-        appState.fileOperations.requestPermanentDelete(
-            from: appState.activePanelViewModel
-        )
-    }
-
-    private func performQuickLook() {
-        guard let url = appState.activePanelViewModel.previewURLForQuickLook() else { return }
-        quickLookController.show(url: url)
-    }
-
-    private func performEditFile() {
-        appState.activePanelViewModel.openSelectedFileWithDefaultApp()
     }
 
     private func handleTypeAheadKeyPress(_ press: KeyPress) -> KeyPress.Result {
@@ -301,24 +248,6 @@ struct MainWindowView: View {
         return .ignored
     }
 
-    private func performRename() {
-        let panel = appState.activePanelViewModel
-
-        let targetID: UUID? = if panel.state.cursor.selected.count == 1 {
-            panel.state.cursor.selected.first
-        } else {
-            panel.state.cursor.focused
-        }
-
-        guard let targetID,
-              let item = panel.state.items.first(where: { $0.id == targetID }),
-              !item.isParentDirectory else {
-            return
-        }
-
-        appState.fileOperations.requestRename(item: item)
-    }
-
     @ViewBuilder
     private func mainContentLayer(showProgressOverlay: Bool, operations: [FileOperation]) -> some View {
         ZStack {
@@ -337,16 +266,7 @@ struct MainWindowView: View {
 
                 Divider()
 
-                CommandBarView(
-                    canViewOrEditFile: canViewOrEditFile,
-                    hasSelection: hasSelection,
-                    onView: { performQuickLook() },
-                    onEdit: { performEditFile() },
-                    onCopy: { performCopy() },
-                    onMove: { performMove() },
-                    onMkdir: { performMkdir() },
-                    onDelete: { performDelete() }
-                )
+                CommandBarView(appState: appState)
             }
             .frame(minWidth: 800, minHeight: 500)
 
@@ -395,10 +315,15 @@ private struct KeyShortcutModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .onKeyPress(.tab, phases: .down) { _ in
+                guard keyboardRoutingActive else { return .ignored }
                 onTab()
                 return .handled
             }
             .onKeyPress(.return, phases: .down) { _ in
+                // While a dialog (confirm / rename / new folder / conflict) is
+                // up, let Return fall through to the dialog's default button
+                // instead of swallowing it for panel navigation.
+                guard keyboardRoutingActive else { return .ignored }
                 onReturn()
                 return .handled
             }

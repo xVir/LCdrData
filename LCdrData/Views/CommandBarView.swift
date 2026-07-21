@@ -1,23 +1,22 @@
 import SwiftUI
 
 /// Bottom command bar with function-key labels reminiscent of classic orthodox
-/// file managers. Each button shows the key hint and action name.
-/// Wired to file operations via closures provided by the parent view.
+/// file managers. Each button shows the key hint and action name, runs its
+/// `Command` through `appState.commands`, and enables/disables itself from the
+/// runner.
 struct CommandBarView: View {
 
-    let canViewOrEditFile: Bool
-    let hasSelection: Bool
-    let onView: () -> Void
-    let onEdit: () -> Void
-    let onCopy: () -> Void
-    let onMove: () -> Void
-    let onMkdir: () -> Void
-    let onDelete: () -> Void
+    let appState: AppState
 
     var body: some View {
         HStack(spacing: 0) {
-            ForEach(commands, id: \.key) { command in
-                CommandButton(command: command)
+            ForEach(entries) { entry in
+                CommandButton(
+                    key: entry.key,
+                    label: entry.label,
+                    isEnabled: appState.commands.isEnabled(entry.command),
+                    action: { appState.commands.perform(entry.command) }
+                )
             }
         }
         .frame(height: 28)
@@ -26,39 +25,39 @@ struct CommandBarView: View {
 
     // MARK: - Command Definitions
 
-    private struct CommandDef: Identifiable {
+    private struct Entry: Identifiable {
         var id: String { key }
         let key: String
         let label: String
-        let isEnabled: Bool
-        let action: () -> Void
+        let command: Command
     }
 
-    private var commands: [CommandDef] {
+    private var entries: [Entry] {
         [
-            CommandDef(key: "F3", label: "View", isEnabled: canViewOrEditFile, action: onView),
-            CommandDef(key: "F4", label: "Edit", isEnabled: canViewOrEditFile, action: onEdit),
-            CommandDef(key: "F5", label: "Copy", isEnabled: hasSelection, action: onCopy),
-            CommandDef(key: "F6", label: "Move", isEnabled: hasSelection, action: onMove),
-            CommandDef(key: "F7", label: "Mkdir", isEnabled: true, action: onMkdir),
-            CommandDef(key: "F8", label: "Delete", isEnabled: hasSelection, action: onDelete),
+            Entry(key: "F3", label: "View", command: .quickLook),
+            Entry(key: "F4", label: "Edit", command: .edit),
+            Entry(key: "F5", label: "Copy", command: .copy),
+            Entry(key: "F6", label: "Move", command: .move),
+            Entry(key: "F7", label: "Mkdir", command: .newFolder),
+            Entry(key: "F8", label: "Delete", command: .trash),
         ]
     }
 
     // MARK: - Command Button
 
     private struct CommandButton: View {
-        let command: CommandDef
+        let key: String
+        let label: String
+        let isEnabled: Bool
+        let action: () -> Void
 
         var body: some View {
-            Button {
-                command.action()
-            } label: {
+            Button(action: action) {
                 HStack(spacing: 3) {
-                    Text(command.key)
+                    Text(key)
                         .fontWeight(.bold)
                         .foregroundStyle(.primary)
-                    Text(command.label)
+                    Text(label)
                         .foregroundStyle(.secondary)
                 }
                 .font(.caption)
@@ -67,20 +66,11 @@ struct CommandBarView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .disabled(!command.isEnabled)
+            .disabled(!isEnabled)
         }
     }
 }
 
 #Preview {
-    CommandBarView(
-        canViewOrEditFile: true,
-        hasSelection: true,
-        onView: {},
-        onEdit: {},
-        onCopy: {},
-        onMove: {},
-        onMkdir: {},
-        onDelete: {}
-    )
+    CommandBarView(appState: AppState())
 }
