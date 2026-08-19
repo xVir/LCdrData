@@ -26,6 +26,7 @@ final class AppEnvironment {
     let bookmarkStore: BookmarkStoreProtocol
     let sandboxAccess: SandboxAccessService
     let scopeActivator: SecurityScopeActivating
+    let sessionStore: PanelSessionStoring
     weak var mostRecentAppState: AppState?
 
     private(set) var activeScopes: [URL] = []
@@ -42,13 +43,15 @@ final class AppEnvironment {
             bookmarkStore: bookmarkStore
         )
         self.scopeActivator = SystemSecurityScopeActivator()
+        self.sessionStore = PanelSessionStore()
     }
 
     init(
         configuration: ConfigurationService,
         bookmarkStore: BookmarkStoreProtocol,
         sandboxAccess: SandboxAccessService? = nil,
-        scopeActivator: SecurityScopeActivating = SystemSecurityScopeActivator()
+        scopeActivator: SecurityScopeActivating = SystemSecurityScopeActivator(),
+        sessionStore: PanelSessionStoring = PanelSessionStore()
     ) {
         self.configuration = configuration
         self.bookmarkStore = bookmarkStore
@@ -57,6 +60,7 @@ final class AppEnvironment {
             bookmarkStore: bookmarkStore
         )
         self.scopeActivator = scopeActivator
+        self.sessionStore = sessionStore
     }
 
     /// Acquires security scope on every bookmark currently in the store, then
@@ -90,8 +94,10 @@ final class AppEnvironment {
     }
 
     /// Builds a session for a window that has no preserved state — e.g. on
-    /// Cmd+N, or the very first window on a fresh launch. Copies the frontmost
-    /// window's panel directories when one is recorded.
+    /// Cmd+N, or the very first window on a fresh launch. Prefers the frontmost
+    /// window's directories (so Cmd+N opens beside what you are looking at),
+    /// then the directories recorded on the previous run, and only falls back to
+    /// Home on a first launch.
     func makeFreshSession() -> PanelSession {
         if let frontmost = mostRecentAppState {
             return PanelSession(
@@ -99,7 +105,15 @@ final class AppEnvironment {
                 rightPath: frontmost.rightPanel.state.currentDirectory.path
             )
         }
+        if let last = sessionStore.loadLastPaths() {
+            return PanelSession(leftPath: last.left, rightPath: last.right)
+        }
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         return PanelSession(leftPath: home, rightPath: home)
+    }
+
+    /// Records a window's directories as the ones to resume on the next launch.
+    func rememberLastSession(_ session: PanelSession) {
+        sessionStore.save(leftPath: session.leftPath, rightPath: session.rightPath)
     }
 }

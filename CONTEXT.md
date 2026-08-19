@@ -109,6 +109,24 @@ closes the FD. Listing I/O does **not** go through the session; the panel still
 calls `FileSystemServiceProtocol.listDirectory` directly. The session is purely
 the URL-scoped lifecycle wrapper.
 
+## Panel session
+
+The pair of directories one window's panels are showing, carried as a
+`PanelSession` by `WindowGroup(for:)`.
+
+macOS window restoration round-trips that value, but only when the system elects
+to restore windows — never when "Close windows when quitting an application" is
+enabled, and never when the app is killed rather than quit (as `tuist run` does).
+Resuming therefore cannot rely on it. `PanelSessionStore` records the directories
+in `UserDefaults` on every navigation, and `AppEnvironment.makeFreshSession()`
+seeds a new window from, in order: the frontmost window (so Cmd+N opens beside
+what the user is looking at), the directories recorded on the previous run, then
+Home on a genuine first launch.
+
+Resuming a directory outside the container also needs its security scope back,
+which works because the same navigation that records the paths also stores a
+bookmark — see **Sandbox access / security scope**.
+
 ## Highlight
 
 The transient green-flash animation drawn on a row to draw the user's attention

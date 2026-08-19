@@ -56,6 +56,9 @@ struct WindowRootView: View {
                     rightPath: newURL.path
                 )
             }
+            .onChange(of: session) { _, newValue in
+                env.rememberLastSession(newValue)
+            }
             .onReceive(NotificationCenter.default.publisher(for: .lcdrConfigurationApplied)) { _ in
                 Task { await appState.applyEffectiveConfiguration() }
             }

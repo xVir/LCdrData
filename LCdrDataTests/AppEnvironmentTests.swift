@@ -5,9 +5,9 @@ import Foundation
 @MainActor
 struct AppEnvironmentTests {
 
-    @Test func makeFreshSessionUsesHomeWhenNoFrontmostState() {
-        // Arrange
-        let env = AppEnvironment()
+    @Test func makeFreshSessionUsesHomeOnAFirstLaunch() {
+        // Arrange — nothing recorded by a previous run.
+        let env = makeEnvironment(sessionStore: FakePanelSessionStore())
 
         // Act
         let session = env.makeFreshSession()
@@ -16,6 +16,69 @@ struct AppEnvironmentTests {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         #expect(session.leftPath == home)
         #expect(session.rightPath == home)
+    }
+
+    @Test func makeFreshSessionResumesThePreviousRunsDirectories() {
+        // Arrange
+        let store = FakePanelSessionStore()
+        store.save(leftPath: "/Users/test/Projects", rightPath: "/Users/test/Downloads")
+        let env = makeEnvironment(sessionStore: store)
+
+        // Act
+        let session = env.makeFreshSession()
+
+        // Assert
+        #expect(session.leftPath == "/Users/test/Projects")
+        #expect(session.rightPath == "/Users/test/Downloads")
+    }
+
+    @Test func rememberLastSessionRecordsBothPaths() {
+        // Arrange
+        let store = FakePanelSessionStore()
+        let env = makeEnvironment(sessionStore: store)
+
+        // Act
+        env.rememberLastSession(
+            PanelSession(leftPath: "/Users/test/a", rightPath: "/Users/test/b")
+        )
+
+        // Assert
+        #expect(store.loadLastPaths()?.left == "/Users/test/a")
+        #expect(store.loadLastPaths()?.right == "/Users/test/b")
+    }
+
+    @Test func frontmostWindowWinsOverThePreviousRun() {
+        // Arrange — Cmd+N should open beside what the user is looking at now.
+        let store = FakePanelSessionStore()
+        store.save(leftPath: "/stale/left", rightPath: "/stale/right")
+        let env = makeEnvironment(sessionStore: store)
+        let frontmost = AppState(
+            leftDirectory: URL(fileURLWithPath: "/Users/test/Documents", isDirectory: true),
+            rightDirectory: URL(fileURLWithPath: "/Users/test/Downloads", isDirectory: true)
+        )
+        env.mostRecentAppState = frontmost
+
+        // Act
+        let session = env.makeFreshSession()
+
+        // Assert
+        #expect(session.leftPath == "/Users/test/Documents")
+        #expect(session.rightPath == "/Users/test/Downloads")
+
+        _ = frontmost  // keep alive — mostRecentAppState is weak
+    }
+
+    private func makeEnvironment(sessionStore: PanelSessionStoring) -> AppEnvironment {
+        AppEnvironment(
+            configuration: ConfigurationService(),
+            bookmarkStore: FakeBookmarkStore(),
+            sandboxAccess: SandboxAccessService(
+                presenter: FakeAccessPresenter(result: nil),
+                bookmarkStore: FakeBookmarkStore()
+            ),
+            scopeActivator: RecordingScopeActivator(),
+            sessionStore: sessionStore
+        )
     }
 
     @Test func makeFreshSessionCopiesFromFrontmostState() {
@@ -132,6 +195,21 @@ struct AppEnvironmentTests {
         #expect(env.activeScopes.isEmpty)
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         #expect(Set(activator.stopped.map(\.path)) == ["/a", "/b", home])
+    }
+}
+
+/// In-memory session store so restore expectations don't touch real defaults.
+nonisolated final class FakePanelSessionStore: PanelSessionStoring, @unchecked Sendable {
+    private let lock = NSLock()
+    private var paths: (left: String, right: String)?
+
+    func save(leftPath: String, rightPath: String) {
+        guard !leftPath.isEmpty, !rightPath.isEmpty else { return }
+        lock.withLock { paths = (leftPath, rightPath) }
+    }
+
+    func loadLastPaths() -> (left: String, right: String)? {
+        lock.withLock { paths }
     }
 }
 

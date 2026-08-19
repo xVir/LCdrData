@@ -65,6 +65,8 @@ struct PathBarView: View {
                 }
             }
         }
+        .accessibilityIdentifier("pathBar.\(viewModel.side.identifier)")
+        .accessibilityValue(viewModel.state.currentDirectory.path)
     }
 
     // MARK: - Copy Path Button
