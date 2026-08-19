@@ -10,6 +10,8 @@ struct PathBarView: View {
     @State private var editedPath: String = ""
     @State private var showCopyConfirmation: Bool = false
 
+    private let pathExpander = TildePathExpander()
+
     var body: some View {
         HStack(spacing: 2) {
             if viewModel.isPathBarEditing {
@@ -101,7 +103,7 @@ struct PathBarView: View {
             .font(.system(.body, design: .monospaced))
             .focused($pathFieldFocused)
             .onSubmit {
-                let url = URL(fileURLWithPath: editedPath)
+                let url = pathExpander.expand(editedPath)
                 var isDir: ObjCBool = false
                 if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir),
                    isDir.boolValue {

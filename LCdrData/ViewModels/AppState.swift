@@ -11,6 +11,7 @@ final class AppState {
     var activePanel: PanelSide
     var fileOperations: FileOperationViewModel
     let configuration: ConfigurationService
+    private let pathExpander: TildePathExpander
 
     /// Presents the system Quick Look panel. Owned per-window here (rather than
     /// as view `@State`) so `CommandRunner` can drive it.
@@ -26,9 +27,11 @@ final class AppState {
         rightDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
         fileOperationService: FileOperationServiceProtocol = FileOperationService(),
         configuration: ConfigurationService,
-        sandboxAccess: SandboxAccessService
+        sandboxAccess: SandboxAccessService,
+        pathExpander: TildePathExpander = TildePathExpander()
     ) {
         self.configuration = configuration
+        self.pathExpander = pathExpander
 
         let cfg = configuration.current
         self.leftPanel = PanelViewModel(
@@ -130,11 +133,10 @@ final class AppState {
         pasteboard.setString(lines.joined(separator: "\n"), forType: .string)
     }
 
-    /// Navigates the active panel to a configured favorite path (`~` expanded).
+    /// Navigates the active panel to a configured favorite path (`~` expanded
+    /// against the user's real home, not the sandbox container).
     @MainActor
     func navigateActivePanelToFavorite(path: String) async {
-        let expanded = (path as NSString).expandingTildeInPath
-        let url = URL(fileURLWithPath: expanded, isDirectory: true)
-        await activePanelViewModel.navigate(to: url)
+        await activePanelViewModel.navigate(to: pathExpander.expand(path))
     }
 }
