@@ -6,6 +6,15 @@ import Observation
 enum PanelSide: Sendable {
     case left
     case right
+
+    /// Stable token embedded in accessibility identifiers so UI tests can
+    /// address one panel's elements unambiguously.
+    var identifier: String {
+        switch self {
+        case .left: "left"
+        case .right: "right"
+        }
+    }
 }
 
 /// Drives a single file panel: listing, selection, navigation, and sorting.
@@ -376,7 +385,28 @@ final class PanelViewModel {
     /// arrow keys, Cmd-click). Routed through `Cursor.userDidSelect` so that
     /// rules like "empty selection restores from focused" live on the cursor.
     func cursorDidChangeSelection(to newSelection: Set<UUID>) {
+        let previous = state.cursor
         state.cursor.userDidSelect(newSelection)
+
+        if newSelection.isEmpty, state.cursor == previous, !previous.selected.isEmpty {
+            resyncSelectionAfterEmptyClick()
+        }
+    }
+
+    /// Clicking blank space makes the list drop its own selection before it
+    /// reports the empty set. `userDidSelect` puts the focused row straight
+    /// back, so the binding ends up at the value SwiftUI already believes it
+    /// published — nothing is written back down and the row stays unhighlighted
+    /// even though the cursor still points at it. Publishing the empty state the
+    /// list is really showing, then restoring it a runloop turn later, makes the
+    /// value change for real so the row lights up again.
+    private func resyncSelectionAfterEmptyClick() {
+        let restored = state.cursor.selected
+        state.cursor.selected = []
+        Task { @MainActor in
+            guard state.cursor.selected.isEmpty else { return }
+            state.cursor.selected = restored
+        }
     }
 
     /// Selects all items (excluding ".." parent entry).

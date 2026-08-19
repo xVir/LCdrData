@@ -48,8 +48,10 @@ struct FileTableView: View {
                             .tag(item.id)
                             .id(item.id)
                             .listRowInsets(EdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8))
+                            .accessibilityIdentifier("fileRow.\(viewModel.side.identifier).\(item.name)")
                     }
                 }
+                .accessibilityIdentifier("fileList.\(viewModel.side.identifier)")
                 .contextMenu(forSelectionType: UUID.self) { ids in
                     FileContextMenu(
                         model: FileContextMenuModel.resolve(selection: ids, in: viewModel.visibleItems),

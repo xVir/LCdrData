@@ -290,6 +290,77 @@ struct PanelViewModelTests {
         #expect(vm.state.cursor.selected.isEmpty)
     }
 
+    @Test func emptySelectionFromEmptySpaceClickPublishesEmptyThenRestoresFocusedRow() async {
+        // Arrange — cursor sitting on the first real row, as after a row click.
+        let items = makeTestItems()
+        let service = MockFileSystemService(items: items)
+        let vm = PanelViewModel(
+            side: .left,
+            initialDirectory: URL(fileURLWithPath: "/tmp"),
+            fileSystemService: service
+        )
+        await vm.reload(.fresh)
+        let focusedID = vm.state.items[1].id
+        vm.cursorDidChangeSelection(to: [focusedID])
+
+        // Act — the list clears itself and hands back an empty set.
+        vm.cursorDidChangeSelection(to: [])
+
+        // Assert — momentarily empty so the list observes a real change...
+        #expect(vm.state.cursor.selected.isEmpty)
+        #expect(vm.state.cursor.focused == focusedID)
+
+        // ...and restored a runloop turn later.
+        await Task.yield()
+        #expect(vm.state.cursor.selected == [focusedID])
+        #expect(vm.state.cursor.focused == focusedID)
+    }
+
+    @Test func emptySelectionResyncDoesNotOverwriteASelectionMadeInTheMeantime() async {
+        // Arrange
+        let items = makeTestItems()
+        let service = MockFileSystemService(items: items)
+        let vm = PanelViewModel(
+            side: .left,
+            initialDirectory: URL(fileURLWithPath: "/tmp"),
+            fileSystemService: service
+        )
+        await vm.reload(.fresh)
+        let firstID = vm.state.items[1].id
+        let secondID = vm.state.items[2].id
+        vm.cursorDidChangeSelection(to: [firstID])
+
+        // Act — an empty-space click immediately followed by a click on another row.
+        vm.cursorDidChangeSelection(to: [])
+        vm.cursorDidChangeSelection(to: [secondID])
+        await Task.yield()
+
+        // Assert — the pending restore must not resurrect the stale row.
+        #expect(vm.state.cursor.selected == [secondID])
+        #expect(vm.state.cursor.focused == secondID)
+    }
+
+    @Test func emptySelectionWithNoFocusedRowLeavesSelectionEmpty() async {
+        // Arrange
+        let items = makeTestItems()
+        let service = MockFileSystemService(items: items)
+        let vm = PanelViewModel(
+            side: .left,
+            initialDirectory: URL(fileURLWithPath: "/tmp"),
+            fileSystemService: service
+        )
+        await vm.reload(.fresh)
+        vm.state.cursor = Cursor()
+
+        // Act
+        vm.cursorDidChangeSelection(to: [])
+        await Task.yield()
+
+        // Assert — nothing to restore, so no resync is scheduled.
+        #expect(vm.state.cursor.selected.isEmpty)
+        #expect(vm.state.cursor.focused == nil)
+    }
+
     @Test func toggleHiddenFiles() async {
         // Arrange
         let service = MockFileSystemService(items: [])

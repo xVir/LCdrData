@@ -56,9 +56,18 @@ Cursor mutations come from two sources:
 
 1. **User events** (clicks, arrow keys, type-ahead, Commander-Space, Cmd+A,
    focusFirst/focusLast). Expressed as mutating methods on `Cursor`
-   (`userDidSelect(_:)`, `userDidClickEmpty()`, etc.).
+   (`userDidSelect(_:)`, `selectAll(in:)`, `focusFirst(in:)`, etc.).
 2. **Reloads.** When the listing changes, `Cursor.resolve(intent:listing:previous:)`
    computes the new cursor based on the **intent** the caller declared.
+
+A click on empty space below the rows reaches `userDidSelect(_:)` as an empty
+set, and the cursor refuses it — the focused row is put straight back, so a panel
+is never left without a cursor. The list clears its own highlight before
+reporting that empty set, so `PanelViewModel.cursorDidChangeSelection(to:)`
+publishes the empty state for one runloop turn before restoring; without that
+round trip the binding never changes value, SwiftUI never writes the selection
+back down, and the row stays visually deselected while the cursor still points
+at it.
 
 ## Cursor.Intent
 
