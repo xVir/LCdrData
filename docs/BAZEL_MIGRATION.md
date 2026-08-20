@@ -439,21 +439,84 @@ macos_application(
 `module_name = "LCdrData"` is load-bearing — `@testable import LCdrData` in the
 test target depends on it.
 
-Two things to verify rather than assume:
+#### The app icon must be an Icon Composer `.icon` bundle
 
-- **Resource placement.** `ConfigurationService` looks up `DefaultConfig` at the
-  root of the resources directory. Confirm it lands at
-  `Contents/Resources/DefaultConfig.kdl` and not in a nested path; if
-  `rules_apple` preserves the `Resources/` prefix, switch to an
-  `apple_resource_group`.
-- **`#Preview` compilation.** Two views (`CommandBarView`, `MainWindowView`) use
-  the `#Preview` macro, which loads a macro plugin from the SDK's
-  `host/plugins`. If `rules_swift` fails to find it, the fallback is to guard
-  both previews with `#if DEBUG` and exclude them from Bazel builds. Only two
-  call sites, so the blast radius is small.
+`rules_apple` 4.5.3 **hard-fails at analysis time** if any `.appiconset` is
+present when `minimum_os_version >= 26.0`:
+
+```
+Legacy .appiconset files should not be used on iOS/macOS/watchOS 26+.
+```
+
+There is no opt-out — no flag, no `features` gate, no build setting. The check in
+`_validate_standard_app_icon_sets` is unconditional. Nor can it be evaded by
+routing the icon through `resources` instead of `app_icons`: detection is
+`[f for f in asset_files if ".appiconset/" in f.path]`, a path scan over every
+file in the compiled catalog regardless of which attribute supplied it.
+
+So the Bazel build uses `LCdrData/AppIcon.icon`, an Icon Composer bundle:
+
+```
+LCdrData/AppIcon.icon/
+├── icon.json
+└── Assets/icon.png     # the existing 1024x1024 artwork
+```
+
+`icon.json` is minimal — one group, one layer, `glass: false` to suppress the
+Liquid Glass pass over what is already fully-rendered edge-to-edge artwork:
+
+```json
+{
+  "groups": [{"layers": [{"glass": false, "image-name": "icon.png", "name": "Icon"}]}],
+  "supported-platforms": {"squares": ["macOS"]}
+}
+```
+
+Things worth knowing before touching this file:
+
+- **Apple does not publish the `icon.json` schema.** Every available reference is
+  reverse-engineered. Check the Icon Composer version before trusting any of it —
+  Xcode 26.6 ships **Icon Composer 1.6**, where layer `name` is required and the
+  2.0-only `features`/`refractivity` keys do not exist. Get the version from
+  `Icon Composer.app/Contents/Executables/ictool --version`, not from
+  `/usr/bin/ictool`, which reports Xcode's version instead.
+- **Rendering is the only validation.** There is no `validate` subcommand. Sweep
+  every rendition, because a document can be valid in Default and broken in Dark:
+
+```bash
+ICTOOL="/Applications/Xcode.app/Contents/Applications/Icon Composer.app/Contents/Executables/ictool"
+for R in Default Dark TintedLight TintedDark ClearLight ClearDark; do
+    "$ICTOOL" LCdrData/AppIcon.icon --export-image --output-file "/tmp/icon-$R.png" \
+        --platform macOS --rendition "$R" --width 256 --height 256 --scale 1 \
+        || echo "FAILED: $R"
+done
+```
+
+- **A dangling `image-name` renders as an empty layer with exit 0.** It is not an
+  error, so cross-check that every `image-name` resolves to a real file in
+  `Assets/` yourself.
+
+The `.appiconset` is **kept** for Tuist, which still uses it, and excluded from
+the Bazel `resources` glob. The two cannot both reach `actool`. The cost is the
+1024x1024 PNG existing twice in the repo (~2 MB each) and two icon definitions
+that could drift. Consolidating Tuist onto the `.icon` too would fix that, and is
+a reasonable follow-up — it was left out here to keep this phase scoped to Bazel.
+
+#### Verified, not assumed
+
+- **Resource placement is correct as-is.** `DefaultConfig.kdl` lands at
+  `Contents/Resources/DefaultConfig.kdl`, exactly where `ConfigurationService`
+  looks. No `apple_resource_group` needed.
+- **`#Preview` compiles fine.** No macro-plugin problem materialised, so the
+  `#if DEBUG` fallback is unnecessary.
 
 **Exit criteria:** `bazel build //:LCdrData` produces a launchable, ad-hoc-signed
-`.app`.
+`.app`. Note the output is `bazel-bin/LCdrData.zip`, which must be unzipped to
+inspect. Against the Phase 0 baseline the bundle should differ only by
+`LCdrData.debug.dylib`, `__preview.dylib` and `NSMainStoryboardFile` — all three
+expected. `Assets.car` is legitimately larger (~5.4 MB vs ~2.5 MB) because Icon
+Composer emits light, dark and tinted renditions where the `.appiconset` emitted
+one.
 
 ### Phase 4 — Unit tests
 
@@ -483,12 +546,26 @@ macos_unit_test(
 this project uses it for *all* 22 unit test files, so a gap here blocks the
 phase.
 
-Reconcile the result against `tuist test "LCdrData" --skip-ui-tests`: the same
-tests must pass, and the *count* must match. A silently-empty test bundle that
-"passes" is the failure mode to watch for.
+Reconcile the result against Tuist: the same tests must pass, and the *count*
+must match. A silently-empty test bundle that "passes" is the failure mode to
+watch for.
+
+Pass `--no-selective-testing` when doing that comparison:
+
+```bash
+tuist test "LCdrData" --skip-ui-tests --no-selective-testing
+```
+
+Selective testing is **on by default**, and when target hashes are unchanged
+Tuist reports `The scheme LCdrData's test action has no tests to run, finishing
+early` and exits 0 without running anything. Comparing against that would be
+meaningless — and it looks alarmingly like a regression the first time you see it.
+
+The Phase 0 baseline is **193 test cases across 24 suites**; see
+[parity-baseline/README.md](parity-baseline/README.md).
 
 **Exit criteria:** `bazel test //:LCdrDataTests` passes with a test count equal
-to Tuist's.
+to Tuist's 193.
 
 ### Phase 5 — UI tests (compile under Bazel, run via Tuist)
 

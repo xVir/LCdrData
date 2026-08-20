@@ -1,0 +1,52 @@
+load("@build_bazel_rules_apple//apple:macos.bzl", "macos_application")
+load("@build_bazel_rules_swift//swift:swift_library.bzl", "swift_library")
+
+# Mirrors the Tuist build settings in Project.swift. SWIFT_VERSION is 5.0, which
+# is why SWIFT_APPROACHABLE_CONCURRENCY expands to five upcoming features here
+# rather than the two it would enable in Swift 6 language mode.
+SWIFT_COPTS = [
+    "-swift-version",
+    "5",
+    "-default-isolation=MainActor",
+    "-enable-upcoming-feature",
+    "DisableOutwardActorInference",
+    "-enable-upcoming-feature",
+    "GlobalActorIsolatedTypesUsability",
+    "-enable-upcoming-feature",
+    "InferIsolatedConformances",
+    "-enable-upcoming-feature",
+    "InferSendableFromCaptures",
+    "-enable-upcoming-feature",
+    "NonisolatedNonsendingByDefault",
+    "-enable-upcoming-feature",
+    "MemberImportVisibility",
+]
+
+# module_name is load-bearing: @testable import LCdrData in the test target
+# depends on it.
+swift_library(
+    name = "LCdrDataLib",
+    srcs = glob(["LCdrData/**/*.swift"]),
+    copts = SWIFT_COPTS,
+    module_name = "LCdrData",
+    deps = ["@swiftpkg_kdl_swift//:KDL"],
+)
+
+macos_application(
+    name = "LCdrData",
+    # rules_apple rejects .appiconset outright for macOS 26+ targets, so the
+    # Bazel build uses an Icon Composer .icon bundle. The .appiconset is kept for
+    # Tuist and excluded from resources below: the two cannot both be present,
+    # since any ".appiconset/" path in the compiled catalog trips the same check.
+    app_icons = glob(["LCdrData/AppIcon.icon/**"]),
+    bundle_id = "com.xvir.LCdrData",
+    bundle_name = "LCdrData",
+    entitlements = "Bazel/LCdrData.entitlements",
+    infoplists = ["Bazel/Info.plist"],
+    minimum_os_version = "26.4",
+    resources = ["LCdrData/Resources/DefaultConfig.kdl"] + glob(
+        ["LCdrData/Assets.xcassets/**"],
+        exclude = ["LCdrData/Assets.xcassets/AppIcon.appiconset/**"],
+    ),
+    deps = [":LCdrDataLib"],
+)
