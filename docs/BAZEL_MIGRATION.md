@@ -336,8 +336,15 @@ swift_deps.from_package(
     resolved = "//Tuist:Package.resolved",
     swift = "//Tuist:Package.swift",
 )
-use_repo(swift_deps, "swift_deps_info", "swiftpkg_kdl_swift")
+use_repo(swift_deps, "swift_package", "swiftpkg_kdl_swift")
 ```
+
+Let `bazel mod tidy` write that `use_repo` line rather than hand-writing it. In
+1.23.0 the generated info repo is named `swift_package`, not the `swift_deps_info`
+that older documentation shows. Only `swiftpkg_kdl_swift` is listed: `use_repo`
+governs what the *root* module can name, and the four transitive packages
+(BigDecimal, BigInt, UInt128, swift-numerics) are referenced internally by the
+generated BUILD files.
 
 Pointing at `//Tuist:...` rather than copying the manifests to the repo root
 makes `Tuist/Package.swift` the one dependency source of truth that both systems
@@ -354,14 +361,24 @@ Run `bazel mod tidy` to let the extension fill in the remaining `use_repo`
 names, then verify with:
 
 ```bash
-bazel build @swiftpkg_kdl_swift//:KDL
+bazel build @swiftpkg_kdl_swift//:KDL.rspm.__impl
 ```
+
+Note the `.rspm.__impl` suffix. `@swiftpkg_kdl_swift//:KDL` is a
+`swift_library_group`, which generates **no actions** — building it reports
+success with `1 process: 1 internal` while compiling nothing, so it is a
+vacuous check. The underlying `swift_library` is `:KDL.rspm.__impl`, and building
+that runs the real compile (~59 actions) and emits `KDL.swiftmodule` plus
+`libKDL.rspm.__impl.a`.
 
 **Fallback if this fights us:** with `swift-mocking` gone there are only five
 packages and no macros, so hand-vendoring them as `http_archive` +
 `swift_library` is a tractable plan B. Do not reach for it first.
 
-**Exit criteria:** `KDL` builds standalone under Bazel.
+**Exit criteria:** `KDL` genuinely compiles under Bazel — verified by a non-zero
+action count and the presence of `KDL.swiftmodule`, not merely by a zero exit
+code. Dependency `.swiftmodule` files are built; their `.a` archives are not, and
+should not be expected until something links them in Phase 3.
 
 ### Phase 3 — App target
 
