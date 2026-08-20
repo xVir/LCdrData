@@ -1,0 +1,13 @@
+common --enable_platform_specific_config
+
+# rules_apple resolves the macOS SDK from the selected Xcode. Pinning
+# DEVELOPER_DIR keeps a silent `xcode-select` switch from invalidating the
+# entire action cache.
+common --repo_env=DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+
+build --macos_minimum_os=26.4
+build --host_macos_minimum_os=26.4
+
+test --test_output=errors
+
+build:release --compilation_mode=opt

@@ -6,5 +6,9 @@
 Derived/
 Tuist/.build/
 
+# Bazel convenience symlinks. MODULE.bazel.lock is committed on purpose,
+# for reproducible dependency resolution.
+/bazel-*
+
 # OS
 **/.DS_Store

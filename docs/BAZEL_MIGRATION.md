@@ -303,8 +303,23 @@ Pinning `DEVELOPER_DIR` matters: `rules_apple` resolves the SDK from the
 selected Xcode, and a silent `xcode-select` change would otherwise invalidate
 the whole action cache.
 
-- `.gitignore` — add `bazel-*` (the convenience symlinks) and `MODULE.bazel.lock`
-  decision. Recommend **committing** the lock file for reproducible CI.
+- `.bazelignore` — keep Bazel out of directories it has no business walking:
+
+```
+Tuist/.build
+Derived
+LCdrData.xcodeproj
+LCdrData.xcworkspace
+```
+
+  `Tuist/.build` is ~66 MB of SPM checkouts. None of these contain `BUILD` files
+  today, so there is no package collision yet — but Phase 2 has
+  `rules_swift_package_manager` populating `Tuist/.build` with vendored Swift
+  packages that may ship their own `BUILD.bazel`, at which point Bazel could
+  start treating them as packages in *this* workspace.
+
+- `.gitignore` — add `/bazel-*` (the convenience symlinks). **Commit**
+  `MODULE.bazel.lock` for reproducible dependency resolution.
 
 **Exit criteria:** `bazel mod graph` resolves without error.
 
