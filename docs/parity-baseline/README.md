@@ -38,9 +38,21 @@ mach-lookup exceptions — which is what a UI-test host needs.
 
 ## Unit test baseline
 
-`tuist test "LCdrData" --skip-ui-tests` — **193 test cases across 24 suites, 0
-failures**. Phase 4 requires the Bazel run to match this count, not merely to be
-green.
+`tuist test "LCdrData" --skip-ui-tests` — **193 test cases, 0 failures**. Phase 4
+requires the Bazel run to match this count, not merely to be green.
+
+Take the count from Swift Testing's own summary line, which Bazel's test log
+prints:
+
+```
+✔ Test run with 193 tests in 23 suites passed after 2.160 seconds.
+```
+
+Do not count `✔` lines with grep. That over-counts by including the run-summary
+line itself, and counting `Suite .* passed` lines gives 24 against 22 distinct
+suite names and Swift Testing's own figure of 23. The per-case total of 193 is
+consistent across both build systems; the suite tally is not a reliable
+comparison.
 
 ## Expected differences at Phase 7
 

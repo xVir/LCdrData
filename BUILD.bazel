@@ -1,5 +1,11 @@
-load("@build_bazel_rules_apple//apple:macos.bzl", "macos_application")
+load("@build_bazel_rules_apple//apple:macos.bzl", "macos_application", "macos_unit_test")
 load("@build_bazel_rules_swift//swift:swift_library.bzl", "swift_library")
+
+# Set by `--config=release` in .bazelrc.
+config_setting(
+    name = "release_build",
+    values = {"compilation_mode": "opt"},
+)
 
 # Mirrors the Tuist build settings in Project.swift. SWIFT_VERSION is 5.0, which
 # is why SWIFT_APPROACHABLE_CONCURRENCY expands to five upcoming features here
@@ -41,7 +47,15 @@ macos_application(
     app_icons = glob(["LCdrData/AppIcon.icon/**"]),
     bundle_id = "com.xvir.LCdrData",
     bundle_name = "LCdrData",
-    entitlements = "Bazel/LCdrData.entitlements",
+    # Mirrors Xcode: debug builds carry get-task-allow plus the testmanagerd
+    # mach-lookup exceptions, release builds carry only the two production keys.
+    # This is not merely for debugging comfort — an app-hosted macos_unit_test
+    # cannot bootstrap without them, because the sandboxed host is refused a
+    # connection to testmanagerd and the runner exits before XCTest attaches.
+    entitlements = select({
+        ":release_build": "Bazel/LCdrData.entitlements",
+        "//conditions:default": "Bazel/LCdrData.debug.entitlements",
+    }),
     infoplists = ["Bazel/Info.plist"],
     minimum_os_version = "26.4",
     resources = ["LCdrData/Resources/DefaultConfig.kdl"] + glob(
@@ -49,4 +63,30 @@ macos_application(
         exclude = ["LCdrData/Assets.xcassets/AppIcon.appiconset/**"],
     ),
     deps = [":LCdrDataLib"],
+)
+
+swift_library(
+    name = "LCdrDataTestsLib",
+    testonly = True,
+    srcs = glob(["LCdrDataTests/**/*.swift"]),
+    copts = SWIFT_COPTS,
+    module_name = "LCdrDataTests",
+    deps = [":LCdrDataLib"],
+)
+
+# test_host is required, not optional: ConfigurationServiceTests passes
+# Bundle.main into ConfigurationService, which then looks up DefaultConfig.kdl.
+# Library-test mode would resolve Bundle.main to the test runner and fail.
+#
+# tags = ["local"] is also required. Under Bazel's darwin sandbox the test host
+# never establishes its connection to testmanagerd, and xcodebuild waits until
+# the 300s timeout with no error beyond a benign "Supported platforms ... is
+# empty" notice. Unsandboxed, the same bundle runs in ~10s.
+macos_unit_test(
+    name = "LCdrDataTests",
+    bundle_id = "com.xvir.LCdrDataTests",
+    minimum_os_version = "26.4",
+    tags = ["local"],
+    test_host = ":LCdrData",
+    deps = [":LCdrDataTestsLib"],
 )

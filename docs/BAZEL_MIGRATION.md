@@ -541,10 +541,21 @@ macos_unit_test(
 )
 ```
 
-`test_host` is required, per 2.5. Confirm the Swift Testing framework
-(`Testing.framework`) is linked — `rules_apple` 4.5.x supports Swift Testing, but
-this project uses it for *all* 22 unit test files, so a gap here blocks the
-phase.
+`test_host` is required, per 2.5. Swift Testing works out of the box — all 193
+cases run — so no extra wiring for `Testing.framework` is needed.
+
+Two non-obvious requirements, both of which present as a **300s timeout with no
+useful error**, only a benign `IDERunDestination: Supported platforms for the
+buildables in the current scheme is empty` notice:
+
+- **The test host needs the debug entitlements.** A sandboxed app is refused its
+  connection to `testmanagerd`, and the runner exits before XCTest attaches
+  (`Failed to establish connection to the IDE`). The app target therefore selects
+  `Bazel/LCdrData.debug.entitlements` for non-`opt` builds and the two-key
+  production file for `--config=release`, which is exactly what Xcode does.
+- **`tags = ["local"]` is mandatory.** Even with correct entitlements, the test
+  never bootstraps inside Bazel's `darwin-sandbox`. Unsandboxed it runs in ~10s.
+  Confirmed by `--strategy=TestRunner=local`, then made permanent via the tag.
 
 Reconcile the result against Tuist: the same tests must pass, and the *count*
 must match. A silently-empty test bundle that "passes" is the failure mode to
@@ -561,11 +572,13 @@ Tuist reports `The scheme LCdrData's test action has no tests to run, finishing
 early` and exits 0 without running anything. Comparing against that would be
 meaningless — and it looks alarmingly like a regression the first time you see it.
 
-The Phase 0 baseline is **193 test cases across 24 suites**; see
-[parity-baseline/README.md](parity-baseline/README.md).
+The Phase 0 baseline is **193 test cases**; see
+[parity-baseline/README.md](parity-baseline/README.md), which also explains why
+the count must come from Swift Testing's summary line rather than from grepping
+`✔` marks.
 
-**Exit criteria:** `bazel test //:LCdrDataTests` passes with a test count equal
-to Tuist's 193.
+**Exit criteria:** `bazel test //:LCdrDataTests` passes, and its log reports
+`Test run with 193 tests ... passed` — matching Tuist case-for-case.
 
 ### Phase 5 — UI tests (compile under Bazel, run via Tuist)
 
