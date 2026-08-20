@@ -72,7 +72,6 @@ let project = Project(
             sources: ["LCdrDataTests/**"],
             dependencies: [
                 .target(name: "LCdrData"),
-                .external(name: "SwiftMocking"),
             ],
             settings: .settings(
                 base: testSettings

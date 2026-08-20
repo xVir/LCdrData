@@ -1,0 +1,13 @@
+LCdrData.app
+LCdrData.app/Contents
+LCdrData.app/Contents/Info.plist
+LCdrData.app/Contents/MacOS
+LCdrData.app/Contents/MacOS/LCdrData
+LCdrData.app/Contents/MacOS/LCdrData.debug.dylib
+LCdrData.app/Contents/MacOS/__preview.dylib
+LCdrData.app/Contents/PkgInfo
+LCdrData.app/Contents/Resources
+LCdrData.app/Contents/Resources/AppIcon.icns
+LCdrData.app/Contents/Resources/Assets.car
+LCdrData.app/Contents/Resources/DefaultConfig.kdl
+LCdrData.app/Contents/_CodeSignature
