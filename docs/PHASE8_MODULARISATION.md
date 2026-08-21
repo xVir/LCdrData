@@ -230,18 +230,46 @@ against 193 will think tests vanished. Update the guidance in
 **Bundle IDs must be unique.** Five targets sharing `com.xvir.LCdrDataTests` is a
 recipe for confusing runner failures. Suffix per target as above.
 
-**Only three test files actually need an app host.** `test_host` exists because
-`ConfigurationServiceTests` reads `Bundle.main`, and `BookmarkStoreTests` and
-`PanelSessionStoreTests` use `UserDefaults` — all three in the `Services` layer.
-The other four targets may be able to run as **library tests** with no
-`test_host`, which would also drop the need for `tags = ["local"]` and the debug
-entitlements on those targets, making them faster and simpler.
+**Exactly one test needs an app host, and it is not the one you would expect.**
+Measured, not assumed: with `test_host` and `tags = ["local"]` both removed,
+**192 of 193 tests pass**. The single failure is `trashFile()`:
 
-Do not assume it though. `rules_apple` warns that library tests run outside an
-application context, where "certain functionalities might not be present (e.g. UI
-layout, `NSUserDefaults`)". Start by keeping `test_host` everywhere so behaviour
-matches today, then drop it target by target and only keep the change where the
-tests still pass.
+```
+✘ trashFile() — "trash_me.txt" couldn't be moved to the trash because you
+  don't have permission to access it.
+  afpAccessDenied: Insufficient access privileges for operation
+```
+
+`FileManager.trashItem` needs an application context that the bare `xctest`
+runner does not provide. Nothing else in the suite does.
+
+This corrects finding 2.5 in [BAZEL_MIGRATION.md](BAZEL_MIGRATION.md), which
+claimed `test_host` was required because `ConfigurationServiceTests` reads
+`Bundle.main`. That inferred a dependency from the *presence* of `Bundle.main` in
+the source without checking whether it is ever dereferenced — and it is not:
+
+- `ConfigurationServiceTests` passes `defaultKDLTextOverride: sampleDefaultKDL`,
+  and `defaultKDLText()` returns the override before touching `bundle`. Its
+  `bundle: Bundle.main` argument is **vestigial**.
+- `BookmarkStoreTests` and `PanelSessionStoreTests` already inject
+  `UserDefaults(suiteName:)` and never touch `.standard`.
+
+So injection has *already* solved the `Bundle` and `UserDefaults` concerns. The
+options for the one genuine holdout are:
+
+| Option | Trade |
+|---|---|
+| Keep `test_host` on all targets (status quo) | Simplest; every target pays the debug entitlements and the `local` tag |
+| App-host only `ServicesTests`; library-test the other four | Four targets get faster and simpler; one boundary to remember |
+| Inject a `TrashServicing` protocol and mock it | Removes the last app-host need, but the test then verifies *that a call was made* rather than that trashing works — losing real coverage of a destructive operation |
+
+Mocking the trash call is possible but is the weakest of the three: it trades
+genuine verification of an irreversible file operation for build convenience. Prefer
+one of the first two.
+
+Whichever is chosen, drop `test_host` target by target and keep the change only
+where the tests still pass — `rules_apple` warns that library tests run outside an
+application context, and `trashFile()` is proof that the warning has teeth.
 
 **There are no `Views` tests.** All 12 files in `LCdrData/Views/` are untested;
 the three test files with "View" in the name are ViewModel tests. So there is no

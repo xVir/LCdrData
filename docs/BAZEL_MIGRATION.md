@@ -155,7 +155,16 @@ cannot run on a headless CI runner regardless of the build system. Bazel will
 `build` them for compile coverage and tag them `manual`; `tuist test` runs them
 (Phase 5). Revisit only if UI tests ever need to gate CI.
 
-### 2.5 Unit tests need app-hosted mode
+### 2.5 Unit tests need app-hosted mode — but not for the reason given here
+
+> **Superseded.** Measured later during Phase 8 planning: with `test_host`
+> removed, **192 of 193 tests still pass**. The lone failure is `trashFile()`,
+> because `FileManager.trashItem` needs an application context. The `Bundle.main`
+> reasoning below is wrong — `ConfigurationServiceTests` passes
+> `defaultKDLTextOverride`, so `defaultKDLText()` returns before touching the
+> bundle, making its `bundle:` argument vestigial. See
+> [PHASE8_MODULARISATION.md](PHASE8_MODULARISATION.md) §6. `test_host` is still
+> correct for the current single target; the reasoning simply is not.
 
 `LCdrDataTests/ConfigurationServiceTests.swift` passes `Bundle.main` into
 `ConfigurationService`, which then does
