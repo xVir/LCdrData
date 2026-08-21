@@ -167,6 +167,12 @@ The suite is **193 test cases**. Take the count from Swift Testing's own summary
 test log — `Test run with 193 tests in 23 suites passed` — rather than counting `✔` marks,
 which over-counts by including that summary.
 
+> One test is currently **skipped**, not run: `FileOperationServiceTests.trashFile()` is
+> marked `@Test(.disabled(...))`. It still counts toward the 193, so a green run does not
+> mean every test executed. `FileManager.trashItem` needs an application context, which
+> makes it the only test requiring `test_host` — see
+> [docs/PHASE8_MODULARISATION.md](docs/PHASE8_MODULARISATION.md) section 6.
+
 ### UI tests — Tuist, via script
 
 ```bash
