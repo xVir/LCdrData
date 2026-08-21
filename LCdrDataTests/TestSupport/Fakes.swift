@@ -1,5 +1,4 @@
 import Foundation
-@testable import Core
 @testable import Services
 @testable import AppEnvironment
 

@@ -1,8 +1,8 @@
 import SwiftUI
-import Core
 import Services
 import ViewModels
 import AppEnvironment
+import Models
 
 /// A single file panel containing a path bar, file table, and status bar.
 /// Visually indicates whether it is the active (focused) panel.

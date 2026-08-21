@@ -1,5 +1,5 @@
 import Foundation
-import Core
+import Models
 
 /// Describes the type of conflict encountered during a file operation.
 package enum FileConflict: Sendable {

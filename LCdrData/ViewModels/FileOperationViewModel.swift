@@ -1,6 +1,6 @@
 import Foundation
 import Observation
-import Core
+import Models
 import Services
 
 /// Manages file operations, progress tracking, confirmation dialogs,

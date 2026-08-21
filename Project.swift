@@ -45,20 +45,80 @@ let project = Project(
         ]
     ),
     targets: [
-        // MARK: Core Module
-        // Mirrors the `Core` swift_library in BUILD.bazel. Both build systems must
-        // agree on the module structure, since the sources contain `import Core`.
-        // Models and Utilities are merged because they are mutually dependent.
+        // MARK: Utilities Module
+        // Mirrors the `Utilities` swift_library in LCdrData/Core/Utilities/BUILD.bazel.
+        // Both build systems must agree on the module structure, since the sources
+        // contain `import Utilities`. The bottom of the stack: no first-party deps.
         .target(
-            name: "Core",
+            name: "Utilities",
             destinations: [.mac],
             product: .staticFramework,
-            productName: "Core",
-            bundleId: "com.xvir.LCdrData.Core",
+            productName: "Utilities",
+            bundleId: "com.xvir.LCdrData.Utilities",
             deploymentTargets: .macOS("26.4"),
             sources: [
-                "LCdrData/Core/Models/**",
-                "LCdrData/Core/Utilities/**",
+                .glob(
+                    "LCdrData/Core/Utilities/**",
+                    excluding: ["LCdrData/Core/Utilities/FileFormatter.swift"]
+                ),
+            ],
+            settings: .settings(
+                base: coreSettings
+            )
+        ),
+        // MARK: Models Module
+        // A leaf: the domain types depend on no other first-party module.
+        .target(
+            name: "Models",
+            destinations: [.mac],
+            product: .staticFramework,
+            productName: "Models",
+            bundleId: "com.xvir.LCdrData.Models",
+            deploymentTargets: .macOS("26.4"),
+            sources: [
+                .glob(
+                    "LCdrData/Core/Models/**",
+                    excluding: ["LCdrData/Core/Models/CommandCatalog.swift"]
+                ),
+            ],
+            settings: .settings(
+                base: coreSettings
+            )
+        ),
+        // MARK: Bindings Module
+        // CommandCatalog alone: the one file needing both a Command and a key, so
+        // keeping it out of Models leaves both Models and Utilities independent.
+        .target(
+            name: "Bindings",
+            destinations: [.mac],
+            product: .staticFramework,
+            productName: "Bindings",
+            bundleId: "com.xvir.LCdrData.Bindings",
+            deploymentTargets: .macOS("26.4"),
+            sources: ["LCdrData/Core/Models/CommandCatalog.swift"],
+            dependencies: [
+                .target(name: "Models"),
+                .target(name: "Utilities"),
+            ],
+            settings: .settings(
+                base: coreSettings
+            )
+        ),
+        // MARK: Formatting Module
+        // FileFormatter alone, sitting ABOVE Models because `kind(for:)` takes a
+        // FileItem. That one signature is why LCdrData/Core/Utilities/ holds two
+        // modules: with it above Models, the Models <-> Utilities cycle disappears
+        // and no source file has to move.
+        .target(
+            name: "Formatting",
+            destinations: [.mac],
+            product: .staticFramework,
+            productName: "Formatting",
+            bundleId: "com.xvir.LCdrData.Formatting",
+            deploymentTargets: .macOS("26.4"),
+            sources: ["LCdrData/Core/Utilities/FileFormatter.swift"],
+            dependencies: [
+                .target(name: "Models"),
             ],
             settings: .settings(
                 base: coreSettings
@@ -76,7 +136,7 @@ let project = Project(
             deploymentTargets: .macOS("26.4"),
             sources: ["LCdrData/Services/**"],
             dependencies: [
-                .target(name: "Core"),
+                .target(name: "Models"),
                 .external(name: "KDL"),
             ],
             settings: .settings(
@@ -94,7 +154,9 @@ let project = Project(
             deploymentTargets: .macOS("26.4"),
             sources: ["LCdrData/ViewModels/**"],
             dependencies: [
-                .target(name: "Core"),
+                .target(name: "Models"),
+                .target(name: "Utilities"),
+                .target(name: "Formatting"),
                 .target(name: "Services"),
             ],
             settings: .settings(
@@ -115,7 +177,7 @@ let project = Project(
             deploymentTargets: .macOS("26.4"),
             sources: ["LCdrData/App/AppEnvironment.swift"],
             dependencies: [
-                .target(name: "Core"),
+                .target(name: "Models"),
                 .target(name: "Services"),
                 .target(name: "ViewModels"),
             ],
@@ -134,7 +196,10 @@ let project = Project(
             deploymentTargets: .macOS("26.4"),
             sources: ["LCdrData/Views/**"],
             dependencies: [
-                .target(name: "Core"),
+                .target(name: "Models"),
+                .target(name: "Bindings"),
+                .target(name: "Utilities"),
+                .target(name: "Formatting"),
                 .target(name: "Services"),
                 .target(name: "ViewModels"),
                 .target(name: "AppEnvironment"),
@@ -169,7 +234,10 @@ let project = Project(
                 "LCdrData/Resources/DefaultConfig.kdl",
             ],
             dependencies: [
-                .target(name: "Core"),
+                .target(name: "Models"),
+                .target(name: "Bindings"),
+                .target(name: "Utilities"),
+                .target(name: "Formatting"),
                 .target(name: "Services"),
                 .target(name: "ViewModels"),
                 .target(name: "AppEnvironment"),
@@ -199,7 +267,6 @@ let project = Project(
             deploymentTargets: .macOS("26.4"),
             sources: ["LCdrDataTests/TestSupport/**"],
             dependencies: [
-                .target(name: "Core"),
                 .target(name: "Services"),
                 .target(name: "AppEnvironment"),
             ],
@@ -223,7 +290,10 @@ let project = Project(
             ],
             dependencies: [
                 .target(name: "LCdrData"),
-                .target(name: "Core"),
+                .target(name: "Models"),
+                .target(name: "Bindings"),
+                .target(name: "Utilities"),
+                .target(name: "Formatting"),
                 .target(name: "Services"),
                 .target(name: "ViewModels"),
                 .target(name: "AppEnvironment"),

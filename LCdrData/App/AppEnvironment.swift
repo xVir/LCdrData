@@ -1,5 +1,5 @@
 import Foundation
-import Core
+import Models
 import Services
 import ViewModels
 

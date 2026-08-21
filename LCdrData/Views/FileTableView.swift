@@ -1,7 +1,9 @@
 import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
-import Core
+import Models
+import Utilities
+import Formatting
 import Services
 import ViewModels
 import AppEnvironment

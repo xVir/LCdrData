@@ -26,7 +26,7 @@ LCdrData/
 ├── Tuist/Package.swift        SPM declarations — read by Tuist AND Bazel
 ├── .tuist-version             4.182.0 (pinned)
 ├── LCdrData/                  BUILD.bazel here defines //LCdrData (the app)
-│   ├── Core/                  Layer 1 — Models/ and Utilities/, one module
+│   ├── Core/                  Layer 1 — four modules, see §3
 │   ├── Services/              Layer 2 — file I/O, sandbox, config, watching
 │   ├── ViewModels/            Layer 3 — @Observable state coordinators
 │   ├── App/                   Layer 4 (AppEnvironment) + layer 6 (entry point)
@@ -64,28 +64,37 @@ Debug builds carry extra entitlements (`get-task-allow` plus two `testmanagerd` 
 
 ## 3. Module layering
 
-The app is six Swift modules, stacked so dependencies only ever point downward:
+The app is nine Swift modules. Layer 1 is two independent leaves plus two small
+modules that combine them; from layer 2 up it is a straight stack.
 
 ```
-App  →  Views  →  AppEnvironment  →  ViewModels  →  Services  →  Core
+                       ┌─ Formatting ─┐
+App → Views → AppEnvironment → ViewModels → Services ─→ Models
+                       └─ Bindings ───┴──────────────→ Utilities
 ```
 
-| Layer | Module | Bazel target | May be depended on by |
+| Layer | Module | Bazel target | Depends on |
 |---|---|---|---|
-| 1 | `Core` | `//LCdrData/Core` | everything |
-| 2 | `Services` | `//LCdrData/Services` | ViewModels, Views, App, most tests |
-| 3 | `ViewModels` | `//LCdrData/ViewModels` | Views, App |
-| 4 | `AppEnvironment` | `//LCdrData/App:AppEnvironment` | Views, App |
-| 5 | `Views` | `//LCdrData/Views` | App only |
-| 6 | `App` | `//LCdrData/App:LCdrDataLib` | the app bundle |
+| 1 | `Utilities` | `//LCdrData/Core/Utilities` | nothing |
+| 1 | `Models` | `//LCdrData/Core/Models` | nothing |
+| 1½ | `Formatting` | `//LCdrData/Core/Utilities:Formatting` | `Models` |
+| 1½ | `Bindings` | `//LCdrData/Core/Models:Bindings` | `Models`, `Utilities` |
+| 2 | `Services` | `//LCdrData/Services` | `Models` |
+| 3 | `ViewModels` | `//LCdrData/ViewModels` | layer 1 and 2 |
+| 4 | `AppEnvironment` | `//LCdrData/App:AppEnvironment` | `Models`, `Services`, `ViewModels` |
+| 5 | `Views` | `//LCdrData/Views` | everything below |
+| 6 | `App` | `//LCdrData/App:LCdrDataLib` | everything below |
 
-Three facts about this shape are load-bearing:
+Four facts about this shape are load-bearing:
 
-- **`Core` merges Models and Utilities** because they are mutually dependent — `CommandCatalog` needs `KeyboardShortcuts`, `FileFormatter` needs `FileItem`. They are subdirectories of one Bazel package rather than packages of their own.
+- **`Core/` holds four modules in two directories**, and the split deliberately does not follow the `Models/` and `Utilities/` folder boundary. Two files are the reason. `CommandCatalog` needs both a `Command` and a `KeyboardShortcuts` key, and `FileFormatter.kind(for:)` takes a `FileItem`; leaving either in place would make the two *directories* mutually dependent even though the *files* are not. Compiling each as its own small module above the leaves keeps `Models` and `Utilities` free of first-party dependencies, and required no source file to move.
+- **Module names avoid the types they contain.** `Formatting` rather than `FileFormatter`, `Bindings` rather than `CommandCatalog`, because a module and a type sharing a name makes every reference from a client ambiguous.
 - **`AppEnvironment` is its own layer**, sharing the `App/` directory with layer 6 but built as a separate target. `Views` needs it while it needs `ViewModels`, which is what breaks the App ↔ Views cycle.
-- **Each module's BUILD file names, via `visibility`, exactly which packages may depend on it**, so a layering violation is an analysis-time error rather than a review comment. It bites in both directions: `Core` cannot reach up to `Services`, and a test target for one layer cannot reach past it either.
+- **Each module's BUILD file names, via `visibility`, exactly which packages may depend on it**, so a layering violation is an analysis-time error rather than a review comment. It bites in both directions: `Models` cannot reach up to `Services`, and a test target for one layer cannot reach past it either.
 
-Types that cross a module boundary are declared `package`, not `public` — roughly forty of them. The widening stops at the package rather than becoming API.
+Types that cross a module boundary are declared `package`, not `public` — roughly forty of them. The widening stops at the package rather than becoming API. Every target shares `package_name = "lcdrdata"`, which is why splitting `Core` into four required no access-level changes at all.
+
+One consequence of `MemberImportVisibility` is worth knowing: a file can need `import Models` without naming a single `Models` type, because reaching a *member* of a type — `panel.state.sortDescriptor` — requires the defining module to be imported. Several imports exist for that reason alone and look redundant.
 
 ---
 

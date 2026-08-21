@@ -1,8 +1,9 @@
 import SwiftUI
-import Core
+import Formatting
 import Services
 import ViewModels
 import AppEnvironment
+import Models
 
 /// Per-panel status bar showing item count, selection count, and total size.
 package struct StatusBarView: View {

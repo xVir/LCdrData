@@ -1,7 +1,7 @@
 import Foundation
 import KDL
 import Observation
-import Core
+import Models
 
 package enum ConfigurationServiceError: Error, Equatable, Sendable {
     case invalidKDL(String)

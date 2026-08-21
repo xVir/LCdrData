@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import Core
+@testable import Utilities
 
 /// Stands in for the account database so the expectations don't depend on the
 /// account the suite happens to run as.

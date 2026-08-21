@@ -1,5 +1,5 @@
 import Foundation
-import Core
+import Models
 
 /// Protocol defining file system operations for directory listing and metadata.
 /// Using a protocol enables dependency injection and testability.

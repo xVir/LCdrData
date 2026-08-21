@@ -1,9 +1,11 @@
 import Testing
 import Foundation
 import SwiftUI
-@testable import Core
+@testable import Models
+@testable import Utilities
 @testable import Services
 @testable import ViewModels
+@testable import Bindings
 
 @MainActor
 struct CommandRunnerTests {

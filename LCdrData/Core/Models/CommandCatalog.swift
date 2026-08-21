@@ -1,4 +1,6 @@
 import SwiftUI
+import Models
+import Utilities
 
 /// Single source of truth mapping a `Command` to its keyboard shortcut.
 ///

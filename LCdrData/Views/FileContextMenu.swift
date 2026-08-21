@@ -1,9 +1,10 @@
 import AppKit
 import SwiftUI
-import Core
+import Models
 import Services
 import ViewModels
 import AppEnvironment
+import Bindings
 
 /// Context-menu content for a panel, shown on **secondary click**.
 ///

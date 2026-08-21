@@ -31,6 +31,12 @@ Bazel is the build system. Tuist keeps the two jobs it does better: generating a
 Xcode project (so SwiftUI previews and the debugger behave normally), and running macOS
 UI tests, which Bazel's Apple test runner cannot drive at all.
 
+> **Default to Bazel, and only Bazel.** Use `bazel build //LCdrData` to build and
+> `bazel test //LCdrDataTests/...` to run the unit tests. Do not run `tuist build`,
+> `tuist test`, or `xcodebuild` unless explicitly asked to — they are slower, and a green
+> Bazel run is the check that matters. The same goes for UI tests: run
+> `scripts/run-ui-tests.sh` only on explicit request, never as part of a routine change.
+
 There is only **one** dependency manifest. `Tuist/Package.swift` is read by Tuist and, via
 `rules_swift_package_manager`, by Bazel too — so there is no second version list to drift.
 
@@ -68,6 +74,14 @@ No setup step is needed — Bazel resolves everything on first build.
   a layering violation is an analysis-time error. The app target is named for its package
   (`//LCdrData`) rather than `app`, because `bin/LCdrData/app` and `bin/LCdrData/App/` are
   the same path on a case-insensitive filesystem.
+- **A directory is not always a module.** `LCdrData/Core/` builds four from two directories:
+  the leaves `Utilities` and `Models`, which depend on nothing, plus `Formatting`
+  (`FileFormatter.swift`) and `Bindings` (`CommandCatalog.swift`), each one file that needs
+  something from both leaves and therefore sits above them. `LCdrData/App/` likewise builds
+  both `AppEnvironment` and the app layer.
+- **An import can look unused and still be required.** `MemberImportVisibility` means
+  reaching a member — `panel.state.sortDescriptor` — needs the defining module imported even
+  when no type from it is named. Do not tidy those away.
 - **The unit test targets are tagged `local`.** They do not run inside Bazel's sandbox.
 - **Every test target declares `size = "small"`.** Each runs in roughly 7–10s, which is
   below the range Bazel expects of the default `medium` size, so without it every run ends
@@ -156,9 +170,10 @@ The project uses two test frameworks:
 - **Swift Testing** (`import Testing`) for unit tests — struct-based, `@Test` attribute, `#expect(...)` assertions
 - **XCTest** (`import XCTest`) for UI tests — class-based, `XCTestCase` subclass
 
-> **During development, only run unit tests (`LCdrDataTests`).** UI tests (`LCdrDataUITests`)
-> require a running app and a GUI login session — do not run them as part of automated or
-> routine development workflows.
+> **During development, only run the unit tests, and only under Bazel.** UI tests
+> (`LCdrDataUITests`) need a running app and a GUI login session, so run them only when
+> explicitly asked — never as part of a routine change. Likewise `tuist test`: see the rule
+> in [Which tool for which task](#which-tool-for-which-task).
 
 ### Unit tests — Bazel
 
@@ -248,9 +263,9 @@ LCdrData/
 ├── scripts/
 │   └── run-ui-tests.sh         # UI test runner (delegates to Tuist)
 ├── LCdrData/                   # BUILD.bazel here defines //LCdrData (the app)
-│   ├── Core/                   # Layer 1 — one module
-│   │   ├── Models/             # Data models
-│   │   └── Utilities/          # Formatters, keyboard shortcuts
+│   ├── Core/                   # Layer 1 — four modules from two folders, the
+│   │   ├── Models/             # one place where folders and modules do not
+│   │   └── Utilities/          # line up; see the gotcha above
 │   ├── Services/               # Layer 2 — file system and sandbox services
 │   ├── ViewModels/             # Layer 3 — observable state objects
 │   ├── App/                    # Layer 4 (AppEnvironment) + layer 6 (entry point)
@@ -259,9 +274,9 @@ LCdrData/
 │   └── Assets.xcassets/        # Asset catalog (.appiconset used by Tuist)
 ├── LCdrDataTests/              # Unit tests (Swift Testing); every folder here
 │                               # is its own Bazel package and test target
-│   ├── Core/                   # Mirrors the production layout, but as two
-│   │   ├── Models/             # packages: the test files, unlike the
-│   │   └── Utilities/          # production sources, are not interdependent
+│   ├── Core/                   # One test package per production folder;
+│   │   ├── Models/             # Core/Utilities covers both the Utilities
+│   │   └── Utilities/          # and Formatting modules
 │   ├── Services/
 │   ├── ViewModels/
 │   ├── AppEnvironment/

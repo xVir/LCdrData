@@ -15,7 +15,9 @@ swift_library(
         "//LCdrDataTests/ViewModels:__pkg__",
     ],
     deps = [
-        "//LCdrData/Core",
+        "//LCdrData/Core/Models",
+        "//LCdrData/Core/Utilities",
+        "//LCdrData/Core/Utilities:Formatting",
         "//LCdrData/Services",
     ],
 )

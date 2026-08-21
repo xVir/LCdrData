@@ -1,5 +1,5 @@
 import SwiftUI
-import Core
+import Models
 import Services
 import ViewModels
 import AppEnvironment

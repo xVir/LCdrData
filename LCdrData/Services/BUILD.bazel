@@ -24,7 +24,7 @@ swift_library(
         "//LCdrDataTests/ViewModels:__pkg__",
     ],
     deps = [
-        "//LCdrData/Core",
+        "//LCdrData/Core/Models",
         "@swiftpkg_kdl_swift//:KDL",
     ],
 )

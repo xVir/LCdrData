@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Core
+@testable import Models
 @testable import Services
 @testable import ViewModels
 

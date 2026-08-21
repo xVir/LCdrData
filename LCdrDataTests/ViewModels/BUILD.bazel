@@ -11,7 +11,9 @@ swift_library(
     module_name = "ViewModelsTests",
     package_name = PACKAGE_NAME,
     deps = [
-        "//LCdrData/Core",
+        "//LCdrData/Core/Models",
+        "//LCdrData/Core/Models:Bindings",
+        "//LCdrData/Core/Utilities",
         "//LCdrData/Services",
         "//LCdrData/ViewModels",
         "//LCdrDataTests/TestSupport",

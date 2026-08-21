@@ -1,8 +1,8 @@
 import Testing
 import Foundation
-@testable import Core
 @testable import Services
 @testable import ViewModels
+@testable import Models
 
 @MainActor
 struct AppStateTests {

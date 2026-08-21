@@ -1,7 +1,8 @@
 import AppKit
 import Foundation
 import Observation
-import Core
+import Models
+import Formatting
 import Services
 
 /// Identifies which side a panel occupies.

@@ -12,7 +12,7 @@ swift_library(
     package_name = PACKAGE_NAME,
     deps = [
         "//LCdrData/App:AppEnvironment",
-        "//LCdrData/Core",
+        "//LCdrData/Core/Models",
         "//LCdrData/Services",
         "//LCdrData/ViewModels",
         "//LCdrDataTests/TestSupport",

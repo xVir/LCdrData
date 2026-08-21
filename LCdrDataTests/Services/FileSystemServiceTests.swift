@@ -1,7 +1,7 @@
 import Testing
 import Foundation
-@testable import Core
 @testable import Services
+@testable import Models
 
 @MainActor
 struct FileSystemServiceTests {

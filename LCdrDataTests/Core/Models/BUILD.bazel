@@ -2,10 +2,7 @@ load("@build_bazel_rules_apple//apple:macos.bzl", "macos_unit_test")
 load("@build_bazel_rules_swift//swift:swift_library.bzl", "swift_library")
 load("//:defs.bzl", "PACKAGE_NAME", "SWIFT_COPTS")
 
-# Tests for the model types in //LCdrData/Core. Models and Utilities are one
-# module in production because they are mutually dependent, but their tests are
-# not: nothing here imports the Utilities tests, so they can be separate
-# packages and separate targets.
+# Tests for //LCdrData/Core/Models.
 swift_library(
     name = "ModelsTestsLib",
     testonly = True,
@@ -13,7 +10,7 @@ swift_library(
     copts = SWIFT_COPTS,
     module_name = "ModelsTests",
     package_name = PACKAGE_NAME,
-    deps = ["//LCdrData/Core"],
+    deps = ["//LCdrData/Core/Models"],
 )
 
 macos_unit_test(

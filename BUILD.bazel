@@ -1,18 +1,6 @@
 # Targets live in per-package BUILD files so each module can declare, via
-# `visibility`, exactly which layers may depend on it:
-#
-#   //LCdrData                      the application bundle
-#   //LCdrData/Core                 layer 1
-#   //LCdrData/Services             layer 2
-#   //LCdrData/ViewModels           layer 3
-#   //LCdrData/App:AppEnvironment   layer 4
-#   //LCdrData/Views                layer 5
-#   //LCdrData/App:LCdrDataLib      layer 6
-#   //LCdrDataTests/<Module>        one test target per module, named for it
-#                                   (Core splits further into Models/Utilities)
-#   //LCdrDataTests/TestSupport     shared test doubles
-#
-# This package holds only the shared configuration below.
+# `visibility`, exactly which layers may depend on it. This package holds only
+# the shared configuration below; `bazel query //...` lists the targets.
 
 # Set by `--config=release` in .bazelrc.
 config_setting(

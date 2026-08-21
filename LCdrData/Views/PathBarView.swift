@@ -1,9 +1,10 @@
 import AppKit
 import SwiftUI
-import Core
+import Utilities
 import Services
 import ViewModels
 import AppEnvironment
+import Models
 
 /// Displays the current directory path as clickable breadcrumb segments.
 /// Supports editing mode (Cmd+L) for direct path entry.

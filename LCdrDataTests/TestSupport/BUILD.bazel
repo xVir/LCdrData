@@ -14,7 +14,6 @@ swift_library(
     visibility = ["//LCdrDataTests:__subpackages__"],
     deps = [
         "//LCdrData/App:AppEnvironment",
-        "//LCdrData/Core",
         "//LCdrData/Services",
     ],
 )

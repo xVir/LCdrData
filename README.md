@@ -165,24 +165,31 @@ bookmarks {
 
 ## Architecture
 
-Six modules in a strict stack, each a separate Swift module and Bazel target:
+Nine modules, each a separate Swift module and Bazel target, stacked so dependencies only
+ever point downward:
 
 ```
-App  →  Views  →  AppEnvironment  →  ViewModels  →  Services  →  Core
+App  →  Views  →  AppEnvironment  →  ViewModels  →  Services  →  Core (four modules)
 ```
 
 Every module's BUILD file names, via Bazel `visibility`, exactly which packages may depend
-on it, so a layering violation fails at analysis time rather than in review. Dependencies
-between modules are always downward; `Core` depends on nothing.
+on it, so a layering violation fails at analysis time rather than in review.
 
 ```
 LCdrData/
-├── Core/          Models, formatters, the command catalogue
+├── Core/          Utilities and Models, both dependency-free, plus
+│                  Formatting and Bindings, one file each
 ├── Services/      File system, sandbox access, configuration, persistence
 ├── ViewModels/    Observable state: panels, app state, operations
 ├── App/           AppEnvironment (shared services) and the app entry point
 └── Views/         SwiftUI views
 ```
+
+`Core/` is the one place where folders and modules deliberately do not line up. Two files
+each need something from both halves — `FileFormatter` takes a `FileItem`, and
+`CommandCatalog` maps a `Command` to a key — so each compiles as its own small module above
+the two leaves. That is what lets `Models` and `Utilities` depend on nothing at all; see
+[docs/CURRENT_ARCH.md](docs/CURRENT_ARCH.md) §3.
 
 ## Documentation
 

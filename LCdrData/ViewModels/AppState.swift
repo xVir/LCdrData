@@ -1,8 +1,9 @@
 import AppKit
 import Foundation
 import Observation
-import Core
+import Utilities
 import Services
+import Models
 
 /// Global application state holding both panels and tracking which is active.
 @Observable

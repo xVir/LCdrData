@@ -1,6 +1,5 @@
 import Testing
 import Foundation
-@testable import Core
 @testable import Services
 
 // MARK: - Fake bookmark serializer

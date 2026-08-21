@@ -1,6 +1,6 @@
 import AppKit
 import Foundation
-import Core
+import Models
 import Services
 
 /// Executes `Command`s against a window's `AppState`, resolving the active /

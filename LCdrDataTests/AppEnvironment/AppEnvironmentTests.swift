@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 @testable import AppEnvironment
-@testable import Core
+@testable import Models
 @testable import Services
 @testable import ViewModels
 @testable import TestSupport

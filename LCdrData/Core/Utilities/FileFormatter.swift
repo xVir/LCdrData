@@ -1,4 +1,5 @@
 import Foundation
+import Models
 
 /// Formatting helpers for file sizes, dates, and other metadata displayed in panels.
 package enum FileFormatter {

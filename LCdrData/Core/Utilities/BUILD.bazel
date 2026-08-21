@@ -1,0 +1,28 @@
+load("@build_bazel_rules_swift//swift:swift_library.bzl", "swift_library")
+load("//:defs.bzl", "PACKAGE_NAME", "SWIFT_COPTS")
+
+# The very bottom of the stack: formatters, key definitions and environment keys
+# that know nothing about the domain. Depends on no first-party module.
+swift_library(
+    name = "Utilities",
+    srcs = glob(
+        ["*.swift"],
+        exclude = ["FileFormatter.swift"],
+    ),
+    copts = SWIFT_COPTS,
+    module_name = "Utilities",
+    package_name = PACKAGE_NAME,
+    visibility = ["//visibility:public"],
+)
+
+# Presentation strings for model values: sizes, dates and file kinds. Depends on
+# Models, which is why it is a separate module from Utilities below.
+swift_library(
+    name = "Formatting",
+    srcs = ["FileFormatter.swift"],
+    copts = SWIFT_COPTS,
+    module_name = "Formatting",
+    package_name = PACKAGE_NAME,
+    visibility = ["//visibility:public"],
+    deps = ["//LCdrData/Core/Models"],
+)

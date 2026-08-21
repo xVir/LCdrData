@@ -13,7 +13,7 @@ swift_library(
     module_name = "ServicesTests",
     package_name = PACKAGE_NAME,
     deps = [
-        "//LCdrData/Core",
+        "//LCdrData/Core/Models",
         "//LCdrData/Services",
         "//LCdrDataTests/TestSupport",
     ],

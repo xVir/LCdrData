@@ -11,7 +11,10 @@ swift_library(
     visibility = ["//LCdrData/App:__pkg__"],
     deps = [
         "//LCdrData/App:AppEnvironment",
-        "//LCdrData/Core",
+        "//LCdrData/Core/Models",
+        "//LCdrData/Core/Models:Bindings",
+        "//LCdrData/Core/Utilities",
+        "//LCdrData/Core/Utilities:Formatting",
         "//LCdrData/Services",
         "//LCdrData/ViewModels",
     ],
