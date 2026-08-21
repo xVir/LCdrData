@@ -729,6 +729,23 @@ Diff the Bazel-produced bundle against the Phase 0 snapshot:
    up as a build failure — only as a runtime permission denial.
 5. Unit test count and results match Tuist.
 
+Check **both** configurations, not just the default one. The entitlements are
+behind a `select()`, and an unexercised arm is how a broken release build ships.
+Validate the staging too: `bazel-bin` is a symlink that repoints between configs,
+so it is easy to unzip the same artifact twice and "confirm" a parity that was
+never tested.
+
+Two flags are load-bearing when comparing test results —
+`--nocache_test_results` for Bazel and `--no-selective-testing` for Tuist. Without
+them either side reports success without running anything.
+
+**Results are recorded in [parity-baseline/REPORT.md](parity-baseline/REPORT.md).**
+Items 1, 2, 3 and 5 pass, with every difference accounted for: `NSMainStoryboardFile`
+absent by design, and `LCdrData.debug.dylib` plus `__preview.dylib` absent because
+Bazel links one self-contained binary where Xcode splits out a debug dylib. Item 4
+requires a human and carries a container-reset caveat, since both builds share
+bundle ID `com.xvir.LCdrData` and therefore one `BookmarkStore`.
+
 **Exit criteria:** documented diff with every remaining difference justified.
 
 ### Phase 8 — Layered modularisation (follow-up)
