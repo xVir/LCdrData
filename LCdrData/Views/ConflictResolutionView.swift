@@ -1,11 +1,14 @@
 import SwiftUI
+import Services
+import ViewModels
+import AppEnvironment
 
 /// Dialog presented when a file operation encounters a naming conflict.
 /// Offers options to overwrite, skip, or rename, with an "Apply to All" checkbox.
-struct ConflictResolutionView: View {
+package struct ConflictResolutionView: View {
 
-    let conflict: FileConflict
-    let onResolve: (ConflictResolution, Bool) -> Void
+    package let conflict: FileConflict
+    package let onResolve: (ConflictResolution, Bool) -> Void
 
     @State private var applyToAll: Bool = false
     @State private var customName: String = ""
@@ -17,7 +20,7 @@ struct ConflictResolutionView: View {
         }
     }
 
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 16) {
             // Header
             HStack(spacing: 12) {

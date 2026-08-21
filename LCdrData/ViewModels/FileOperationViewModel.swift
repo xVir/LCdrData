@@ -1,36 +1,38 @@
 import Foundation
 import Observation
+import Core
+import Services
 
 /// Manages file operations, progress tracking, confirmation dialogs,
 /// and conflict resolution for the dual-panel file manager.
 @Observable
-final class FileOperationViewModel {
+package final class FileOperationViewModel {
 
     // MARK: - State
 
     /// Currently active operations.
-    var activeOperations: [FileOperation] = []
+    package var activeOperations: [FileOperation] = []
 
     /// Whether the progress overlay should be shown.
-    var showProgressOverlay: Bool = false
+    package var showProgressOverlay: Bool = false
 
     /// Whether a confirmation dialog should be shown.
-    var showConfirmationDialog: Bool = false
+    package var showConfirmationDialog: Bool = false
 
     /// Description for the confirmation dialog.
-    var confirmationMessage: String = ""
+    package var confirmationMessage: String = ""
 
     /// The pending operation awaiting confirmation.
-    var pendingOperationType: FileOperationType?
+    package var pendingOperationType: FileOperationType?
 
     /// Whether the conflict resolution dialog should be shown.
-    var showConflictDialog: Bool = false
+    package var showConflictDialog: Bool = false
 
     /// The current conflict awaiting resolution.
-    var currentConflict: FileConflict?
+    package var currentConflict: FileConflict?
 
     /// Whether to apply the chosen resolution to all remaining conflicts.
-    var applyToAll: Bool = false
+    package var applyToAll: Bool = false
 
     /// The stored resolution when "apply to all" is active.
     private var storedResolution: ConflictResolution?
@@ -45,22 +47,22 @@ final class FileOperationViewModel {
     private var currentTask: Task<Void, Never>?
 
     /// Error message to display if an operation fails.
-    var errorMessage: String?
+    package var errorMessage: String?
 
     /// Whether to show the error alert.
-    var showErrorAlert: Bool = false
+    package var showErrorAlert: Bool = false
 
     /// Whether the new folder dialog should be shown.
-    var showNewFolderDialog: Bool = false
+    package var showNewFolderDialog: Bool = false
 
     /// The name entered for the new folder.
-    var newFolderName: String = ""
+    package var newFolderName: String = ""
 
     /// Whether the rename dialog should be shown.
-    var showRenameDialog: Bool = false
+    package var showRenameDialog: Bool = false
 
     /// The item being renamed.
-    var renameItem: FileItem?
+    package var renameItem: FileItem?
 
     // MARK: - Dependencies
 
@@ -68,14 +70,14 @@ final class FileOperationViewModel {
 
     // MARK: - Init
 
-    init(operationService: FileOperationServiceProtocol = FileOperationService()) {
+    package init(operationService: FileOperationServiceProtocol = FileOperationService()) {
         self.operationService = operationService
     }
 
     // MARK: - Selected Items Helper
 
     /// Returns the selected non-parent items from the active panel.
-    func selectedItems(from panel: PanelViewModel) -> [FileItem] {
+    package func selectedItems(from panel: PanelViewModel) -> [FileItem] {
         panel.state.items.filter { item in
             panel.state.cursor.selected.contains(item.id) && !item.isParentDirectory
         }
@@ -84,7 +86,7 @@ final class FileOperationViewModel {
     // MARK: - Copy
 
     /// Initiates a copy operation from selected items in the source panel to the destination.
-    func requestCopy(
+    package func requestCopy(
         from sourcePanel: PanelViewModel,
         to destinationPanel: PanelViewModel
     ) {
@@ -104,7 +106,7 @@ final class FileOperationViewModel {
     // MARK: - Move
 
     /// Initiates a move operation from selected items in the source panel to the destination.
-    func requestMove(
+    package func requestMove(
         from sourcePanel: PanelViewModel,
         to destinationPanel: PanelViewModel
     ) {
@@ -124,7 +126,7 @@ final class FileOperationViewModel {
     // MARK: - Delete
 
     /// Initiates a delete (trash) operation for selected items in the panel.
-    func requestDelete(from panel: PanelViewModel) {
+    package func requestDelete(from panel: PanelViewModel) {
         let items = selectedItems(from: panel)
         guard !items.isEmpty else { return }
 
@@ -137,7 +139,7 @@ final class FileOperationViewModel {
     }
 
     /// Initiates immediate removal from disk (not Trash). Requires confirmation.
-    func requestPermanentDelete(from panel: PanelViewModel) {
+    package func requestPermanentDelete(from panel: PanelViewModel) {
         let items = selectedItems(from: panel)
         guard !items.isEmpty else { return }
 
@@ -153,13 +155,13 @@ final class FileOperationViewModel {
     // MARK: - New Folder
 
     /// Shows the new folder dialog.
-    func requestNewFolder() {
+    package func requestNewFolder() {
         newFolderName = "New Folder"
         showNewFolderDialog = true
     }
 
     /// Creates a new folder in the specified directory.
-    func performCreateFolder(in directory: URL) async {
+    package func performCreateFolder(in directory: URL) async {
         let name = newFolderName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return }
 
@@ -174,13 +176,13 @@ final class FileOperationViewModel {
     // MARK: - Rename
 
     /// Shows the rename dialog for the given item.
-    func requestRename(item: FileItem) {
+    package func requestRename(item: FileItem) {
         renameItem = item
         showRenameDialog = true
     }
 
     /// Performs the rename of the item.
-    func performRename(newName: String) async {
+    package func performRename(newName: String) async {
         guard let item = renameItem else { return }
         guard !newName.isEmpty, newName != item.name else {
             renameItem = nil
@@ -200,7 +202,7 @@ final class FileOperationViewModel {
     // MARK: - Confirmation Handling
 
     /// Called when the user confirms a pending operation.
-    func confirmOperation(
+    package func confirmOperation(
         reloadSource: @escaping () async -> Void,
         reloadDestination: @escaping () async -> Void
     ) {
@@ -217,7 +219,7 @@ final class FileOperationViewModel {
     }
 
     /// Called when the user cancels a pending operation.
-    func cancelConfirmation() {
+    package func cancelConfirmation() {
         pendingOperationType = nil
     }
 
@@ -447,7 +449,7 @@ final class FileOperationViewModel {
     }
 
     /// Called when the user selects a conflict resolution.
-    func resolveCurrentConflict(with resolution: ConflictResolution, applyToAll: Bool) {
+    package func resolveCurrentConflict(with resolution: ConflictResolution, applyToAll: Bool) {
         self.applyToAll = applyToAll
         if applyToAll {
             self.storedResolution = resolution
@@ -462,7 +464,7 @@ final class FileOperationViewModel {
     // MARK: - Cancellation
 
     /// Cancels the current running operation.
-    func cancelCurrentOperation() {
+    package func cancelCurrentOperation() {
         currentTask?.cancel()
         currentTask = nil
         showProgressOverlay = false

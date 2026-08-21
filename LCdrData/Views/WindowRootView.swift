@@ -1,17 +1,21 @@
 import SwiftUI
+import Core
+import Services
+import ViewModels
+import AppEnvironment
 
 /// One per window. Owns the per-window `AppState`, publishes it as a focused
 /// value for menu commands, captures bookmarks on panel navigation, and writes
 /// fresh paths back into the `PanelSession` so macOS state-restoration sees them.
-struct WindowRootView: View {
+package struct WindowRootView: View {
 
     @Binding var session: PanelSession
-    let env: AppEnvironment
+    package let env: AppEnvironment
 
     @State private var appState: AppState
     @Environment(\.controlActiveState) private var controlActiveState
 
-    init(session: Binding<PanelSession>, env: AppEnvironment) {
+    package init(session: Binding<PanelSession>, env: AppEnvironment) {
         self._session = session
         self.env = env
 
@@ -30,7 +34,7 @@ struct WindowRootView: View {
         env.mostRecentAppState = state
     }
 
-    var body: some View {
+    package var body: some View {
         MainWindowView()
             .environment(appState)
             .focusedSceneValue(\.appState, appState)

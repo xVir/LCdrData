@@ -299,7 +299,9 @@ mess.
 | 4 | Extract `AppEnvironment` | 193 tests |
 | 5 | Extract `Views`; `:LCdrDataLib` is now App-layer only | 193 tests |
 | 6 | Split the single test target into five per-module `macos_unit_test` targets (§6); fix `@testable import` lines | **Sum** of five targets = 193 |
-| 7 | Enable layering enforcement | 193 tests, no new warnings |
+| 7 | Verify layering enforcement (already provided by `deps` + `MemberImportVisibility`) | A lower layer importing an upper one fails to build |
+| 8 | Split the root `BUILD.bazel` into per-package BUILD files (§9) | Counts sum to 193; a visibility violation fails analysis |
+| 9 | Give each test folder its own BUILD file too, `Core` splitting into `Models` and `Utilities` (§9, last subsection) | Counts sum to 193; production visibility lists narrow |
 
 Keep the app target's `module_name` arrangement in mind: `@testable import
 LCdrData` currently resolves because `:LCdrDataLib` sets `module_name =
@@ -310,16 +312,32 @@ From step 6 onward `bazel test //...` reports **six** test targets — five unit
 test targets plus `//:LCdrDataUITests_build_test` — and no single one of them
 reports 193.
 
-At step 7, the feature is:
+### Step 7: layering is already enforced, and the feature does not help
 
-```bash
-bazel build //... --features=swift.layering_check
-```
+`swift.layering_check` exists in rules_swift 3.6.1 but is wired **only** to
+`SWIFT_ACTION_PRECOMPILE_C_MODULE` — it checks *Clang* module layering, not
+Swift. Confirmed by `bazel aquery`: passing the feature adds no flags to the
+Swift compile action, and it triggers no recompilation. This project has no C
+modules, so it is a no-op.
 
-**Not** `swift.layering_check_swift`, which does not exist — the only layering
-string in rules_swift 3.6.1 is `swift.layering_check`
-(`swift/internal/feature_names.bzl`). An earlier draft of the migration plan had
-this wrong. Once it passes cleanly, promote it to `.bazelrc` so it is permanent.
+The Swift-specific variant, `swift.layering_check_swift`, landed in
+**rules_swift 4.0** and is not in 3.6.1. Both earlier drafts of this plan named
+the wrong flag.
+
+Enforcement is nevertheless already in place, by two independent mechanisms:
+
+- **Explicit Bazel `deps`.** A module can only import what its `deps` declare.
+  Verified by adding `import Views` to `Core/Models/Cursor.swift`, which fails
+  with `error: no such module 'Views'`. This is the layering constraint, and it is
+  a hard build error rather than a warning.
+- **`MemberImportVisibility`.** Already enabled project-wide. A member is
+  unusable without importing its defining module, so a symbol cannot leak in
+  transitively. This was visible during steps 1 and 2, where it forced imports on
+  files whose only use of a module was through its members.
+
+Between them, the goal of step 7 is met. Revisit `swift.layering_check_swift`
+when upgrading to rules_swift 4.0, where it would additionally catch *declared
+but unused* dependencies — the one gap the two mechanisms above leave open.
 
 ## 8. Risks
 
@@ -337,12 +355,130 @@ flat set of sources. After this, Bazel enforces layering and Tuist does not, so
 code that violates a boundary still builds in Xcode and fails in Bazel. That is
 tolerable, but only if it is a known trade rather than a surprise.
 
-## 9. Definition of done
+## 9. Per-package BUILD files (step 8)
+
+Every module is currently defined in the **root** `BUILD.bazel`. That is not a
+design decision — the migration carved modules out of a pre-existing monolithic
+target, and leaving the definitions where that target already lived was the
+smallest change per step. Per-directory BUILD files are the idiomatic Bazel
+layout.
+
+### Why it is worth doing: visibility becomes real enforcement
+
+Bazel `visibility` only applies **across** packages. With everything in one
+package it does nothing, because targets in the same package can always see each
+other. Split into packages, each module can name exactly who may depend on it:
+
+```starlark
+# LCdrData/Services/BUILD.bazel
+swift_library(
+    name = "Services",
+    visibility = [
+        "//LCdrData/ViewModels:__pkg__",
+        "//LCdrData/Views:__pkg__",
+        "//LCdrData/App:__pkg__",
+    ],
+)
+```
+
+A `Core` → `Services` dependency then fails at **analysis time**, which is
+strictly stronger than step 7's `swift.layering_check`. Since the case for this
+whole phase rests on enforced layering rather than build speed (§1), that is a
+material upgrade rather than housekeeping.
+
+### The blocker: two modules do not map to directories
+
+A Bazel package covers its own directory plus subdirectories without their own
+BUILD file. It **cannot** glob into a sibling directory.
+
+| Module | Sources | Per-package feasible? |
+|---|---|---|
+| `Core` | `Models/**` + `Utilities/**` | **No** — two sibling directories |
+| `Services` | `Services/**` | Yes |
+| `ViewModels` | `ViewModels/**` | Yes |
+| `Views` | `Views/**` | Yes |
+| `AppEnvironment` | `App/AppEnvironment.swift` | Yes — one BUILD file can define two targets |
+| `App` | `App/**` minus that file | Yes, same package as above |
+
+Only `Core` is genuinely blocked. Fixing it means making the directory layout
+match the module layout — moving `Models/` and `Utilities/` under
+`LCdrData/Core/` — which also updates the Tuist source globs.
+
+### Why step 8 and not step 0
+
+Deliberately sequenced last. Restructuring directories mid-extraction would aim
+the remaining steps at a moving target, and step 5 in particular has to carve
+`App/` into two modules, which is easier to reason about before directories move.
+
+### Two output-path collisions to expect
+
+Bazel forbids one action's output path being a prefix of another's, and macOS
+filesystems are case-insensitive by default. Both bite here:
+
+- **An app target named `LCdrData` in the repo root collides with the
+  `LCdrData/` package subtree** — `bin/LCdrData` is a prefix of
+  `bin/LCdrData/Core/...`. Fix: move the app target *into* the `LCdrData`
+  package, so its output is `bin/LCdrData/<name>`.
+- **Naming that target `app` then collides with the `App/` layer package** —
+  `bin/LCdrData/app` and `bin/LCdrData/App/` are the same path when case is
+  ignored. Fix: name the target for its package, giving `//LCdrData`, which also
+  reads better than `//LCdrData:app`.
+
+`bundle_name = "LCdrData"` keeps the product `LCdrData.app` regardless of the
+target name, so neither rename affects the shipped artifact.
+
+### The test tree gets the same treatment (step 9)
+
+Step 8 left `LCdrDataTests/` as a single package holding all six test targets.
+Because the test folders already mirror the module layout (§6), each becomes a
+package with no source moves at all — only the BUILD file is split six ways, and
+`LCdrDataTests/BUILD.bazel` disappears entirely since no sources sit at that
+level. `bazel test //LCdrDataTests/...` is unaffected.
+
+Test targets are named for their package, matching the app target's convention,
+so a single module's tests run as `bazel test //LCdrDataTests/Services` rather
+than `//LCdrDataTests:ServicesTests`. Swift module names keep the `Tests` suffix
+(`module_name = "ServicesTests"`), as do the bundle IDs.
+
+The payoff is the same as for production modules: visibility stops being a
+subtree-wide grant. `ViewModels` was previously visible to `//LCdrDataTests` as a
+whole; it is now visible to the two test packages that actually import it, and
+`AppEnvironment` to three. Verified by pointing the `Core` tests at `ViewModels`,
+which fails with `Visibility error`.
+
+One dependency turned out to be unnecessary and was dropped: the `Core` tests
+never imported `TestSupport`.
+
+The test tree also splits **one level deeper than production**. `Core` has to be
+a single module because `Models` and `Utilities` are mutually dependent (§9), but
+its tests are not — nothing in `Core/Models` imports `Core/Utilities` or the
+reverse — so each is its own package and its own `macos_unit_test`:
+`//LCdrDataTests/Core/Models` (50 tests) and `//LCdrDataTests/Core/Utilities`
+(18). That makes seven test targets in `bazel test //...` including UI test
+compile coverage.
+
+This is where the tightened visibility earns its keep. Neither `Core` test
+package appears in `//LCdrData/Services`'s visibility list, so an `import
+Services` in a test for the bottom layer fails at analysis time instead of
+quietly widening the graph. All eight files carried exactly that import, unused
+— a leftover from when the tests were one flat target — with one real exception:
+four tests in `Core/Models/FileOperationTests.swift` covered
+`FileOperationError`, which is declared in `Services/FileOperationService.swift`.
+They moved to `LCdrDataTests/Services/FileOperationServiceTests.swift`, beside
+the type they test, which is why `Models` reports 50 rather than the 54 implied
+by the old `CoreTests` total of 72 and `Services` reports 46 rather than 42.
+
+That is the general shape of the answer whenever a test target wants a
+dependency its layer should not have: the test is usually filed in the wrong
+place, and moving it is preferable to widening the visibility list or splitting
+the library in two.
+
+## 10. Definition of done
 
 - Six `swift_library` targets with explicit `deps`, no cycles.
-- Five per-module `macos_unit_test` targets, each with a unique `bundle_id`, whose
+- Six per-module `macos_unit_test` targets, each with a unique `bundle_id`, whose
   counts **sum** to 193.
-- `bazel test //...` green across all six test targets, including UI test compile
+- `bazel test //...` green across all seven test targets, including UI test compile
   coverage.
 - `--features=swift.layering_check` passes with no undeclared-dependency warnings.
 - `scripts/run-ui-tests.sh` no worse than before (note

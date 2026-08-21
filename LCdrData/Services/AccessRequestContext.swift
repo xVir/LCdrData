@@ -2,7 +2,7 @@ import Foundation
 
 /// Describes which kind of access request is being made. Drives alert copy,
 /// button labels, and the `NSOpenPanel.directoryURL` for the presenter.
-enum AccessRequestContext: Sendable, Equatable {
+package enum AccessRequestContext: Sendable, Equatable {
 
     /// First-launch prompt for Home folder access.
     case startup
@@ -18,7 +18,7 @@ enum AccessRequestContext: Sendable, Equatable {
 
     /// The resolved-target URL this request is conceptually about — used as
     /// the dedup key for single-flight coalescing across concurrent callers.
-    var dedupKey: URL {
+    package var dedupKey: URL {
         switch self {
         case .startup:
             return FileManager.default.homeDirectoryForCurrentUser

@@ -4,14 +4,15 @@ import Foundation
 /// Abstracts the user-facing flow that asks for sandbox folder access. The
 /// production implementation drives NSAlert + NSOpenPanel; tests inject a
 /// fake that returns deterministic results.
-protocol AccessPresenter: Sendable {
+package protocol AccessPresenter: Sendable {
     func present(_ context: AccessRequestContext) async -> URL?
 }
 
 /// A presenter that always cancels — used as a safe default for tests and
 /// previews that never need to drive the access dialog.
-struct NoopAccessPresenter: AccessPresenter {
-    func present(_ context: AccessRequestContext) async -> URL? { nil }
+package struct NoopAccessPresenter: AccessPresenter {
+    package init() {}
+    package func present(_ context: AccessRequestContext) async -> URL? { nil }
 }
 
 /// Production presenter: shows the existing NSOpenPanel pre-navigated to the
@@ -19,9 +20,10 @@ struct NoopAccessPresenter: AccessPresenter {
 /// "Skip for Now" wording, etc.) lands in the follow-on commit; until then
 /// this preserves current behaviour.
 @MainActor
-struct NSOpenPanelAccessPresenter: AccessPresenter {
+package struct NSOpenPanelAccessPresenter: AccessPresenter {
+    package init() {}
 
-    func present(_ context: AccessRequestContext) async -> URL? {
+    package func present(_ context: AccessRequestContext) async -> URL? {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
         panel.canChooseDirectories = true

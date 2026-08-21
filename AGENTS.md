@@ -20,8 +20,8 @@ This repo uses **two build tools on purpose**. Neither is being phased out.
 
 | Task | Tool | Command |
 |------|------|---------|
-| Build the app | **Bazel** | `bazel build //:LCdrData` |
-| Run unit tests | **Bazel** | `bazel test //:LCdrDataTests` |
+| Build the app | **Bazel** | `bazel build //LCdrData` |
+| Run unit tests | **Bazel** | `bazel test //LCdrDataTests/...` |
 | Generate an Xcode project | **Tuist** | `tuist generate` |
 | Run UI tests | **Tuist**, via script | `scripts/run-ui-tests.sh` |
 | Declare a dependency | **Both** read `Tuist/Package.swift` |
@@ -46,7 +46,8 @@ Bazel builds the app and runs the unit tests. Version pinned in `.bazelversion`:
 |------|---------|
 | `MODULE.bazel` | bzlmod dependencies (`rules_apple`, `rules_swift`, `apple_support`, `rules_swift_package_manager`) |
 | `MODULE.bazel.lock` | Committed on purpose, for reproducible resolution |
-| `BUILD.bazel` | App, unit test, and UI test targets |
+| `BUILD.bazel` | Root: shared config only. Targets live in per-package BUILD files |
+| `defs.bzl` | Shared `SWIFT_COPTS` and `PACKAGE_NAME` |
 | `.bazelrc` | macOS deployment target, pinned `DEVELOPER_DIR`, the `release` config |
 | `.bazelignore` | Keeps Bazel out of `Tuist/.build`, `Derived/`, and the generated Xcode projects |
 | `Bazel/Info.plist` | Hand-written app plist |
@@ -60,9 +61,17 @@ No setup step is needed — Bazel resolves everything on first build.
 - **Debug builds carry extra entitlements, and must.** An app-hosted `macos_unit_test`
   cannot bootstrap without them: the sandboxed host is refused its connection to
   `testmanagerd`. `--config=release` selects the two-key production set.
-- **`bazel build //:LCdrData` outputs `bazel-bin/LCdrData.zip`**, not a `.app` directory.
-  Unzip it to inspect or run it.
-- **The unit test target is tagged `local`.** It does not run inside Bazel's sandbox.
+- **`bazel build //LCdrData` outputs `bazel-bin/LCdrData/LCdrData.zip`**, not a `.app`
+  directory. Unzip it to inspect or run it.
+- **Each module declares who may depend on it** via `visibility` in its own BUILD file, so
+  a layering violation is an analysis-time error. The app target is named for its package
+  (`//LCdrData`) rather than `app`, because `bin/LCdrData/app` and `bin/LCdrData/App/` are
+  the same path on a case-insensitive filesystem.
+- **The unit test targets are tagged `local`.** They do not run inside Bazel's sandbox.
+- **Every test target declares `size = "small"`.** Each runs in roughly 7–10s, which is
+  below the range Bazel expects of the default `medium` size, so without it every run ends
+  in `Consider setting timeout="short" or size="small"` warnings. The resulting timeout is
+  60s — ample, but worth knowing if a test ever starts hanging rather than failing.
 - **UI tests are tagged `manual`**, so wildcards skip them. `//:LCdrDataUITests_build_test`
   provides their compile coverage instead.
 
@@ -118,19 +127,19 @@ Use Bazel:
 
 ```bash
 # Build (debug — the default configuration)
-bazel build //:LCdrData
+bazel build //LCdrData
 
 # Build (release — optimised, production entitlements)
-bazel build //:LCdrData --config=release
+bazel build //LCdrData --config=release
 
 # Clean
 bazel clean
 ```
 
-The output is `bazel-bin/LCdrData.zip`. Unzip it to get `LCdrData.app`:
+The output is `bazel-bin/LCdrData/LCdrData.zip`. Unzip it to get `LCdrData.app`:
 
 ```bash
-unzip -o bazel-bin/LCdrData.zip -d /tmp/lcdr && open /tmp/lcdr/LCdrData.app
+unzip -o bazel-bin/LCdrData/LCdrData.zip -d /tmp/lcdr && open /tmp/lcdr/LCdrData.app
 ```
 
 Building through Xcode still works after `tuist generate`, and is the right choice when you
@@ -153,19 +162,29 @@ The project uses two test frameworks:
 ### Unit tests — Bazel
 
 ```bash
-# Run unit tests (use this during development)
-bazel test //:LCdrDataTests
+# Run all unit tests (use this during development)
+bazel test //LCdrDataTests/...
 
-# Run everything Bazel is willing to run: unit tests + UI test compile coverage
+# One module's tests — each test folder is its own package, and the target is
+# named for it, so the label is just the folder
+bazel test //LCdrDataTests/Services
+bazel test //LCdrDataTests/Core/Models
+
+# Everything Bazel is willing to run: unit tests + UI test compile coverage
 bazel test //...
 
 # Force a re-run, ignoring cached results
-bazel test //:LCdrDataTests --nocache_test_results
+bazel test //LCdrDataTests/... --nocache_test_results
 ```
 
-The suite is **193 test cases**. Take the count from Swift Testing's own summary line in the
-test log — `Test run with 193 tests in 23 suites passed` — rather than counting `✔` marks,
-which over-counts by including that summary.
+The suite is **193 test cases split across six targets** — Core/Models 50, Core/Utilities 18,
+Services 46, ViewModels 69, AppEnvironment 9, App 1. They **sum** to 193; no single target
+reports that number, so a target showing 50 is not a sign of lost tests.
+
+Take counts from Swift Testing's own summary line in each test log
+(`Test run with 50 tests in ... passed`) rather than counting `✔` marks, which over-counts
+by including the summary line itself. Note the line reads "1 test" singular for
+`AppTests`.
 
 > One test is currently **skipped**, not run: `FileOperationServiceTests.trashFile()` is
 > marked `@Test(.disabled(...))`. It still counts toward the 193, so a green run does not
@@ -213,7 +232,8 @@ If added later, update this section.
 LCdrData/
 ├── MODULE.bazel                # Bazel dependencies (bzlmod)
 ├── MODULE.bazel.lock           # Committed for reproducible resolution
-├── BUILD.bazel                 # App, unit test and UI test targets
+├── BUILD.bazel                 # Shared config; targets are per-package
+├── defs.bzl                    # Shared SWIFT_COPTS and PACKAGE_NAME
 ├── .bazelrc                    # Deployment target, DEVELOPER_DIR, release config
 ├── .bazelversion               # Pinned Bazel version (9.2.0)
 ├── .bazelignore                # Directories Bazel must not traverse
@@ -226,16 +246,26 @@ LCdrData/
 ├── .tuist-version              # Pinned Tuist version (4.182.0)
 ├── scripts/
 │   └── run-ui-tests.sh         # UI test runner (delegates to Tuist)
-├── LCdrData/                   # Main app target
-│   ├── App/                    # App entry point and delegate
+├── LCdrData/                   # BUILD.bazel here defines //LCdrData (the app)
+│   ├── Core/                   # Layer 1 — one module
+│   │   ├── Models/             # Data models
+│   │   └── Utilities/          # Formatters, keyboard shortcuts
+│   ├── Services/               # Layer 2 — file system and sandbox services
+│   ├── ViewModels/             # Layer 3 — observable state objects
+│   ├── App/                    # Layer 4 (AppEnvironment) + layer 6 (entry point)
+│   ├── Views/                  # Layer 5 — SwiftUI views
 │   ├── AppIcon.icon/           # Icon Composer bundle (used by Bazel)
-│   ├── Assets.xcassets/        # Asset catalog (.appiconset used by Tuist)
-│   ├── Models/                 # Data models
-│   ├── Services/               # File system and sandbox services
-│   ├── Utilities/              # Formatters, keyboard shortcuts
-│   ├── ViewModels/             # Observable state objects
-│   └── Views/                  # SwiftUI views
-├── LCdrDataTests/              # Unit tests (Swift Testing)
+│   └── Assets.xcassets/        # Asset catalog (.appiconset used by Tuist)
+├── LCdrDataTests/              # Unit tests (Swift Testing); every folder here
+│                               # is its own Bazel package and test target
+│   ├── Core/                   # Mirrors the production layout, but as two
+│   │   ├── Models/             # packages: the test files, unlike the
+│   │   └── Utilities/          # production sources, are not interdependent
+│   ├── Services/
+│   ├── ViewModels/
+│   ├── AppEnvironment/
+│   ├── App/
+│   └── TestSupport/            # Test doubles shared across test targets
 ├── LCdrDataUITests/            # UI tests (XCTest)
 ├── Derived/                    # Tuist-generated files (gitignored)
 ├── docs/
@@ -247,6 +277,7 @@ LCdrData/
 │   ├── MULTIWINDOW.md
 │   ├── SANDBOX_ACCESS_REDESIGN.md
 │   └── parity-baseline/        # Tuist reference bundle + parity report
+├── README.md                   # Project overview, build and run instructions
 └── AGENTS.md                   # This file (CLAUDE.md is a symlink to it)
 ```
 

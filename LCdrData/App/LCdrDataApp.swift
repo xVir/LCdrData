@@ -1,4 +1,9 @@
 import SwiftUI
+import Core
+import Services
+import ViewModels
+import AppEnvironment
+import Views
 
 @main
 struct LCdrDataApp: App {
@@ -24,23 +29,4 @@ struct LCdrDataApp: App {
             ConfigurationView(configuration: env.configuration)
         }
     }
-}
-
-// MARK: - Focused scene value
-
-struct ActiveAppStateKey: FocusedValueKey {
-    typealias Value = AppState
-}
-
-extension FocusedValues {
-    var appState: AppState? {
-        get { self[ActiveAppStateKey.self] }
-        set { self[ActiveAppStateKey.self] = newValue }
-    }
-}
-
-// MARK: - Notifications
-
-extension Notification.Name {
-    static let lcdrConfigurationApplied = Notification.Name("LCDR.configurationApplied")
 }

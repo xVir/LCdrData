@@ -1,18 +1,21 @@
 import Foundation
+import Core
+import Services
+import ViewModels
 
 /// Brackets `startAccessingSecurityScopedResource` so tests can stand in for
 /// the kernel-backed call without acquiring real scopes.
-protocol SecurityScopeActivating: Sendable {
+package protocol SecurityScopeActivating: Sendable {
     func startAccessing(_ url: URL) -> Bool
     func stopAccessing(_ url: URL)
 }
 
 /// Production activator: forwards to the URL extension methods.
-struct SystemSecurityScopeActivator: SecurityScopeActivating {
-    func startAccessing(_ url: URL) -> Bool {
+package struct SystemSecurityScopeActivator: SecurityScopeActivating {
+    package func startAccessing(_ url: URL) -> Bool {
         url.startAccessingSecurityScopedResource()
     }
-    func stopAccessing(_ url: URL) {
+    package func stopAccessing(_ url: URL) {
         url.stopAccessingSecurityScopedResource()
     }
 }
@@ -20,19 +23,19 @@ struct SystemSecurityScopeActivator: SecurityScopeActivating {
 /// Holds application-wide services shared across every window. Per-window state
 /// lives in `AppState`, owned by each `WindowRootView`.
 @MainActor
-final class AppEnvironment {
+package final class AppEnvironment {
 
-    let configuration: ConfigurationService
-    let bookmarkStore: BookmarkStoreProtocol
-    let sandboxAccess: SandboxAccessService
-    let scopeActivator: SecurityScopeActivating
-    let sessionStore: PanelSessionStoring
-    weak var mostRecentAppState: AppState?
+    package let configuration: ConfigurationService
+    package let bookmarkStore: BookmarkStoreProtocol
+    package let sandboxAccess: SandboxAccessService
+    package let scopeActivator: SecurityScopeActivating
+    package let sessionStore: PanelSessionStoring
+    package weak var mostRecentAppState: AppState?
 
-    private(set) var activeScopes: [URL] = []
+    package private(set) var activeScopes: [URL] = []
     private var hasStarted: Bool = false
 
-    init() {
+    package init() {
         let configuration = ConfigurationService()
         try? configuration.load()
         self.configuration = configuration
@@ -46,7 +49,7 @@ final class AppEnvironment {
         self.sessionStore = PanelSessionStore()
     }
 
-    init(
+    package init(
         configuration: ConfigurationService,
         bookmarkStore: BookmarkStoreProtocol,
         sandboxAccess: SandboxAccessService? = nil,
@@ -68,7 +71,7 @@ final class AppEnvironment {
     /// Idempotent — subsequent calls are no-ops. Bookmarks that fail to start
     /// scope are silently skipped (they remain in the store and may succeed
     /// on a later launch — e.g. an unmounted volume).
-    func start() async {
+    package func start() async {
         guard !hasStarted else { return }
         hasStarted = true
         let urls = bookmarkStore.allBookmarkURLs()
@@ -86,7 +89,7 @@ final class AppEnvironment {
 
     /// Releases every scope acquired via `start()` or via a runtime grant.
     /// Call from `applicationWillTerminate`.
-    func releaseAllScopes() {
+    package func releaseAllScopes() {
         for url in activeScopes {
             scopeActivator.stopAccessing(url)
         }
@@ -98,7 +101,7 @@ final class AppEnvironment {
     /// window's directories (so Cmd+N opens beside what you are looking at),
     /// then the directories recorded on the previous run, and only falls back to
     /// Home on a first launch.
-    func makeFreshSession() -> PanelSession {
+    package func makeFreshSession() -> PanelSession {
         if let frontmost = mostRecentAppState {
             return PanelSession(
                 leftPath: frontmost.leftPanel.state.currentDirectory.path,
@@ -113,7 +116,7 @@ final class AppEnvironment {
     }
 
     /// Records a window's directories as the ones to resume on the next launch.
-    func rememberLastSession(_ session: PanelSession) {
+    package func rememberLastSession(_ session: PanelSession) {
         sessionStore.save(leftPath: session.leftPath, rightPath: session.rightPath)
     }
 }

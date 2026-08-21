@@ -1,16 +1,20 @@
 import SwiftUI
+import Core
+import Services
+import ViewModels
+import AppEnvironment
 
 /// Root view: two side-by-side file panels with a resizable splitter,
 /// a toolbar area, and a command bar at the bottom.
 /// Handles global keyboard shortcuts that apply to the active panel.
-struct MainWindowView: View {
+package struct MainWindowView: View {
 
     @Environment(AppState.self) private var appState
     @FocusState private var focusedPanel: PanelSide?
 
     private var runner: CommandRunner { appState.commands }
 
-    var body: some View {
+    package var body: some View {
         @Bindable var ops = appState.fileOperations
         let dateFormat = appState.configuration.current.appearanceDateFormat
         let fontSize = CGFloat(appState.configuration.current.appearanceFontSize)
@@ -287,32 +291,32 @@ struct MainWindowView: View {
 
 private struct KeyShortcutModifier: ViewModifier {
 
-    let keyboardRoutingActive: Bool
-    let onTab: () -> Void
-    let onReturn: () -> Void
-    let onCmdL: () -> Void
-    let onCmdDown: () -> Void
-    let onCmdShiftA: () -> Void
+    package let keyboardRoutingActive: Bool
+    package let onTab: () -> Void
+    package let onReturn: () -> Void
+    package let onCmdL: () -> Void
+    package let onCmdDown: () -> Void
+    package let onCmdShiftA: () -> Void
     /// Returns true if handled
-    let onEscape: () -> Bool
+    package let onEscape: () -> Bool
     /// Returns true if key was consumed
-    let onSpace: () -> Bool
-    let onHome: () -> Void
-    let onEnd: () -> Void
-    let onF3: () -> Void
-    let onF4: () -> Void
-    let onF2: () -> Void
-    let onF5: () -> Void
-    let onF6: () -> Void
-    let onF7: () -> Void
-    let onF8: () -> Void
+    package let onSpace: () -> Bool
+    package let onHome: () -> Void
+    package let onEnd: () -> Void
+    package let onF3: () -> Void
+    package let onF4: () -> Void
+    package let onF2: () -> Void
+    package let onF5: () -> Void
+    package let onF6: () -> Void
+    package let onF7: () -> Void
+    package let onF8: () -> Void
     /// Plain Delete / forward-delete — parent directory (not Trash).
-    let onDeleteKeyNavigateParent: () -> Void
-    let onPermanentDelete: () -> Void
-    let pathEditingBlocksDelete: () -> Bool
-    let typeAhead: (KeyPress) -> KeyPress.Result
+    package let onDeleteKeyNavigateParent: () -> Void
+    package let onPermanentDelete: () -> Void
+    package let pathEditingBlocksDelete: () -> Bool
+    package let typeAhead: (KeyPress) -> KeyPress.Result
 
-    func body(content: Content) -> some View {
+    package func body(content: Content) -> some View {
         content
             .onKeyPress(.tab, phases: .down) { _ in
                 guard keyboardRoutingActive else { return .ignored }

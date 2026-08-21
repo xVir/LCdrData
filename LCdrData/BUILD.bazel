@@ -1,0 +1,41 @@
+load("@build_bazel_rules_apple//apple:macos.bzl", "macos_application")
+
+# The application bundle: `bazel build //LCdrData`.
+#
+# It lives in this package rather than the repo root so its output path does not
+# become a prefix of the module packages' outputs (bin/LCdrData/Core/... and so
+# on), which Bazel forbids.
+#
+# The target is named for the package, which makes `//LCdrData` valid shorthand.
+# It cannot be called `app`: that would produce bin/LCdrData/app, which on a
+# case-insensitive filesystem is the same path as bin/LCdrData/App/ from the
+# App layer's package.
+#
+# bundle_name keeps the product LCdrData.app regardless of the target name.
+macos_application(
+    name = "LCdrData",
+    # rules_apple rejects .appiconset for macOS 26+ targets, so the Bazel build
+    # uses an Icon Composer .icon bundle. The .appiconset is kept for Tuist and
+    # excluded from resources below: any ".appiconset/" path in the compiled
+    # catalog trips the same check.
+    app_icons = glob(["AppIcon.icon/**"]),
+    bundle_id = "com.xvir.LCdrData",
+    bundle_name = "LCdrData",
+    # Mirrors Xcode: debug builds carry get-task-allow plus the testmanagerd
+    # mach-lookup exceptions, release builds carry only the two production keys.
+    # This is not merely for debugging comfort — an app-hosted macos_unit_test
+    # cannot bootstrap without them, because the sandboxed host is refused a
+    # connection to testmanagerd and the runner exits before XCTest attaches.
+    entitlements = select({
+        "//:release_build": "//Bazel:LCdrData.entitlements",
+        "//conditions:default": "//Bazel:LCdrData.debug.entitlements",
+    }),
+    infoplists = ["//Bazel:Info.plist"],
+    minimum_os_version = "26.4",
+    resources = ["Resources/DefaultConfig.kdl"] + glob(
+        ["Assets.xcassets/**"],
+        exclude = ["Assets.xcassets/AppIcon.appiconset/**"],
+    ),
+    visibility = ["//visibility:public"],
+    deps = ["//LCdrData/App:LCdrDataLib"],
+)

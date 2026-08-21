@@ -1,23 +1,27 @@
 import SwiftUI
+import Core
+import Services
+import ViewModels
+import AppEnvironment
 
 /// A sheet dialog for renaming a file or directory.
 /// Uses its own `@State` for the text field so the name is always
 /// initialized fresh from the item — no stale binding issues.
-struct RenameDialogView: View {
+package struct RenameDialogView: View {
 
-    let item: FileItem
-    let onRename: (String) -> Void
+    package let item: FileItem
+    package let onRename: (String) -> Void
 
     @State private var newName: String
     @Environment(\.dismiss) private var dismiss
 
-    init(item: FileItem, onRename: @escaping (String) -> Void) {
+    package init(item: FileItem, onRename: @escaping (String) -> Void) {
         self.item = item
         self.onRename = onRename
         self._newName = State(initialValue: item.name)
     }
 
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 16) {
             Text("Rename")
                 .font(.headline)

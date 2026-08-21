@@ -1,0 +1,29 @@
+load("@build_bazel_rules_apple//apple:macos.bzl", "macos_unit_test")
+load("@build_bazel_rules_swift//swift:swift_library.bzl", "swift_library")
+load("//:defs.bzl", "PACKAGE_NAME", "SWIFT_COPTS")
+
+# Tests for //LCdrData/ViewModels.
+swift_library(
+    name = "ViewModelsTestsLib",
+    testonly = True,
+    srcs = glob(["**/*.swift"]),
+    copts = SWIFT_COPTS,
+    module_name = "ViewModelsTests",
+    package_name = PACKAGE_NAME,
+    deps = [
+        "//LCdrData/Core",
+        "//LCdrData/Services",
+        "//LCdrData/ViewModels",
+        "//LCdrDataTests/TestSupport",
+    ],
+)
+
+macos_unit_test(
+    name = "ViewModels",
+    bundle_id = "com.xvir.LCdrData.ViewModelsTests",
+    minimum_os_version = "26.4",
+    size = "small",
+    tags = ["local"],
+    test_host = "//LCdrData",
+    deps = [":ViewModelsTestsLib"],
+)

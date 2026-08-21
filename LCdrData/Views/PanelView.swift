@@ -1,8 +1,12 @@
 import SwiftUI
+import Core
+import Services
+import ViewModels
+import AppEnvironment
 
 /// A single file panel containing a path bar, file table, and status bar.
 /// Visually indicates whether it is the active (focused) panel.
-struct PanelView: View {
+package struct PanelView: View {
 
     @Bindable var viewModel: PanelViewModel
     @Environment(AppState.self) private var appState
@@ -11,7 +15,7 @@ struct PanelView: View {
         appState.activePanel == viewModel.side
     }
 
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 0) {
             PathBarView(viewModel: viewModel)
 

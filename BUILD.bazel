@@ -1,128 +1,22 @@
-load(
-    "@build_bazel_rules_apple//apple:macos.bzl",
-    "macos_application",
-    "macos_build_test",
-    "macos_ui_test",
-    "macos_unit_test",
-)
-load("@build_bazel_rules_swift//swift:swift_library.bzl", "swift_library")
+# Targets live in per-package BUILD files so each module can declare, via
+# `visibility`, exactly which layers may depend on it:
+#
+#   //LCdrData                      the application bundle
+#   //LCdrData/Core                 layer 1
+#   //LCdrData/Services             layer 2
+#   //LCdrData/ViewModels           layer 3
+#   //LCdrData/App:AppEnvironment   layer 4
+#   //LCdrData/Views                layer 5
+#   //LCdrData/App:LCdrDataLib      layer 6
+#   //LCdrDataTests/<Module>        one test target per module, named for it
+#                                   (Core splits further into Models/Utilities)
+#   //LCdrDataTests/TestSupport     shared test doubles
+#
+# This package holds only the shared configuration below.
 
 # Set by `--config=release` in .bazelrc.
 config_setting(
     name = "release_build",
     values = {"compilation_mode": "opt"},
-)
-
-# Mirrors the Tuist build settings in Project.swift. SWIFT_VERSION is 5.0, which
-# is why SWIFT_APPROACHABLE_CONCURRENCY expands to five upcoming features here
-# rather than the two it would enable in Swift 6 language mode.
-SWIFT_COPTS = [
-    "-swift-version",
-    "5",
-    "-default-isolation=MainActor",
-    "-enable-upcoming-feature",
-    "DisableOutwardActorInference",
-    "-enable-upcoming-feature",
-    "GlobalActorIsolatedTypesUsability",
-    "-enable-upcoming-feature",
-    "InferIsolatedConformances",
-    "-enable-upcoming-feature",
-    "InferSendableFromCaptures",
-    "-enable-upcoming-feature",
-    "NonisolatedNonsendingByDefault",
-    "-enable-upcoming-feature",
-    "MemberImportVisibility",
-]
-
-# module_name is load-bearing: @testable import LCdrData in the test target
-# depends on it.
-swift_library(
-    name = "LCdrDataLib",
-    srcs = glob(["LCdrData/**/*.swift"]),
-    copts = SWIFT_COPTS,
-    module_name = "LCdrData",
-    deps = ["@swiftpkg_kdl_swift//:KDL"],
-)
-
-macos_application(
-    name = "LCdrData",
-    # rules_apple rejects .appiconset outright for macOS 26+ targets, so the
-    # Bazel build uses an Icon Composer .icon bundle. The .appiconset is kept for
-    # Tuist and excluded from resources below: the two cannot both be present,
-    # since any ".appiconset/" path in the compiled catalog trips the same check.
-    app_icons = glob(["LCdrData/AppIcon.icon/**"]),
-    bundle_id = "com.xvir.LCdrData",
-    bundle_name = "LCdrData",
-    # Mirrors Xcode: debug builds carry get-task-allow plus the testmanagerd
-    # mach-lookup exceptions, release builds carry only the two production keys.
-    # This is not merely for debugging comfort — an app-hosted macos_unit_test
-    # cannot bootstrap without them, because the sandboxed host is refused a
-    # connection to testmanagerd and the runner exits before XCTest attaches.
-    entitlements = select({
-        ":release_build": "Bazel/LCdrData.entitlements",
-        "//conditions:default": "Bazel/LCdrData.debug.entitlements",
-    }),
-    infoplists = ["Bazel/Info.plist"],
-    minimum_os_version = "26.4",
-    resources = ["LCdrData/Resources/DefaultConfig.kdl"] + glob(
-        ["LCdrData/Assets.xcassets/**"],
-        exclude = ["LCdrData/Assets.xcassets/AppIcon.appiconset/**"],
-    ),
-    deps = [":LCdrDataLib"],
-)
-
-swift_library(
-    name = "LCdrDataTestsLib",
-    testonly = True,
-    srcs = glob(["LCdrDataTests/**/*.swift"]),
-    copts = SWIFT_COPTS,
-    module_name = "LCdrDataTests",
-    deps = [":LCdrDataLib"],
-)
-
-# test_host is required, not optional: ConfigurationServiceTests passes
-# Bundle.main into ConfigurationService, which then looks up DefaultConfig.kdl.
-# Library-test mode would resolve Bundle.main to the test runner and fail.
-#
-# tags = ["local"] is also required. Under Bazel's darwin sandbox the test host
-# never establishes its connection to testmanagerd, and xcodebuild waits until
-# the 300s timeout with no error beyond a benign "Supported platforms ... is
-# empty" notice. Unsandboxed, the same bundle runs in ~10s.
-macos_unit_test(
-    name = "LCdrDataTests",
-    bundle_id = "com.xvir.LCdrDataTests",
-    minimum_os_version = "26.4",
-    tags = ["local"],
-    test_host = ":LCdrData",
-    deps = [":LCdrDataTestsLib"],
-)
-
-swift_library(
-    name = "LCdrDataUITestsLib",
-    testonly = True,
-    srcs = glob(["LCdrDataUITests/**/*.swift"]),
-    copts = SWIFT_COPTS,
-    module_name = "LCdrDataUITests",
-)
-
-# Bazel builds this but never runs it. rules_apple's default runner refuses
-# XCUITEST outright (see docs/BAZEL_MIGRATION.md 2.4), so execution belongs to
-# scripts/run-ui-tests.sh, which delegates to Tuist. tags = ["manual"] keeps the
-# target out of `bazel test //...` and `bazel build //...`.
-macos_ui_test(
-    name = "LCdrDataUITests",
-    bundle_id = "com.xvir.LCdrDataUITests",
-    minimum_os_version = "26.4",
-    tags = ["manual"],
-    test_host = ":LCdrData",
-    deps = [":LCdrDataUITestsLib"],
-)
-
-# Compile coverage for the UI test sources. Because macos_ui_test is manual, it
-# is skipped by wildcard patterns; this build test is not, so `bazel test //...`
-# still fails if a UI test stops compiling.
-macos_build_test(
-    name = "LCdrDataUITests_build_test",
-    minimum_os_version = "26.4",
-    targets = [":LCdrDataUITestsLib"],
+    visibility = ["//visibility:public"],
 )

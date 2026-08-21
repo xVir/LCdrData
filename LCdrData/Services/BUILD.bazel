@@ -1,0 +1,30 @@
+load("@build_bazel_rules_swift//swift:swift_library.bzl", "swift_library")
+load("//:defs.bzl", "PACKAGE_NAME", "SWIFT_COPTS")
+
+# Layer 2. KDL lives here because ConfigurationService is its only consumer.
+swift_library(
+    name = "Services",
+    srcs = glob(["**/*.swift"]),
+    copts = SWIFT_COPTS,
+    module_name = "Services",
+    package_name = PACKAGE_NAME,
+    # Core must NOT appear here: that is the layering constraint, enforced by
+    # Bazel at analysis time rather than left to review.
+    visibility = [
+        "//LCdrData/App:__pkg__",
+        "//LCdrData/ViewModels:__pkg__",
+        "//LCdrData/Views:__pkg__",
+        # Neither //LCdrDataTests/Core package appears here, on purpose: tests
+        # for the bottom layer have no business reaching into Services, and a
+        # test that needs one of its types belongs beside that type instead.
+        "//LCdrDataTests/App:__pkg__",
+        "//LCdrDataTests/AppEnvironment:__pkg__",
+        "//LCdrDataTests/Services:__pkg__",
+        "//LCdrDataTests/TestSupport:__pkg__",
+        "//LCdrDataTests/ViewModels:__pkg__",
+    ],
+    deps = [
+        "//LCdrData/Core",
+        "@swiftpkg_kdl_swift//:KDL",
+    ],
+)

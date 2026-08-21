@@ -1,11 +1,15 @@
 import SwiftUI
+import Core
+import Services
+import ViewModels
+import AppEnvironment
 
 /// Per-panel status bar showing item count, selection count, and total size.
-struct StatusBarView: View {
+package struct StatusBarView: View {
 
-    let viewModel: PanelViewModel
+    package let viewModel: PanelViewModel
 
-    var body: some View {
+    package var body: some View {
         HStack {
             Text(itemCountText)
             Spacer()

@@ -1,9 +1,13 @@
 import AppKit
 import SwiftUI
+import Core
+import Services
+import ViewModels
+import AppEnvironment
 
 /// Displays the current directory path as clickable breadcrumb segments.
 /// Supports editing mode (Cmd+L) for direct path entry.
-struct PathBarView: View {
+package struct PathBarView: View {
 
     @Bindable var viewModel: PanelViewModel
     @FocusState private var pathFieldFocused: Bool
@@ -12,7 +16,7 @@ struct PathBarView: View {
 
     private let pathExpander = TildePathExpander()
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 2) {
             if viewModel.isPathBarEditing {
                 pathTextField

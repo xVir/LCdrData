@@ -1,4 +1,8 @@
 import AppKit
+import Services
+import ViewModels
+import AppEnvironment
+import Views
 
 /// Terminates the app when the last window is closed, matching the behavior
 /// expected from a single-window utility like a file manager.

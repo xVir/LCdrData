@@ -1,0 +1,48 @@
+load("@build_bazel_rules_swift//swift:swift_library.bzl", "swift_library")
+load("//:defs.bzl", "PACKAGE_NAME", "SWIFT_COPTS")
+
+# Layer 4. Its own module because Views needs it while it depends on ViewModels,
+# which is what breaks the App <-> Views cycle. It shares this package with the
+# App layer, which is why one BUILD file defines two targets from one directory.
+swift_library(
+    name = "AppEnvironment",
+    srcs = ["AppEnvironment.swift"],
+    copts = SWIFT_COPTS,
+    module_name = "AppEnvironment",
+    package_name = PACKAGE_NAME,
+    visibility = [
+        "//LCdrData/Views:__pkg__",
+        "//LCdrDataTests/App:__pkg__",
+        "//LCdrDataTests/AppEnvironment:__pkg__",
+        "//LCdrDataTests/TestSupport:__pkg__",
+    ],
+    deps = [
+        "//LCdrData/Core",
+        "//LCdrData/Services",
+        "//LCdrData/ViewModels",
+    ],
+)
+
+# Layer 6, the top. module_name is load-bearing: @testable import LCdrData in
+# the App test target depends on it.
+swift_library(
+    name = "LCdrDataLib",
+    srcs = glob(
+        ["**/*.swift"],
+        exclude = ["AppEnvironment.swift"],
+    ),
+    copts = SWIFT_COPTS,
+    module_name = "LCdrData",
+    package_name = PACKAGE_NAME,
+    visibility = [
+        "//LCdrData:__pkg__",
+        "//LCdrDataTests/App:__pkg__",
+    ],
+    deps = [
+        ":AppEnvironment",
+        "//LCdrData/Core",
+        "//LCdrData/Services",
+        "//LCdrData/ViewModels",
+        "//LCdrData/Views",
+    ],
+)

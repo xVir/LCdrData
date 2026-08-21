@@ -1,4 +1,9 @@
 import SwiftUI
+import Core
+import Services
+import ViewModels
+import AppEnvironment
+import Views
 
 /// Menu commands that target the currently focused window's `AppState` via
 /// `@FocusedValue(\.appState)`. When no window has focus (e.g. Settings is

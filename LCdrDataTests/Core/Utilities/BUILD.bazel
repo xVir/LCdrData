@@ -1,0 +1,26 @@
+load("@build_bazel_rules_apple//apple:macos.bzl", "macos_unit_test")
+load("@build_bazel_rules_swift//swift:swift_library.bzl", "swift_library")
+load("//:defs.bzl", "PACKAGE_NAME", "SWIFT_COPTS")
+
+# Tests for the formatters and path helpers in //LCdrData/Core. Core is the only
+# dependency, and //LCdrData/Services deliberately does not make this package
+# visible, so adding an import of it here fails at analysis time.
+swift_library(
+    name = "UtilitiesTestsLib",
+    testonly = True,
+    srcs = glob(["*.swift"]),
+    copts = SWIFT_COPTS,
+    module_name = "UtilitiesTests",
+    package_name = PACKAGE_NAME,
+    deps = ["//LCdrData/Core"],
+)
+
+macos_unit_test(
+    name = "Utilities",
+    bundle_id = "com.xvir.LCdrData.UtilitiesTests",
+    minimum_os_version = "26.4",
+    size = "small",
+    tags = ["local"],
+    test_host = "//LCdrData",
+    deps = [":UtilitiesTestsLib"],
+)

@@ -1,14 +1,16 @@
 import Foundation
+import Core
 
 /// Protocol defining file system operations for directory listing and metadata.
 /// Using a protocol enables dependency injection and testability.
-nonisolated protocol FileSystemServiceProtocol: Sendable {
+package nonisolated protocol FileSystemServiceProtocol: Sendable {
     /// Lists the contents of a directory, returning FileItem representations.
     func listDirectory(at url: URL, showHidden: Bool) async throws -> [FileItem]
 }
 
 /// Concrete implementation of FileSystemServiceProtocol using Foundation's FileManager.
-nonisolated final class FileSystemService: FileSystemServiceProtocol, Sendable {
+package nonisolated final class FileSystemService: FileSystemServiceProtocol, Sendable {
+    package init() {}
 
     /// Resource keys to pre-fetch for performance during directory listing.
     private nonisolated static let resourceKeys: [URLResourceKey] = [
@@ -21,7 +23,7 @@ nonisolated final class FileSystemService: FileSystemServiceProtocol, Sendable {
         .isSymbolicLinkKey
     ]
 
-    func listDirectory(at url: URL, showHidden: Bool) async throws -> [FileItem] {
+    package func listDirectory(at url: URL, showHidden: Bool) async throws -> [FileItem] {
         let resourceKeys = Self.resourceKeys
 
         // Use a detached task to run on a background thread, using a local FileManager.

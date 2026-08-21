@@ -1,0 +1,6 @@
+# The hand-written Info.plist and entitlements consumed by //LCdrData.
+exports_files([
+    "Info.plist",
+    "LCdrData.entitlements",
+    "LCdrData.debug.entitlements",
+])

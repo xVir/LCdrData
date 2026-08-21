@@ -1,5 +1,7 @@
 import AppKit
 import Foundation
+import Core
+import Services
 
 /// Executes `Command`s against a window's `AppState`, resolving the active /
 /// inactive panel and cursor targets. This is the single place every UI
@@ -9,16 +11,16 @@ import Foundation
 /// A lightweight value: recreated per access via `AppState.commands`, holding
 /// only a reference to its `AppState`.
 @MainActor
-struct CommandRunner {
+package struct CommandRunner {
 
-    let appState: AppState
+    package let appState: AppState
 
     private var active: PanelViewModel { appState.activePanelViewModel }
     private var inactive: PanelViewModel { appState.inactivePanelViewModel }
 
     // MARK: - Execution
 
-    func perform(_ command: Command) {
+    package func perform(_ command: Command) {
         switch command {
         case .goToParent:
             Task { await active.navigateToParent() }
@@ -76,7 +78,7 @@ struct CommandRunner {
 
     /// Whether a command is currently actionable in the active panel. UI
     /// surfaces use this to enable/disable their items.
-    func isEnabled(_ command: Command) -> Bool {
+    package func isEnabled(_ command: Command) -> Bool {
         switch command {
         case .copy, .move, .trash, .permanentDelete, .copyPaths, .revealInFinder:
             return hasSelection
@@ -101,7 +103,7 @@ struct CommandRunner {
     /// The item a Rename should target given the current cursor — the single
     /// selected non-parent row, else the focused row. `nil` when nothing
     /// renameable is under the cursor.
-    var renameTarget: FileItem? {
+    package var renameTarget: FileItem? {
         let cursor = active.state.cursor
         let targetID = cursor.selected.count == 1 ? cursor.selected.first : cursor.focused
         guard let targetID,

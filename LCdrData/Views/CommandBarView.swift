@@ -1,14 +1,18 @@
 import SwiftUI
+import Core
+import Services
+import ViewModels
+import AppEnvironment
 
 /// Bottom command bar with function-key labels reminiscent of classic orthodox
 /// file managers. Each button shows the key hint and action name, runs its
 /// `Command` through `appState.commands`, and enables/disables itself from the
 /// runner.
-struct CommandBarView: View {
+package struct CommandBarView: View {
 
-    let appState: AppState
+    package let appState: AppState
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 0) {
             ForEach(entries) { entry in
                 CommandButton(

@@ -1,0 +1,18 @@
+load("@build_bazel_rules_swift//swift:swift_library.bzl", "swift_library")
+load("//:defs.bzl", "PACKAGE_NAME", "SWIFT_COPTS")
+
+# Layer 5. Only the App layer may depend on Views.
+swift_library(
+    name = "Views",
+    srcs = glob(["**/*.swift"]),
+    copts = SWIFT_COPTS,
+    module_name = "Views",
+    package_name = PACKAGE_NAME,
+    visibility = ["//LCdrData/App:__pkg__"],
+    deps = [
+        "//LCdrData/App:AppEnvironment",
+        "//LCdrData/Core",
+        "//LCdrData/Services",
+        "//LCdrData/ViewModels",
+    ],
+)

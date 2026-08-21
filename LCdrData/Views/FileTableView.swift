@@ -1,14 +1,18 @@
 import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
+import Core
+import Services
+import ViewModels
+import AppEnvironment
 
 /// Displays the file listing as a sortable table with columns for
 /// name, size, date modified, and kind.
 /// Uses a List with custom column header row for sort control.
-struct FileTableView: View {
+package struct FileTableView: View {
 
     @Bindable var viewModel: PanelViewModel
-    let isActive: Bool
+    package let isActive: Bool
     @Environment(AppState.self) private var appState
     @Environment(\.lcPanelDateFormat) private var panelDateFormat
     @Environment(\.lcPanelFontSize) private var panelFontSize
@@ -18,7 +22,7 @@ struct FileTableView: View {
     @FocusState private var fileListFocused: Bool
     @State private var isFileDropTargeted = false
 
-    var body: some View {
+    package var body: some View {
         VStack(spacing: 0) {
             // Column headers with sort indicators
             columnHeaders
@@ -175,14 +179,14 @@ struct FileTableView: View {
 // MARK: - Sortable Column Header
 
 private struct SortableColumnHeader: View {
-    let title: String
-    let column: FileSortDescriptor.Column
-    let currentSort: FileSortDescriptor
-    let onTap: () async -> Void
+    package let title: String
+    package let column: FileSortDescriptor.Column
+    package let currentSort: FileSortDescriptor
+    package let onTap: () async -> Void
 
     private var isActive: Bool { currentSort.column == column }
 
-    var body: some View {
+    package var body: some View {
         Button {
             Task { await onTap() }
         } label: {
@@ -205,10 +209,10 @@ private struct SortableColumnHeader: View {
 // MARK: - File Row View
 
 private struct FileRowView: View {
-    let item: FileItem
-    let viewModel: PanelViewModel
-    let dateFormat: String
-    let fontSize: CGFloat
+    package let item: FileItem
+    package let viewModel: PanelViewModel
+    package let dateFormat: String
+    package let fontSize: CGFloat
 
     @State private var showHighlight: Bool = false
 
@@ -216,7 +220,7 @@ private struct FileRowView: View {
         viewModel.highlightedItemID == item.id
     }
 
-    var body: some View {
+    package var body: some View {
         HStack(spacing: 0) {
             // Name column
             HStack(spacing: 6) {

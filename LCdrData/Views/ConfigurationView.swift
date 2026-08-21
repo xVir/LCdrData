@@ -1,15 +1,23 @@
 import SwiftUI
+import Core
+import Services
+import ViewModels
+import AppEnvironment
 
 /// Dual-pane KDL editor: read-only defaults (left) and user overrides (right), with Apply / Cancel.
-struct ConfigurationView: View {
+package struct ConfigurationView: View {
 
-    let configuration: ConfigurationService
+    package let configuration: ConfigurationService
+
+    package init(configuration: ConfigurationService) {
+        self.configuration = configuration
+    }
 
     @State private var userKDL: String = ""
     @State private var applyError: String?
     @State private var defaultAttributed = AttributedString()
 
-    var body: some View {
+    package var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Configuration")
                 .font(.title2)

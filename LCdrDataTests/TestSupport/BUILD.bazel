@@ -1,0 +1,20 @@
+load("@build_bazel_rules_swift//swift:swift_library.bzl", "swift_library")
+load("//:defs.bzl", "PACKAGE_NAME", "SWIFT_COPTS")
+
+# Shared test doubles. Their own module because they are used from four test
+# files across four packages; leaving them beside one test would make the
+# per-module test targets depend on each other.
+swift_library(
+    name = "TestSupport",
+    testonly = True,
+    srcs = glob(["**/*.swift"]),
+    copts = SWIFT_COPTS,
+    module_name = "TestSupport",
+    package_name = PACKAGE_NAME,
+    visibility = ["//LCdrDataTests:__subpackages__"],
+    deps = [
+        "//LCdrData/App:AppEnvironment",
+        "//LCdrData/Core",
+        "//LCdrData/Services",
+    ],
+)

@@ -1,0 +1,30 @@
+load("@build_bazel_rules_apple//apple:macos.bzl", "macos_unit_test")
+load("@build_bazel_rules_swift//swift:swift_library.bzl", "swift_library")
+load("//:defs.bzl", "PACKAGE_NAME", "SWIFT_COPTS")
+
+# Tests for //LCdrData/Services. These are the ones that genuinely need
+# test_host: ConfigurationServiceTests reads Bundle.main, and BookmarkStoreTests
+# and PanelSessionStoreTests use UserDefaults.
+swift_library(
+    name = "ServicesTestsLib",
+    testonly = True,
+    srcs = glob(["**/*.swift"]),
+    copts = SWIFT_COPTS,
+    module_name = "ServicesTests",
+    package_name = PACKAGE_NAME,
+    deps = [
+        "//LCdrData/Core",
+        "//LCdrData/Services",
+        "//LCdrDataTests/TestSupport",
+    ],
+)
+
+macos_unit_test(
+    name = "Services",
+    bundle_id = "com.xvir.LCdrData.ServicesTests",
+    minimum_os_version = "26.4",
+    size = "small",
+    tags = ["local"],
+    test_host = "//LCdrData",
+    deps = [":ServicesTestsLib"],
+)

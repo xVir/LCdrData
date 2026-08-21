@@ -8,9 +8,9 @@ import Foundation
 /// Sessions are short-lived — replaced (not mutated) when the panel navigates
 /// to a different URL. Security scope is managed app-wide by
 /// `AppEnvironment` from at-launch bookmark activation, not per-session.
-final class DirectorySession: @unchecked Sendable {
+package final class DirectorySession: @unchecked Sendable {
 
-    let url: URL
+    package let url: URL
     private let debounceInterval: TimeInterval
     private let onChange: @MainActor () -> Void
 
@@ -21,7 +21,7 @@ final class DirectorySession: @unchecked Sendable {
     private var debounceGeneration: UInt64 = 0
     private var isCancelled: Bool = false
 
-    init(
+    package init(
         url: URL,
         debounceInterval: TimeInterval = 0.28,
         onChange: @escaping @MainActor () -> Void
@@ -58,7 +58,7 @@ final class DirectorySession: @unchecked Sendable {
 
     /// Stops watching and closes the file descriptor. Idempotent — safe to
     /// call from `deinit` even if the caller already invoked it.
-    func cancel() {
+    package func cancel() {
         guard !isCancelled else { return }
         isCancelled = true
         source?.cancel()

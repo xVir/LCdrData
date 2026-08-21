@@ -1,5 +1,9 @@
 import AppKit
 import SwiftUI
+import Core
+import Services
+import ViewModels
+import AppEnvironment
 
 /// Context-menu content for a panel, shown on **secondary click**.
 ///
@@ -14,12 +18,12 @@ import SwiftUI
 /// aligned, and grey. Shortcuts declared inside a `.contextMenu` are ephemeral
 /// (the content exists only while the menu is open), so they are not registered
 /// globally and do not collide with the window's `onKeyPress` routing.
-struct FileContextMenu: View {
+package struct FileContextMenu: View {
 
-    let model: FileContextMenuModel
-    let appState: AppState
+    package let model: FileContextMenuModel
+    package let appState: AppState
 
-    var body: some View {
+    package var body: some View {
         switch model.variant {
         case .selection:
             selectionMenu

@@ -1,0 +1,37 @@
+load(
+    "@build_bazel_rules_apple//apple:macos.bzl",
+    "macos_build_test",
+    "macos_ui_test",
+)
+load("@build_bazel_rules_swift//swift:swift_library.bzl", "swift_library")
+load("//:defs.bzl", "SWIFT_COPTS")
+
+swift_library(
+    name = "LCdrDataUITestsLib",
+    testonly = True,
+    srcs = glob(["**/*.swift"]),
+    copts = SWIFT_COPTS,
+)
+
+# Bazel builds this but never runs it. rules_apple's default runner refuses
+# XCUITEST outright (see docs/BAZEL_MIGRATION.md 2.4), so execution belongs to
+# scripts/run-ui-tests.sh, which delegates to Tuist. tags = ["manual"] keeps the
+# target out of `bazel test //...` and `bazel build //...`.
+macos_ui_test(
+    name = "LCdrDataUITests",
+    bundle_id = "com.xvir.LCdrDataUITests",
+    minimum_os_version = "26.4",
+    tags = ["manual"],
+    test_host = "//LCdrData",
+    deps = [":LCdrDataUITestsLib"],
+)
+
+# Compile coverage for the UI test sources. Because macos_ui_test is manual, it
+# is skipped by wildcard patterns; this build test is not, so `bazel test //...`
+# still fails if a UI test stops compiling.
+macos_build_test(
+    name = "LCdrDataUITests_build_test",
+    minimum_os_version = "26.4",
+    size = "small",
+    targets = [":LCdrDataUITestsLib"],
+)

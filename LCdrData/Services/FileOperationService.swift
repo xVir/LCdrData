@@ -1,19 +1,20 @@
 import Foundation
+import Core
 
 /// Describes the type of conflict encountered during a file operation.
-enum FileConflict: Sendable {
+package enum FileConflict: Sendable {
     case destinationExists(source: URL, destination: URL)
 }
 
 /// Describes how to resolve a file conflict.
-enum ConflictResolution: Sendable {
+package enum ConflictResolution: Sendable {
     case overwrite
     case skip
     case rename(newName: String)
 }
 
 /// Describes a file operation to perform.
-enum FileOperationType: Sendable, Equatable {
+package enum FileOperationType: Sendable, Equatable {
     case copy(sources: [URL], destination: URL)
     case move(sources: [URL], destination: URL)
     case delete(items: [URL])
@@ -23,20 +24,8 @@ enum FileOperationType: Sendable, Equatable {
     case rename(item: URL, newName: String)
 }
 
-/// Reports progress for a file operation.
-struct FileOperationProgress: Sendable {
-    let totalItems: Int
-    let completedItems: Int
-    let currentItemName: String
-
-    var fractionCompleted: Double {
-        guard totalItems > 0 else { return 0 }
-        return Double(completedItems) / Double(totalItems)
-    }
-}
-
 /// Protocol defining file operation capabilities for testability.
-nonisolated protocol FileOperationServiceProtocol: Sendable {
+package nonisolated protocol FileOperationServiceProtocol: Sendable {
     /// Copies files from source URLs to a destination directory.
     /// Calls `onProgress` for each item completed.
     /// Calls `onConflict` when a destination file already exists, returning the resolution.
@@ -69,9 +58,10 @@ nonisolated protocol FileOperationServiceProtocol: Sendable {
 }
 
 /// Concrete implementation using Foundation's FileManager.
-nonisolated final class FileOperationService: FileOperationServiceProtocol, Sendable {
+package nonisolated final class FileOperationService: FileOperationServiceProtocol, Sendable {
+    package init() {}
 
-    func copy(
+    package func copy(
         sources: [URL],
         to destination: URL,
         onProgress: @Sendable (FileOperationProgress) -> Void,
@@ -88,7 +78,7 @@ nonisolated final class FileOperationService: FileOperationServiceProtocol, Send
         )
     }
 
-    func move(
+    package func move(
         sources: [URL],
         to destination: URL,
         onProgress: @Sendable (FileOperationProgress) -> Void,
@@ -105,7 +95,7 @@ nonisolated final class FileOperationService: FileOperationServiceProtocol, Send
         )
     }
 
-    func trash(items: [URL]) async throws -> [URL] {
+    package func trash(items: [URL]) async throws -> [URL] {
         return try await Task.detached {
             let fm = FileManager()
             var trashedURLs: [URL] = []
@@ -122,7 +112,7 @@ nonisolated final class FileOperationService: FileOperationServiceProtocol, Send
         }.value
     }
 
-    func deletePermanently(items: [URL]) async throws {
+    package func deletePermanently(items: [URL]) async throws {
         try await Task.detached {
             let fm = FileManager()
             for item in items {
@@ -131,7 +121,7 @@ nonisolated final class FileOperationService: FileOperationServiceProtocol, Send
         }.value
     }
 
-    func createFolder(in directory: URL, name: String) async throws -> URL {
+    package func createFolder(in directory: URL, name: String) async throws -> URL {
         return try await Task.detached {
             let fm = FileManager()
             let folderURL = directory.appendingPathComponent(name, isDirectory: true)
@@ -145,7 +135,7 @@ nonisolated final class FileOperationService: FileOperationServiceProtocol, Send
         }.value
     }
 
-    func rename(item: URL, to newName: String) async throws -> URL {
+    package func rename(item: URL, to newName: String) async throws -> URL {
         return try await Task.detached {
             let fm = FileManager()
             let newURL = item.deletingLastPathComponent()
@@ -231,12 +221,12 @@ nonisolated final class FileOperationService: FileOperationServiceProtocol, Send
 }
 
 /// Errors specific to file operations.
-enum FileOperationError: LocalizedError, Equatable {
+package enum FileOperationError: LocalizedError, Equatable {
     case itemAlreadyExists(name: String)
     case operationCancelled
     case invalidDestination
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .itemAlreadyExists(let name):
             return "An item named \"\(name)\" already exists."

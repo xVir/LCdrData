@@ -1,8 +1,9 @@
 import Foundation
 import KDL
 import Observation
+import Core
 
-enum ConfigurationServiceError: Error, Equatable, Sendable {
+package enum ConfigurationServiceError: Error, Equatable, Sendable {
     case invalidKDL(String)
     case cannotCreateApplicationSupport
     case cannotWriteUserFile
@@ -11,17 +12,17 @@ enum ConfigurationServiceError: Error, Equatable, Sendable {
 /// Loads bundled default KDL, merges user overrides from Application Support, and applies changes.
 @Observable
 @MainActor
-final class ConfigurationService {
+package final class ConfigurationService {
 
-    private(set) var current: AppConfiguration
-    private(set) var lastAppliedUserKDL: String = ""
+    package private(set) var current: AppConfiguration
+    package private(set) var lastAppliedUserKDL: String = ""
 
     private let bundle: Bundle
     private let fileManager: FileManager
     private let configDirectory: URL
     private let defaultKDLTextOverride: String?
 
-    init(bundle: Bundle = .main, fileManager: FileManager = .default) {
+    package init(bundle: Bundle = .main, fileManager: FileManager = .default) {
         let root = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         self.bundle = bundle
         self.fileManager = fileManager
@@ -45,14 +46,14 @@ final class ConfigurationService {
     }
 
     /// Application Support directory for this app (or test override).
-    var applicationSupportDirectory: URL { configDirectory }
+    package var applicationSupportDirectory: URL { configDirectory }
 
-    var userConfigFileURL: URL {
+    package var userConfigFileURL: URL {
         configDirectory.appendingPathComponent("config.kdl", isDirectory: false)
     }
 
     /// Full default KDL text (bundled resource).
-    func defaultKDLText() throws -> String {
+    package func defaultKDLText() throws -> String {
         if let defaultKDLTextOverride {
             return defaultKDLTextOverride
         }
@@ -63,7 +64,7 @@ final class ConfigurationService {
     }
 
     /// Last-applied user overrides read from disk (or empty if none).
-    func userKDLText() throws -> String {
+    package func userKDLText() throws -> String {
         let url = userConfigFileURL
         guard fileManager.fileExists(atPath: url.path) else {
             return ""
@@ -72,7 +73,7 @@ final class ConfigurationService {
     }
 
     /// Reads the user file if present, merges with bundled defaults, updates `current` and `lastAppliedUserKDL`.
-    func load() throws {
+    package func load() throws {
         let defaultsDoc = try Self.parseDocument(try defaultKDLText())
         let base = Self.appConfiguration(from: defaultsDoc, mergingOnto: AppConfiguration.defaults)
 
@@ -95,7 +96,7 @@ final class ConfigurationService {
     }
 
     /// Parses user KDL, merges with bundled defaults, validates, writes the user file, updates `current`.
-    func apply(fromUserKDL kdlText: String) throws {
+    package func apply(fromUserKDL kdlText: String) throws {
         let defaultsDoc = try Self.parseDocument(try defaultKDLText())
         let base = Self.appConfiguration(from: defaultsDoc, mergingOnto: AppConfiguration.defaults)
 
@@ -149,7 +150,7 @@ final class ConfigurationService {
     }
 
     /// Applies all recognized nodes in `document` onto `mergingOnto` (typically bundled defaults, then user file).
-    static func appConfiguration(from document: KDLDocument, mergingOnto base: AppConfiguration) -> AppConfiguration {
+    package static func appConfiguration(from document: KDLDocument, mergingOnto base: AppConfiguration) -> AppConfiguration {
         var result = base
 
         if let panel = document["panel"] {

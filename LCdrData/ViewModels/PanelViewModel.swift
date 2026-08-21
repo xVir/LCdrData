@@ -1,15 +1,17 @@
 import AppKit
 import Foundation
 import Observation
+import Core
+import Services
 
 /// Identifies which side a panel occupies.
-enum PanelSide: Sendable {
+package enum PanelSide: Sendable {
     case left
     case right
 
     /// Stable token embedded in accessibility identifiers so UI tests can
     /// address one panel's elements unambiguously.
-    var identifier: String {
+    package var identifier: String {
         switch self {
         case .left: "left"
         case .right: "right"
@@ -19,22 +21,22 @@ enum PanelSide: Sendable {
 
 /// Drives a single file panel: listing, selection, navigation, and sorting.
 @Observable
-final class PanelViewModel {
+package final class PanelViewModel {
 
     // MARK: - Published State
 
-    var state: PanelState
-    var isLoading: Bool = false
-    var errorMessage: String?
+    package var state: PanelState
+    package var isLoading: Bool = false
+    package var errorMessage: String?
     /// True when the last load failure was a sandbox permission denial.
-    var isPermissionError: Bool = false
+    package var isPermissionError: Bool = false
 
     /// When set, the row with this ID plays a highlight animation (fading
     /// green background). Cleared automatically after the animation ends.
-    var highlightedItemID: UUID?
+    package var highlightedItemID: UUID?
 
     /// When true, the path bar shows an editable path field (Cmd+L).
-    var isPathBarEditing: Bool = false
+    package var isPathBarEditing: Bool = false
 
     // MARK: - Type-ahead (incremental search)
 
@@ -44,14 +46,14 @@ final class PanelViewModel {
 
     // MARK: - Dependencies
 
-    let side: PanelSide
+    package let side: PanelSide
     private let fileSystemService: FileSystemServiceProtocol
     private let sandboxAccessService: SandboxAccessService
     private let directoryWatchingEnabled: Bool
 
     // MARK: - Init
 
-    init(
+    package init(
         side: PanelSide,
         initialDirectory: URL,
         sortDescriptor: FileSortDescriptor? = nil,
@@ -85,7 +87,7 @@ final class PanelViewModel {
     /// repositions the cursor according to `intent`. The single canonical
     /// load path — every navigation, refresh, and file-operation completion
     /// goes through here.
-    func reload(_ intent: Cursor.Intent) async {
+    package func reload(_ intent: Cursor.Intent) async {
         isLoading = true
         errorMessage = nil
         isPermissionError = false
@@ -127,7 +129,7 @@ final class PanelViewModel {
     }
 
     /// File URLs for the current selection excluding the parent (`..`) entry.
-    func selectedNonParentURLs() -> [URL] {
+    package func selectedNonParentURLs() -> [URL] {
         state.items
             .filter { state.cursor.selected.contains($0.id) && !$0.isParentDirectory }
             .map(\.url)
@@ -135,7 +137,7 @@ final class PanelViewModel {
 
     /// Releases the panel's session — security scope and watcher are torn down.
     /// Called from the app delegate's `applicationWillTerminate`.
-    func releaseDirectorySecurityScope() {
+    package func releaseDirectorySecurityScope() {
         currentSession?.cancel()
         currentSession = nil
     }
@@ -164,12 +166,12 @@ final class PanelViewModel {
     // MARK: - Navigation
 
     /// Items shown in the file list (same as `state.items`; kept for call sites).
-    var visibleItems: [FileItem] { state.items }
+    package var visibleItems: [FileItem] { state.items }
 
     /// Navigates into a directory, pushing to history. On permission error
     /// the panel offers the user the reactive grant prompt; if access isn't
     /// granted the navigation is atomically reverted to the prior state.
-    func navigate(to url: URL) async {
+    package func navigate(to url: URL) async {
         clearDirectoryNavigationExtras()
 
         let currentDir = state.currentDirectory
@@ -240,7 +242,7 @@ final class PanelViewModel {
     /// Navigate to the parent directory.
     /// After loading the parent listing, the cursor will land on the folder
     /// we just left so the user can easily re-enter it.
-    func navigateToParent() async {
+    package func navigateToParent() async {
         let parent = state.currentDirectory.deletingLastPathComponent()
         guard parent != state.currentDirectory else { return }
         await navigate(to: parent)
@@ -248,7 +250,7 @@ final class PanelViewModel {
 
     /// Navigate back in history. On permission denial of the back-target,
     /// the navigation reverts atomically.
-    func navigateBack() async {
+    package func navigateBack() async {
         guard state.historyIndex > 0 else { return }
         clearDirectoryNavigationExtras()
         let target = state.history[state.historyIndex - 1]
@@ -260,7 +262,7 @@ final class PanelViewModel {
 
     /// Navigate forward in history. On permission denial of the forward-target,
     /// the navigation reverts atomically.
-    func navigateForward() async {
+    package func navigateForward() async {
         guard state.historyIndex < state.history.count - 1 else { return }
         clearDirectoryNavigationExtras()
         let target = state.history[state.historyIndex + 1]
@@ -271,7 +273,7 @@ final class PanelViewModel {
     }
 
     /// Opens a row: parent → up, directory → enter, file → default app.
-    func openItem(_ item: FileItem) async {
+    package func openItem(_ item: FileItem) async {
         if item.isParentDirectory {
             await navigateToParent()
             return
@@ -285,7 +287,7 @@ final class PanelViewModel {
 
     /// Opens the currently selected item (Cmd+Down / double-click).
     /// Uses the List selection when exactly one item is selected; otherwise the cursor focus.
-    func openSelectedItem() async {
+    package func openSelectedItem() async {
         let targetID: UUID? = if state.cursor.selected.count == 1 {
             state.cursor.selected.first
         } else {
@@ -305,7 +307,7 @@ final class PanelViewModel {
     // MARK: - Sorting
 
     /// Changes the sort column; toggles direction if same column.
-    func toggleSort(column: FileSortDescriptor.Column) async {
+    package func toggleSort(column: FileSortDescriptor.Column) async {
         state.sortDescriptor.toggle(column: column)
         await reloadCurrentListing()
     }
@@ -317,7 +319,7 @@ final class PanelViewModel {
 
     /// Sorts items according to the current sort descriptor.
     /// Directories always appear before files.
-    func sortItems(_ items: [FileItem]) -> [FileItem] {
+    package func sortItems(_ items: [FileItem]) -> [FileItem] {
         let descriptor = state.sortDescriptor
 
         return items.sorted { lhs, rhs in
@@ -368,7 +370,7 @@ final class PanelViewModel {
     // MARK: - Selection
 
     /// Toggles selection of a specific item.
-    func toggleSelection(of itemID: UUID) {
+    package func toggleSelection(of itemID: UUID) {
         if state.cursor.selected.contains(itemID) {
             state.cursor.selected.remove(itemID)
         } else {
@@ -377,14 +379,14 @@ final class PanelViewModel {
     }
 
     /// Sets the focused item.
-    func setFocused(_ itemID: UUID?) {
+    package func setFocused(_ itemID: UUID?) {
         state.cursor.focused = itemID
     }
 
     /// Reacts to user-driven selection changes from the file list (clicks,
     /// arrow keys, Cmd-click). Routed through `Cursor.userDidSelect` so that
     /// rules like "empty selection restores from focused" live on the cursor.
-    func cursorDidChangeSelection(to newSelection: Set<UUID>) {
+    package func cursorDidChangeSelection(to newSelection: Set<UUID>) {
         let previous = state.cursor
         state.cursor.userDidSelect(newSelection)
 
@@ -410,17 +412,17 @@ final class PanelViewModel {
     }
 
     /// Selects all items (excluding ".." parent entry).
-    func selectAll() {
+    package func selectAll() {
         state.cursor.selectAll(in: visibleItems)
     }
 
     /// Deselects all items.
-    func deselectAll() {
+    package func deselectAll() {
         state.cursor.selected = []
     }
 
     /// Collapses a multi-selection to a single focused row (Cmd+Shift+A).
-    func deselectAllKeepingFocus() {
+    package func deselectAllKeepingFocus() {
         state.cursor.deselectAllKeepingFocus(in: visibleItems)
     }
 
@@ -429,7 +431,7 @@ final class PanelViewModel {
     /// Briefly highlights the row matching `url` in the current listing — used
     /// after rename / mkdir to draw the user's eye to the new item.
     /// No-op if no row in the current listing maps to that URL.
-    func highlight(url: URL) {
+    package func highlight(url: URL) {
         let standardized = url.standardizedFileURL.path
         guard let item = visibleItems.first(where: {
             !$0.isParentDirectory
@@ -449,20 +451,20 @@ final class PanelViewModel {
     // MARK: - Hidden Files
 
     /// Toggles visibility of hidden files and reloads.
-    func toggleHiddenFiles() async {
+    package func toggleHiddenFiles() async {
         state.showHiddenFiles.toggle()
         await reload(.keepSelection)
     }
 
     // MARK: - Type-ahead
 
-    func resetTypeAheadBuffer() {
+    package func resetTypeAheadBuffer() {
         typeAheadBuffer = ""
         typeAheadLastEvent = .distantPast
     }
 
     /// Handles incremental search from printable text; returns true if focus moved.
-    func handleTypeAheadInsert(_ text: String, now: Date = .now) -> Bool {
+    package func handleTypeAheadInsert(_ text: String, now: Date = .now) -> Bool {
         guard !text.isEmpty else { return false }
         if now.timeIntervalSince(typeAheadLastEvent) > typeAheadResetInterval {
             typeAheadBuffer = ""
@@ -483,25 +485,25 @@ final class PanelViewModel {
 
     // MARK: - Home / End
 
-    func focusFirstListItem() {
+    package func focusFirstListItem() {
         state.cursor.focusFirst(in: visibleItems)
     }
 
-    func focusLastListItem() {
+    package func focusLastListItem() {
         state.cursor.focusLast(in: visibleItems)
     }
 
     // MARK: - Quick Look / open
 
     /// URL for Quick Look (F3) when a single file is selected.
-    func previewURLForQuickLook() -> URL? {
+    package func previewURLForQuickLook() -> URL? {
         guard let item = singleSelectedNonDirectoryItem() else { return nil }
         guard !item.isDirectory else { return nil }
         return item.url
     }
 
     /// Opens the selected file with the default application (F4).
-    func openSelectedFileWithDefaultApp() {
+    package func openSelectedFileWithDefaultApp() {
         guard let item = singleSelectedNonDirectoryItem() else { return }
         guard !item.isDirectory else { return }
         NSWorkspace.shared.open(item.url)
@@ -521,7 +523,7 @@ final class PanelViewModel {
     }
 
     /// Filters the full listing; keeps `..` when the filter is non-empty.
-    static func filteredItems(_ items: [FileItem], nameFilterText: String) -> [FileItem] {
+    package static func filteredItems(_ items: [FileItem], nameFilterText: String) -> [FileItem] {
         let trimmed = nameFilterText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return items }
         return items.filter { item in
@@ -531,7 +533,7 @@ final class PanelViewModel {
     }
 
     /// Next row whose name starts with `buffer` (localized), searching after `focusedID`, wrapping.
-    static func typeAheadMatchID(items: [FileItem], focusedID: UUID?, buffer: String) -> UUID? {
+    package static func typeAheadMatchID(items: [FileItem], focusedID: UUID?, buffer: String) -> UUID? {
         let trimmed = buffer.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
 

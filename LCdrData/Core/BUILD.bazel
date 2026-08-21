@@ -1,0 +1,16 @@
+load("@build_bazel_rules_swift//swift:swift_library.bzl", "swift_library")
+load("//:defs.bzl", "PACKAGE_NAME", "SWIFT_COPTS")
+
+# Bottom layer. Models and Utilities are one module because they are mutually
+# dependent (CommandCatalog needs KeyboardShortcuts; FileFormatter needs
+# FileItem), which is also why they are subdirectories of a single package
+# rather than packages of their own — a Bazel package cannot glob into a sibling.
+swift_library(
+    name = "Core",
+    srcs = glob(["**/*.swift"]),
+    copts = SWIFT_COPTS,
+    module_name = "Core",
+    package_name = PACKAGE_NAME,
+    # Everything may depend on Core.
+    visibility = ["//visibility:public"],
+)
