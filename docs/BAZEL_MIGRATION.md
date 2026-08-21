@@ -594,11 +594,23 @@ macos_ui_test(
 ```
 
 Per 2.4 this will not execute under `bazel test`; `tags = ["manual"]` keeps it out
-of `bazel test //...`. Use `macos_build_test` to assert it still builds.
+of `bazel test //...`.
 
-The Bazel target exists purely so UI test sources keep compiling in the Bazel
-graph — a `bazel build //...` will catch a UI test that no longer builds. It is
-never executed by Bazel.
+Because `manual` also excludes the target from `bazel build //...`, compile
+coverage needs a separate build test — and it must point at the **library**, not
+the test bundle, since `macos_build_test` takes library targets:
+
+```starlark
+macos_build_test(
+    name = "LCdrDataUITests_build_test",
+    minimum_os_version = "26.4",
+    targets = [":LCdrDataUITestsLib"],
+)
+```
+
+That test is not `manual`, so `bazel test //...` still fails if a UI test stops
+compiling. `bazel test //...` should report exactly two test targets:
+`//:LCdrDataTests` and `//:LCdrDataUITests_build_test`.
 
 #### `scripts/run-ui-tests.sh`
 
@@ -637,9 +649,30 @@ to the bundle diff in Phase 7. Given macOS UI tests cannot run headless under an
 build system, and the alternative is roughly a hundred lines of XCTRunner bundle
 surgery and re-signing for four test files, this is the right trade.
 
+#### One UI test fails, and it predates the migration
+
+`PanelSelectionUITests.testClickingEmptySpaceKeepsRowSelected` fails with:
+
+```
+XCTAssertGreaterThan failed: ("-6069.0") is not greater than ("24.0")
+- no blank area below the rows — enlarge the window or use a smaller directory
+```
+
+Verified pre-existing by running it in a `git worktree` at `230f1db`, the commit
+before this migration began, where it fails identically. The test's own message
+explains why: it needs empty space below the file rows, so it depends on window
+size and on how many entries the directory under test contains.
+
+Do not read this as a migration regression. It is worth fixing, but as its own
+task — the assertion needs to either establish the window geometry it requires or
+skip when the precondition cannot be met.
+
 **Exit criteria:** `bazel build //:LCdrDataUITests` succeeds; `bazel test //...`
-does not attempt to run it; `scripts/run-ui-tests.sh` runs the suite and reports
-pass/fail correctly, verified by deliberately breaking one assertion.
+reports two test targets and does not attempt the UI test;
+`scripts/run-ui-tests.sh` reports pass and fail correctly. Verified by three
+cases: a passing class exits 0, the known-failing test exits 1 with
+`** TEST FAILED **`, and a stubbed-out `launchctl` triggers the preflight and
+exits 1 with guidance.
 
 ### Phase 6 — Bazel-native Xcode project (optional, not required)
 
