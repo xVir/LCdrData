@@ -12,9 +12,9 @@ swift_library(
     deps = [
         "//LCdrData/App:AppEnvironment",
         "//LCdrData/Core/Models",
-        "//LCdrData/Core/Models:Bindings",
+        "//LCdrData/Core/Bindings",
         "//LCdrData/Core/Utilities",
-        "//LCdrData/Core/Utilities:Formatting",
+        "//LCdrData/Core/Formatting",
         "//LCdrData/Services",
         "//LCdrData/ViewModels",
     ],

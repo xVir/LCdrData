@@ -48,7 +48,7 @@ let project = Project(
         // MARK: Utilities Module
         // Mirrors the `Utilities` swift_library in LCdrData/Core/Utilities/BUILD.bazel.
         // Both build systems must agree on the module structure, since the sources
-        // contain `import Utilities`. The bottom of the stack: no first-party deps.
+        // contain `import Utilities`. Each of the four Core modules is one directory.
         .target(
             name: "Utilities",
             destinations: [.mac],
@@ -56,12 +56,7 @@ let project = Project(
             productName: "Utilities",
             bundleId: "com.xvir.LCdrData.Utilities",
             deploymentTargets: .macOS("26.4"),
-            sources: [
-                .glob(
-                    "LCdrData/Core/Utilities/**",
-                    excluding: ["LCdrData/Core/Utilities/FileFormatter.swift"]
-                ),
-            ],
+            sources: ["LCdrData/Core/Utilities/**"],
             settings: .settings(
                 base: coreSettings
             )
@@ -75,19 +70,14 @@ let project = Project(
             productName: "Models",
             bundleId: "com.xvir.LCdrData.Models",
             deploymentTargets: .macOS("26.4"),
-            sources: [
-                .glob(
-                    "LCdrData/Core/Models/**",
-                    excluding: ["LCdrData/Core/Models/CommandCatalog.swift"]
-                ),
-            ],
+            sources: ["LCdrData/Core/Models/**"],
             settings: .settings(
                 base: coreSettings
             )
         ),
         // MARK: Bindings Module
-        // CommandCatalog alone: the one file needing both a Command and a key, so
-        // keeping it out of Models leaves both Models and Utilities independent.
+        // The keyboard binding for each Command. Needs both a Command and a key,
+        // which is why it is neither Models nor Utilities.
         .target(
             name: "Bindings",
             destinations: [.mac],
@@ -95,7 +85,7 @@ let project = Project(
             productName: "Bindings",
             bundleId: "com.xvir.LCdrData.Bindings",
             deploymentTargets: .macOS("26.4"),
-            sources: ["LCdrData/Core/Models/CommandCatalog.swift"],
+            sources: ["LCdrData/Core/Bindings/**"],
             dependencies: [
                 .target(name: "Models"),
                 .target(name: "Utilities"),
@@ -105,10 +95,8 @@ let project = Project(
             )
         ),
         // MARK: Formatting Module
-        // FileFormatter alone, sitting ABOVE Models because `kind(for:)` takes a
-        // FileItem. That one signature is why LCdrData/Core/Utilities/ holds two
-        // modules: with it above Models, the Models <-> Utilities cycle disappears
-        // and no source file has to move.
+        // Presentation strings for model values. Depends on Models, which
+        // Utilities must not.
         .target(
             name: "Formatting",
             destinations: [.mac],
@@ -116,7 +104,7 @@ let project = Project(
             productName: "Formatting",
             bundleId: "com.xvir.LCdrData.Formatting",
             deploymentTargets: .macOS("26.4"),
-            sources: ["LCdrData/Core/Utilities/FileFormatter.swift"],
+            sources: ["LCdrData/Core/Formatting/**"],
             dependencies: [
                 .target(name: "Models"),
             ],
@@ -220,8 +208,7 @@ let project = Project(
                 .glob(
                     "LCdrData/**",
                     excluding: [
-                        "LCdrData/Core/Models/**",
-                        "LCdrData/Core/Utilities/**",
+                        "LCdrData/Core/**",
                         "LCdrData/Services/**",
                         "LCdrData/ViewModels/**",
                         "LCdrData/App/AppEnvironment.swift",

@@ -2,30 +2,27 @@ load("@build_bazel_rules_apple//apple:macos.bzl", "macos_unit_test")
 load("@build_bazel_rules_swift//swift:swift_library.bzl", "swift_library")
 load("//:defs.bzl", "PACKAGE_NAME", "SWIFT_COPTS")
 
-# Tests for //LCdrData/ViewModels.
+# Tests for //LCdrData/Core/Formatting. Needs Models too, because it builds
+# FileItem values to format.
 swift_library(
-    name = "ViewModelsTestsLib",
+    name = "FormattingTestsLib",
     testonly = True,
-    srcs = glob(["**/*.swift"]),
+    srcs = glob(["*.swift"]),
     copts = SWIFT_COPTS,
-    module_name = "ViewModelsTests",
+    module_name = "FormattingTests",
     package_name = PACKAGE_NAME,
     deps = [
+        "//LCdrData/Core/Formatting",
         "//LCdrData/Core/Models",
-        "//LCdrData/Core/Bindings",
-        "//LCdrData/Core/Utilities",
-        "//LCdrData/Services",
-        "//LCdrData/ViewModels",
-        "//LCdrDataTests/TestSupport",
     ],
 )
 
 macos_unit_test(
-    name = "ViewModels",
-    bundle_id = "com.xvir.LCdrData.ViewModelsTests",
+    name = "Formatting",
+    bundle_id = "com.xvir.LCdrData.FormattingTests",
     minimum_os_version = "26.4",
     size = "small",
     tags = ["local"],
     test_host = "//LCdrData",
-    deps = [":ViewModelsTestsLib"],
+    deps = [":FormattingTestsLib"],
 )

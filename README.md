@@ -53,8 +53,8 @@ bazel test //LCdrDataTests/...   # all unit tests
 bazel test //LCdrDataTests/Core/Models   # one module's tests
 ```
 
-193 test cases written with [Swift Testing](https://github.com/swiftlang/swift-testing),
-split across six targets whose counts sum to that total. `bazel test //...` adds compile
+201 test cases written with [Swift Testing](https://github.com/swiftlang/swift-testing),
+split across eight targets whose counts sum to that total. `bazel test //...` adds compile
 coverage for the UI tests.
 
 UI tests need a GUI login session and are driven by Tuist rather than Bazel, since Bazel's
@@ -165,31 +165,10 @@ bookmarks {
 
 ## Architecture
 
-Nine modules, each a separate Swift module and Bazel target, stacked so dependencies only
-ever point downward:
-
-```
-App  →  Views  →  AppEnvironment  →  ViewModels  →  Services  →  Core (four modules)
-```
-
-Every module's BUILD file names, via Bazel `visibility`, exactly which packages may depend
-on it, so a layering violation fails at analysis time rather than in review.
-
-```
-LCdrData/
-├── Core/          Utilities and Models, both dependency-free, plus
-│                  Formatting and Bindings, one file each
-├── Services/      File system, sandbox access, configuration, persistence
-├── ViewModels/    Observable state: panels, app state, operations
-├── App/           AppEnvironment (shared services) and the app entry point
-└── Views/         SwiftUI views
-```
-
-`Core/` is the one place where folders and modules deliberately do not line up. Two files
-each need something from both halves — `FileFormatter` takes a `FileItem`, and
-`CommandCatalog` maps a `Command` to a key — so each compiles as its own small module above
-the two leaves. That is what lets `Models` and `Utilities` depend on nothing at all; see
-[docs/CURRENT_ARCH.md](docs/CURRENT_ARCH.md) §3.
+The app is a stack of small Swift modules, each its own Bazel target, whose dependencies only
+ever point downward — layering enforced at analysis time by Bazel `visibility` rather than by
+review. **[docs/CURRENT_ARCH.md](docs/CURRENT_ARCH.md)** describes the modules, the services
+behind them, and how a keystroke becomes a file operation.
 
 ## Documentation
 

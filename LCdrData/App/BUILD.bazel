@@ -41,7 +41,7 @@ swift_library(
     deps = [
         ":AppEnvironment",
         "//LCdrData/Core/Models",
-        "//LCdrData/Core/Models:Bindings",
+        "//LCdrData/Core/Bindings",
         "//LCdrData/Services",
         "//LCdrData/ViewModels",
         "//LCdrData/Views",

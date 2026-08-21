@@ -1,0 +1,18 @@
+load("@build_bazel_rules_swift//swift:swift_library.bzl", "swift_library")
+load("//:defs.bzl", "PACKAGE_NAME", "SWIFT_COPTS")
+
+# The keyboard binding for each Command. Its own module because it needs both a
+# Command and a key, which would otherwise make Models and Utilities depend on
+# each other.
+swift_library(
+    name = "Bindings",
+    srcs = glob(["*.swift"]),
+    copts = SWIFT_COPTS,
+    module_name = "Bindings",
+    package_name = PACKAGE_NAME,
+    visibility = ["//visibility:public"],
+    deps = [
+        "//LCdrData/Core/Models",
+        "//LCdrData/Core/Utilities",
+    ],
+)

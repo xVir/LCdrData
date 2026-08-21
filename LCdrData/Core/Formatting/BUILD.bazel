@@ -1,12 +1,14 @@
 load("@build_bazel_rules_swift//swift:swift_library.bzl", "swift_library")
 load("//:defs.bzl", "PACKAGE_NAME", "SWIFT_COPTS")
 
-# The domain types. A leaf: no first-party dependencies.
+# Presentation strings for model values: sizes, dates and file kinds. Its own
+# module because it depends on Models, which Utilities must not.
 swift_library(
-    name = "Models",
+    name = "Formatting",
     srcs = glob(["*.swift"]),
     copts = SWIFT_COPTS,
-    module_name = "Models",
+    module_name = "Formatting",
     package_name = PACKAGE_NAME,
     visibility = ["//visibility:public"],
+    deps = ["//LCdrData/Core/Models"],
 )

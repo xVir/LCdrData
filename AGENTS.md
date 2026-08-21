@@ -74,11 +74,11 @@ No setup step is needed — Bazel resolves everything on first build.
   a layering violation is an analysis-time error. The app target is named for its package
   (`//LCdrData`) rather than `app`, because `bin/LCdrData/app` and `bin/LCdrData/App/` are
   the same path on a case-insensitive filesystem.
-- **A directory is not always a module.** `LCdrData/Core/` builds four from two directories:
-  the leaves `Utilities` and `Models`, which depend on nothing, plus `Formatting`
-  (`FileFormatter.swift`) and `Bindings` (`CommandCatalog.swift`), each one file that needs
-  something from both leaves and therefore sits above them. `LCdrData/App/` likewise builds
-  both `AppEnvironment` and the app layer.
+- **One directory, one module — with a single exception.** `LCdrData/Core/` holds four:
+  the leaves `Utilities` and `Models`, which depend on nothing, plus `Bindings` and
+  `Formatting`, one file each, that need something from both leaves and so cannot live in
+  either. The exception is `LCdrData/App/`, which builds `AppEnvironment` and the app layer
+  from one directory.
 - **An import can look unused and still be required.** `MemberImportVisibility` means
   reaching a member — `panel.state.sortDescriptor` — needs the defining module imported even
   when no type from it is named. Do not tidy those away.
@@ -193,9 +193,10 @@ bazel test //...
 bazel test //LCdrDataTests/... --nocache_test_results
 ```
 
-The suite is **193 test cases split across six targets** — Core/Models 50, Core/Utilities 18,
-Services 46, ViewModels 69, AppEnvironment 9, App 1. They **sum** to 193; no single target
-reports that number, so a target showing 50 is not a sign of lost tests.
+The suite is **201 test cases split across eight targets** — Core/Models 50,
+Core/Formatting 11, Core/Bindings 8, Core/Utilities 7, Services 46, ViewModels 69,
+AppEnvironment 9, App 1. They **sum** to 201; no single target reports that number, so a
+target showing 50 is not a sign of lost tests.
 
 Take counts from Swift Testing's own summary line in each test log
 (`Test run with 50 tests in ... passed`) rather than counting `✔` marks, which over-counts
@@ -203,7 +204,7 @@ by including the summary line itself. Note the line reads "1 test" singular for
 `AppTests`.
 
 > One test is currently **skipped**, not run: `FileOperationServiceTests.trashFile()` is
-> marked `@Test(.disabled(...))`. It still counts toward the 193, so a green run does not
+> marked `@Test(.disabled(...))`. It still counts toward the 201, so a green run does not
 > mean every test executed. `FileManager.trashItem` needs an application context, which
 > makes it the only test requiring `test_host` — see
 > [docs/PHASE8_MODULARISATION.md](docs/PHASE8_MODULARISATION.md) section 6.
@@ -244,57 +245,34 @@ If added later, update this section.
 
 ## Project Structure
 
-```
-LCdrData/
-├── MODULE.bazel                # Bazel dependencies (bzlmod)
-├── MODULE.bazel.lock           # Committed for reproducible resolution
-├── BUILD.bazel                 # Shared config; targets are per-package
-├── defs.bzl                    # Shared SWIFT_COPTS and PACKAGE_NAME
-├── .bazelrc                    # Deployment target, DEVELOPER_DIR, release config
-├── .bazelversion               # Pinned Bazel version (9.2.0)
-├── .bazelignore                # Directories Bazel must not traverse
-├── Bazel/                      # Hand-written Info.plist and entitlements
-├── Tuist.swift                 # Tuist project configuration
-├── Project.swift               # Project manifest (targets, settings, deps)
-├── Tuist/
-│   ├── BUILD.bazel             # Exports the manifests to Bazel
-│   └── Package.swift           # SPM dependencies — read by Tuist AND Bazel
-├── .tuist-version              # Pinned Tuist version (4.182.0)
-├── scripts/
-│   └── run-ui-tests.sh         # UI test runner (delegates to Tuist)
-├── LCdrData/                   # BUILD.bazel here defines //LCdrData (the app)
-│   ├── Core/                   # Layer 1 — four modules from two folders, the
-│   │   ├── Models/             # one place where folders and modules do not
-│   │   └── Utilities/          # line up; see the gotcha above
-│   ├── Services/               # Layer 2 — file system and sandbox services
-│   ├── ViewModels/             # Layer 3 — observable state objects
-│   ├── App/                    # Layer 4 (AppEnvironment) + layer 6 (entry point)
-│   ├── Views/                  # Layer 5 — SwiftUI views
-│   ├── AppIcon.icon/           # Icon Composer bundle (used by Bazel)
-│   └── Assets.xcassets/        # Asset catalog (.appiconset used by Tuist)
-├── LCdrDataTests/              # Unit tests (Swift Testing); every folder here
-│                               # is its own Bazel package and test target
-│   ├── Core/                   # One test package per production folder;
-│   │   ├── Models/             # Core/Utilities covers both the Utilities
-│   │   └── Utilities/          # and Formatting modules
-│   ├── Services/
-│   ├── ViewModels/
-│   ├── AppEnvironment/
-│   ├── App/
-│   └── TestSupport/            # Test doubles shared across test targets
-├── LCdrDataUITests/            # UI tests (XCTest)
-├── Derived/                    # Tuist-generated files (gitignored)
-├── docs/
-│   ├── DESIGN.md               # Product spec — behaviour and UX, no architecture
-│   ├── CONTEXT.md              # Project vocabulary and domain terms
-│   ├── CURRENT_ARCH.md         # Architecture as built
-│   ├── BAZEL_MIGRATION.md      # Why the Bazel/Tuist split looks like this
-│   ├── FUTURE_IMPROVEMENTS.md
-│   ├── MULTIWINDOW.md
-│   └── SANDBOX_ACCESS_REDESIGN.md
-├── README.md                   # Project overview, build and run instructions
-└── AGENTS.md                   # This file (CLAUDE.md is a symlink to it)
-```
+> **Do not add a source tree to this section.** Listing `LCdrData/`, `LCdrDataTests/` or
+> their module folders here means a second copy of the layout that goes stale on every
+> refactor — it did, repeatedly. The BUILD files are the source of truth; `bazel query //...`
+> enumerates the targets, and [docs/CURRENT_ARCH.md](docs/CURRENT_ARCH.md) §3 describes the
+> module stack. Only root-level files and directories belong below.
+
+| Path | Purpose |
+|---|---|
+| `MODULE.bazel` | Bazel dependencies (bzlmod) |
+| `MODULE.bazel.lock` | Committed for reproducible resolution |
+| `BUILD.bazel` | Shared config only; targets live in per-package BUILD files |
+| `defs.bzl` | Shared `SWIFT_COPTS` and `PACKAGE_NAME` |
+| `.bazelrc` | Deployment target, `DEVELOPER_DIR`, the `release` config |
+| `.bazelversion` | Pinned Bazel version (9.2.0) |
+| `.bazelignore` | Directories Bazel must not traverse |
+| `Bazel/` | Hand-written Info.plist and entitlements |
+| `Tuist.swift` | Tuist project configuration |
+| `Project.swift` | Tuist manifest — targets, settings, deps |
+| `Tuist/Package.swift` | SPM dependencies, read by **both** tools |
+| `.tuist-version` | Pinned Tuist version (4.182.0) |
+| `scripts/run-ui-tests.sh` | UI test runner (delegates to Tuist) |
+| `LCdrData/` | App sources; its `BUILD.bazel` defines `//LCdrData` |
+| `LCdrDataTests/` | Unit tests (Swift Testing), one package per module |
+| `LCdrDataUITests/` | UI tests (XCTest) |
+| `Derived/` | Tuist-generated files (gitignored) |
+| `docs/` | See the table at the end of [README.md](README.md) |
+| `README.md` | Project overview, build and run instructions |
+| `AGENTS.md` | This file (`CLAUDE.md` is a symlink to it) |
 
 > The app icon exists in **two** formats. `rules_apple` rejects `.appiconset` for macOS 26+
 > targets, so Bazel uses `AppIcon.icon` (Icon Composer) while Tuist continues to use the
@@ -379,6 +357,14 @@ Image(systemName: "globe")
 ### Test Conventions
 
 - Every class and struct with logic must have a corresponding unit test file
+- **Keep `LCdrDataTests/` aligned with the production layout.** Every production source
+  directory has a test directory at the same relative path, holding the tests for exactly
+  that module and its own `BUILD.bazel` with one `macos_unit_test` target. When you add,
+  move, split or rename a production module, do the same to its test directory in the same
+  change — a test file that has drifted away from the module it covers is how a target ends
+  up depending on a layer it should not see. `LCdrDataTests/TestSupport/` is the one
+  exception, since it mirrors no module, and `Views` has no test directory because the views
+  are covered by UI tests
 - Design code for testability: use protocol-based dependencies injected via initializer
 - Avoid static methods — use instance methods on injectable types instead
 - Break large classes into smaller, focused types that are easier to test in isolation

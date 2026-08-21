@@ -26,7 +26,7 @@ LCdrData/
 ├── Tuist/Package.swift        SPM declarations — read by Tuist AND Bazel
 ├── .tuist-version             4.182.0 (pinned)
 ├── LCdrData/                  BUILD.bazel here defines //LCdrData (the app)
-│   ├── Core/                  Layer 1 — four modules, see §3
+│   ├── Core/                  Layer 1 — Utilities, Models, Bindings, Formatting
 │   ├── Services/              Layer 2 — file I/O, sandbox, config, watching
 │   ├── ViewModels/            Layer 3 — @Observable state coordinators
 │   ├── App/                   Layer 4 (AppEnvironment) + layer 6 (entry point)
@@ -77,8 +77,8 @@ App → Views → AppEnvironment → ViewModels → Services ─→ Models
 |---|---|---|---|
 | 1 | `Utilities` | `//LCdrData/Core/Utilities` | nothing |
 | 1 | `Models` | `//LCdrData/Core/Models` | nothing |
-| 1½ | `Formatting` | `//LCdrData/Core/Utilities:Formatting` | `Models` |
-| 1½ | `Bindings` | `//LCdrData/Core/Models:Bindings` | `Models`, `Utilities` |
+| 1½ | `Formatting` | `//LCdrData/Core/Formatting` | `Models` |
+| 1½ | `Bindings` | `//LCdrData/Core/Bindings` | `Models`, `Utilities` |
 | 2 | `Services` | `//LCdrData/Services` | `Models` |
 | 3 | `ViewModels` | `//LCdrData/ViewModels` | layer 1 and 2 |
 | 4 | `AppEnvironment` | `//LCdrData/App:AppEnvironment` | `Models`, `Services`, `ViewModels` |
@@ -87,7 +87,7 @@ App → Views → AppEnvironment → ViewModels → Services ─→ Models
 
 Four facts about this shape are load-bearing:
 
-- **`Core/` holds four modules in two directories**, and the split deliberately does not follow the `Models/` and `Utilities/` folder boundary. Two files are the reason. `CommandCatalog` needs both a `Command` and a `KeyboardShortcuts` key, and `FileFormatter.kind(for:)` takes a `FileItem`; leaving either in place would make the two *directories* mutually dependent even though the *files* are not. Compiling each as its own small module above the leaves keeps `Models` and `Utilities` free of first-party dependencies, and required no source file to move.
+- **`Core/` is four directories, one per module**, and `Bindings/` and `Formatting/` hold a single file each. That looks fussy until you see what it buys: `CommandCatalog` needs both a `Command` and a `KeyboardShortcuts` key, and `FileFormatter.kind(for:)` takes a `FileItem`, so housing either with `Models` or `Utilities` would make those two mutually dependent — which is exactly what forced them to be one module before. Given their own modules, both leaves are free of first-party dependencies.
 - **Module names avoid the types they contain.** `Formatting` rather than `FileFormatter`, `Bindings` rather than `CommandCatalog`, because a module and a type sharing a name makes every reference from a client ambiguous.
 - **`AppEnvironment` is its own layer**, sharing the `App/` directory with layer 6 but built as a separate target. `Views` needs it while it needs `ViewModels`, which is what breaks the App ↔ Views cycle.
 - **Each module's BUILD file names, via `visibility`, exactly which packages may depend on it**, so a layering violation is an analysis-time error rather than a review comment. It bites in both directions: `Models` cannot reach up to `Services`, and a test target for one layer cannot reach past it either.
@@ -313,22 +313,26 @@ System frameworks: SwiftUI, AppKit (`NSOpenPanel`, `NSWorkspace`, `NSPasteboard`
 
 ## 9. Tests
 
-**193 test cases across six unit test targets**, one per module, whose counts **sum** to that total — no single target reports 193.
+**201 test cases across eight unit test targets**, whose counts **sum** to that total — no single target reports 201. The test tree mirrors the production module layout one directory at a time, so every module's tests are a package of their own.
 
 | Target | Files | Cases | Covers |
 |---|---|---|---|
+| `//LCdrDataTests/Core/Utilities` | 1 | 7 | `~` expansion against a stubbed account home |
 | `//LCdrDataTests/Core/Models` | 6 | 50 | `FileItem` identity, `Cursor` resolution, `PanelState`, sort toggling, operation models, context-menu variants |
-| `//LCdrDataTests/Core/Utilities` | 2 | 18 | Size/date/kind formatting, `~` expansion against a stubbed account home |
+| `//LCdrDataTests/Core/Bindings` | 1 | 8 | Every `Command`'s key and modifiers, and which commands have none |
+| `//LCdrDataTests/Core/Formatting` | 1 | 11 | Size, date and kind formatting |
 | `//LCdrDataTests/Services` | 7 | 46 | Listing, file operations with conflicts and progress, KDL parsing and merging, bookmark storage, session persistence, `DirectorySession`, sandbox access dedup |
 | `//LCdrDataTests/ViewModels` | 5 | 69 | Panel loading, selection, navigation, history, type-ahead, command dispatch, dialog flows and cancellation |
 | `//LCdrDataTests/AppEnvironment` | 1 | 9 | Startup scope activation, session seeding |
 | `//LCdrDataTests/App` | 1 | 1 | `AppDelegate` termination behaviour |
 
+`Views` has no unit test target: the views are covered by the UI tests instead.
+
 `//LCdrDataTests/TestSupport` holds the fakes shared across targets — `FakeBookmarkStore`, `FakeAccessPresenter`, `RecordingScopeActivator` and friends. All test doubles are hand-written against the service protocols; there is no mocking framework.
 
 Every target is app-hosted (`test_host = "//LCdrData"`) and tagged `local`, since these do not bootstrap inside Bazel's sandbox, and declares `size = "small"`.
 
-One test is **skipped, not run**: `FileOperationServiceTests.trashFile()` is `@Test(.disabled(...))` because `FileManager.trashItem` needs an application context. It still counts toward the 193.
+One test is **skipped, not run**: `FileOperationServiceTests.trashFile()` is `@Test(.disabled(...))` because `FileManager.trashItem` needs an application context. It still counts toward the 201.
 
 UI tests under `LCdrDataUITests/` (XCTest) cover launch, panel selection and session restore. Bazel compiles them but cannot run them — `rules_apple`'s runner rejects macOS XCUITEST — so `scripts/run-ui-tests.sh` delegates to Tuist. They are not part of the routine development loop.
 
