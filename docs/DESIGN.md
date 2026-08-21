@@ -1,256 +1,184 @@
 # LCdrData — Design Document
 
+What LCdrData is meant to feel like to use. This document is the **product spec**: layout,
+behaviour, keyboard model and configuration, described from the user's side.
+
+> It deliberately contains no architecture or code. For how the app is actually built —
+> modules, services, data flow — see **[CURRENT_ARCH.md](CURRENT_ARCH.md)**, which also
+> records where the two currently disagree.
+
 ## Overview
 
 LCdrData is a native macOS dual-panel file manager inspired by orthodox file managers
-(Total Commander, ForkLift, Midnight Commander). It is built entirely with Swift and
-SwiftUI, targeting macOS 26.4+. The name "LCDR" stands for "Lieutenant Commander" — a nod
-to the tradition of naming file managers with military/naval ranks (Commander, Captain, etc.)
-and a reference to Lieutenant Commander Data from Star Trek: The Next Generation.
+(Total Commander, ForkLift, Midnight Commander). The name "LCDR" stands for "Lieutenant
+Commander" — a nod to the tradition of naming file managers after military and naval ranks
+(Commander, Captain), and a reference to Lieutenant Commander Data from *Star Trek: The Next
+Generation*.
 
-The app provides a keyboard-driven, power-user-oriented file management experience with
-two side-by-side directory panels, a command bar, and rich file operations.
+It offers a keyboard-driven, power-user file management experience: two side-by-side
+directory panels, a function-key command bar, and file operations that always run between
+the two panels.
 
-## Design Principles
+## Design principles
 
-1. **Keyboard-first** — every action reachable via keyboard shortcut; mouse is optional
-2. **Native macOS** — use system APIs (FileManager, NSWorkspace, FSEvents), respect
-   sandboxing, support macOS services and Finder integration
-3. **Performance** — handle directories with 100k+ files; lazy loading, background I/O
-4. **Simplicity** — avoid feature bloat; ship a focused core before adding plugins
-5. **Transparency** — file operations show real progress; errors surface clearly
+1. **Keyboard-first.** Every action is reachable from the keyboard; the mouse is optional.
+2. **Native macOS.** It behaves like a Mac app — Quick Look, the Trash, Finder integration,
+   the standard menu bar, and the system's own folder-access prompts.
+3. **Responsive.** Large directories stay usable; nothing blocks the window.
+4. **Focused.** A small, coherent core rather than a feature checklist.
+5. **Transparent.** Operations show real progress, and failures say what went wrong.
 
-## Architecture
+## The window
 
-### Layer Diagram
-
-```
-┌─────────────────────────────────────────────────┐
-│                  SwiftUI Views                  │  Presentation
-│  (MainWindow, PanelView, Toolbar, Dialogs)      │
-├─────────────────────────────────────────────────┤
-│               ViewModels / State                │  State Management
-│  (PanelViewModel, FileOperationVM, AppState)    │
-├─────────────────────────────────────────────────┤
-│                   Services                      │  Business Logic
-│  (FileSystemService, OperationQueue,            │
-│   SearchService, BookmarkService)               │
-├─────────────────────────────────────────────────┤
-│                    Models                       │  Data
-│  (FileItem, PanelState, SortDescriptor,         │
-│   FileOperation, Bookmark)                      │
-└─────────────────────────────────────────────────┘
-```
-
-### Target Module Layout
-
-All source code lives in the `LCdrData/` app target. Organize by feature/layer:
+Minimum 800 × 500 points; opens at 1100 × 700.
 
 ```
-LCdrData/
-├── App/
-│   └── LCdrDataApp.swift               # @main entry point, window/scene setup
-├── Models/
-│   ├── FileItem.swift                  # Single file/directory representation
-│   ├── PanelState.swift                # State of one file panel
-│   ├── SortDescriptor.swift            # Column sort configuration
-│   ├── FileOperation.swift             # Copy/move/delete operation descriptor
-│   ├── Bookmark.swift                  # Saved location / security-scoped bookmark
-│   └── AppConfiguration.swift          # Strongly-typed config model (parsed from KDL)
-├── ViewModels/
-│   ├── AppState.swift                  # Global app state (active panel, theme, etc.)
-│   ├── PanelViewModel.swift            # Drives one panel: listing, selection, navigation
-│   └── FileOperationViewModel.swift    # Manages queued file operations and progress
-├── Services/
-│   ├── FileSystemService.swift         # Directory listing, metadata, file watching
-│   ├── FileOperationService.swift      # Copy, move, rename, delete, create
-│   ├── SearchService.swift             # File name / content search
-│   ├── BookmarkService.swift           # Security-scoped bookmark persistence
-│   └── ConfigurationService.swift      # KDL config load/parse/apply/save
-├── Views/
-│   ├── MainWindowView.swift            # Root view: two panels + toolbar + command bar
-│   ├── PanelView.swift                 # Single file panel (table, path bar, status bar)
-│   ├── FileTableView.swift             # Sortable file/directory list (Table or List)
-│   ├── PathBarView.swift               # Breadcrumb / editable path bar
-│   ├── ToolbarView.swift               # Top toolbar with common actions
-│   ├── CommandBarView.swift            # Bottom command/quick-action bar
-│   ├── StatusBarView.swift             # Per-panel status: item count, selection size
-│   ├── FileOperationProgressView.swift # Operation progress sheet/overlay
-│   └── ConfigurationView.swift         # Dual-pane KDL: defaults (read-only) + user overrides, Apply/Cancel
-├── Utilities/
-│   ├── KeyboardShortcuts.swift         # Centralized shortcut definitions
-│   ├── FileFormatter.swift             # Size, date, permissions formatting
-│   ├── Icons.swift                     # System icon helpers
-│   └── KDLSyntaxHighlighter.swift      # KDL syntax highlighting for config editor
-└── Resources/
-    └── Assets.xcassets/
+┌──────────────────────────────────────────────────────────┐
+│  /Users/dan/Documents  │  /Users/dan/Downloads           │  Path bars
+├────────────────────────┼─────────────────────────────────┤
+│  ..                    │  ..                             │
+│  > Projects/      4 KB │  archive.zip          12.3 MB   │
+│  > Photos/       12 KB │  report.pdf            2.1 MB   │
+│    notes.txt      1 KB │  > screenshots/         4 KB    │
+│    readme.md      3 KB │    image.png          845 KB    │
+│                        │                                 │
+├────────────────────────┼─────────────────────────────────┤
+│  3 items, 8 KB         │  4 items, 15.2 MB               │  Status bars
+├────────────────────────┴─────────────────────────────────┤
+│  [F3 View] [F5 Copy] [F6 Move] [F7 Mkdir] [F8 Delete]    │  Command bar
+└──────────────────────────────────────────────────────────┘
 ```
 
-## Data Models
+**Multiple windows.** `⌘N` opens another window with its own pair of panels, starting from
+the frontmost window's directories. Windows are independent, but granted folder access and
+settings are shared across all of them. Closing the last window quits the app, and the next
+launch restores where you left off.
 
-### FileItem
+## Panels
 
-```swift
-struct FileItem: Identifiable, Hashable {
-    let id: UUID
-    let url: URL
-    let name: String
-    let isDirectory: Bool
-    let size: Int64?              // nil for directories (computed on demand)
-    let modificationDate: Date?
-    let creationDate: Date?
-    let isHidden: Bool
-    let isSymlink: Bool
-    let permissions: UInt16
-}
-```
+- Two side-by-side panels, each independently navigable, separated by a resizable splitter.
+- Exactly one panel is **active** at a time, shown by a tinted border. `Tab` switches;
+  clicking a panel activates it.
+- Each panel has a path bar, a file table and a status bar showing item counts and the size
+  of the selection.
+- File operations always run **from the active panel to the other one**, which is what makes
+  a two-panel layout worth having.
 
-### PanelState
+## The file table
 
-```swift
-struct PanelState {
-    var currentDirectory: URL
-    var items: [FileItem]
-    var selectedItemIDs: Set<UUID>
-    var focusedItemID: UUID?
-    var sortDescriptor: SortDescriptor
-    var showHiddenFiles: Bool
-    var history: [URL]            // back/forward navigation stack
-    var historyIndex: Int
-}
-```
+- Columns: Name, Size, Date Modified, Kind. Click a header to sort; click again to reverse.
+  Directories group before files.
+- A `..` row sits at the top of every listing except the filesystem root.
+- Click to select, `⌘`-click to add to the selection, `⇧`-click for a range.
+- `Return` enters a directory; on a **file** it starts a rename, the way Finder does.
+  `F2` renames whatever is focused, orthodox-style. Neither applies to `..`.
+- Double-click or `⌘↓` opens a file and enters a directory.
+- `Delete` and forward delete go to the **parent directory** — the same as activating `..` —
+  when the list has keyboard focus and the path bar is not being edited. This is the orthodox
+  convention, and it is why moving to the Trash is `F8` rather than `Delete`.
+- `⌘⇧.` toggles hidden files.
+- Dragging rows out exports the files; dropping files onto a panel copies them in.
 
-### SortDescriptor
+## Navigation
 
-```swift
-struct SortDescriptor {
-    enum Column: String { case name, size, dateModified, dateCreated, kind }
-    var column: Column
-    var ascending: Bool
-}
-```
+- **Path bar** — clickable breadcrumbs, or `⌘L` to type a path directly. `~` works and
+  expands to your real home folder. A button copies the current path.
+- **Parent** — the `..` row, `⌘↑`, or `Delete`.
+- **History** — back and forward per panel, `⌘[` and `⌘]`.
+- **Favorites** — a menu of saved locations, defined in your configuration file.
+- **Open Folder…** — `⌘⇧O`, which is also how you grant access to a folder outside the
+  sandbox.
 
-## Core Features (MVP)
+## File operations
 
-### 1. Dual-Panel Layout
+Everything acts on the active panel's selection, with the other panel as the destination.
 
-- Two side-by-side file panels, each independently navigable
-- One panel is "active" (focused) at any time — indicated visually
-- Tab key switches active panel
-- Each panel has: path bar, file table, status bar
-- Resizable splitter between panels
+| Operation | Shortcut | Description |
+|---|---|---|
+| Copy | `F5` | Copy the selection to the other panel |
+| Move | `F6` | Move the selection to the other panel |
+| Move to Trash | `F8` | With confirmation |
+| Delete permanently | `⌘⌫` | Bypasses the Trash, with confirmation |
+| New folder | `F7` | Create a directory in the active panel |
+| Rename | `Return` / `F2` | `Return` is Finder-style, `F2` orthodox |
+| View | `F3` / `Space` | Quick Look preview |
+| Edit | `F4` | Open in the default application |
+| Refresh | `⌘R` | Reload the active panel |
 
-### 2. File Table
+- Destructive operations ask first.
+- Long copies and moves show a progress overlay that can be cancelled part-way.
+- When a file already exists at the destination, a dialog offers **overwrite**, **skip** or
+  **rename** — and an *apply to all* toggle so a large batch needs answering once.
+- Panels refresh themselves when their directory changes on disk, so an operation performed
+  elsewhere shows up without a manual reload.
 
-- Columns: Icon, Name, Size, Date Modified, Kind
-- Sortable by clicking column headers
-- Single-click selects; Cmd+click for multi-select; Shift+click for range select
-- Enter: enter directories; for a focused **file**, Enter starts rename (macOS-style).
-- F2: rename the focused item (not the `..` row).
-- Double-click or Cmd+Down opens files and enters directories.
-- **Delete** (⌫) and **forward delete** (⌦): go to parent directory when the file list has keyboard focus and the path bar is not being edited—same outcome as activating `..`. **Cmd+Up** also goes to parent via the menu command **Go to Parent Directory**.
-- Show/hide hidden files toggle (Cmd+Shift+.)
-- `..` entry at top to navigate to parent
+After an operation the cursor lands somewhere sensible rather than jumping to the top: on the
+new item after a rename or a new folder, on the neighbouring row after a delete, and on the
+directory you came from after going to a parent.
 
-### 3. File Operations
+## Keyboard
 
-All operations work from the active panel to the inactive panel (as target):
+Arrow keys move through the list, and typing plain characters jumps to the first matching
+filename — the buffer clears after a second of silence.
 
-| Operation       | Shortcut | Description                              |
-|-----------------|----------|------------------------------------------|
-| Copy            | F5       | Copy selected items to other panel       |
-| Move            | F6       | Move selected items to other panel       |
-| Delete          | F8       | Move selected items to Trash             |
-| Permanent delete| Cmd+Delete | Remove immediately (not Trash); confirmation |
-| New Folder      | F7       | Create directory in active panel         |
-| Rename          | Enter / F2 | Rename focused file (Enter Finder-style; F2 orthodox) |
-| View            | F3       | Quick Look preview                       |
-| Edit            | F4       | Open in default editor                   |
-| Refresh         | Cmd+R    | Reload active panel                      |
+| Shortcut | Action |
+|---|---|
+| `Tab` | Switch active panel |
+| `Return` | Enter directory, or rename a focused **file** |
+| `F2` | Rename the focused item (not `..`) |
+| `Delete` / forward delete | Go to parent directory |
+| `⌘↑` | Go to parent directory |
+| `⌘↓` / double-click | Open file, enter directory |
+| `⌘L` | Edit the path bar |
+| `⌘⇧O` | Open Folder… |
+| `⌘R` | Refresh panel |
+| `⌘⇧.` | Toggle hidden files |
+| `⌘[` / `⌘]` | History back / forward |
+| `⌘A` | Select all (excludes `..`) |
+| `⌘⇧A` | Collapse the selection to the focused row |
+| `⌘⌥C` | Copy selected paths to the clipboard |
+| `⌘⌫` | Delete permanently, with confirmation |
+| `Space` / `F3` | Quick Look preview |
+| `F4` | Open in the default application |
+| `F5` / `F6` | Copy / move to the other panel |
+| `F7` | New folder |
+| `F8` | Move to Trash |
+| `Home` / `End` | First / last row |
+| `⌘N` | New window |
+| `⌘,` | Settings |
+| Arrows | Move through the list |
+| Any letter | Incremental filename search |
 
-Menu commands (same shortcuts where shown in the menu bar) also expose **Go to Parent**, **Open**, **Delete Immediately…**, **Copy Selected Paths**, etc. The **Edit › Delete** list command can still move the selection to Trash when chosen from the menu; the physical **Delete** / **forward delete** keys in the main window are bound to parent navigation only.
+The command bar along the bottom labels the function keys — `F3 View`, `F5 Copy`, `F6 Move`,
+`F7 Mkdir`, `F8 Delete` — in the manner of classic orthodox managers. The buttons are
+clickable, and they grey out when they do not apply, so the bar doubles as a reminder of what
+is currently possible.
 
-- Confirmation dialogs for destructive operations
-- Progress sheet for long-running copy/move with cancel support
-- Conflict resolution: skip, overwrite, rename, apply to all
+Menu bar equivalents exist for navigation, selection and delete commands, so the standard
+macOS discovery route works too.
 
-### 4. Navigation
+## Folder access
 
-- Path bar: clickable breadcrumbs; editable via Cmd+L (go to path)
-- Parent directory: `..` row, **Cmd+Up** (**Go to Parent Directory** in the menu), or plain **Delete** / **forward delete** when the list is focused (see File Table above).
-- Back/forward history per panel (Cmd+[ / Cmd+])
-- Bookmarks sidebar or dropdown for saved locations
-- Volumes list accessible from path bar root
-- Drag and drop support (files into/out of panels)
+The app is sandboxed, so it can only see folders you have explicitly allowed. This is
+deliberately quiet:
 
-### 5. Keyboard Navigation
-
-- Arrow keys navigate the file list
-- Type-ahead / incremental search: start typing to jump to matching filename
-- Space opens Quick Look preview for the focused file (same as F3)
-- Cmd+A selects all; Cmd+Shift+A collapses multi-selection to the focused row
-- Home / End: first / last row in the list; Cmd+Down opens the focused item (same as double-click)
-
-### 6. Command Bar
-
-Bottom bar with function-key labels (F3 View, F5 Copy, F6 Move, F7 Mkdir, F8 Delete)
-reminiscent of classic orthodox file managers. Clickable and acts as keyboard hint.
-
-## Future Features (Post-MVP)
-
-These are explicitly out of scope for the initial implementation but inform
-architectural decisions (keep extension points open):
-
-- **Dependency injection** - use Swinject https://github.com/swinject/swinject for dependency injectsion management in the app
-- **Tabs** — multiple tabs per panel
-- **Archive support** — browse zip/tar/gz as directories
-- **File preview panel** — Quick Look-style inline preview using QLPreviewView in the file panel
-
-## State Management
-
-Use the `@Observable` macro (Observation framework) for view models:
-
-```swift
-@Observable
-final class PanelViewModel {
-    var state: PanelState
-    private let fileSystemService: FileSystemService
-    // ...
-}
-```
-
-Global app state held in `AppState`, injected via SwiftUI environment:
-
-```swift
-@Observable
-final class AppState {
-    var leftPanel: PanelViewModel
-    var rightPanel: PanelViewModel
-    var activePanel: PanelSide  // .left or .right
-}
-```
-
-Inject into the view hierarchy:
-
-```swift
-WindowGroup {
-    MainWindowView()
-        .environment(appState)
-}
-```
+- On first launch it asks once for your home folder, which covers most work.
+- Navigating somewhere it cannot read prompts for exactly that folder, and continues where
+  you left off once granted. Declining leaves the panel where it was rather than in an error
+  state.
+- **Grant Folder Access…** in the menu asks up front, without waiting for a failure.
+- Grants persist across launches. You should never be asked twice for the same folder.
 
 ## Configuration
 
-### Language: KDL 2.0
+Settings are a [KDL 2.0](https://kdl.dev/) document — a human-friendly, node-based format.
+Your file lives inside the app's sandbox container:
 
-App configuration uses [KDL 2.0](https://kdl.dev/) ("cuddle") — a human-friendly document
-language with node-based semantics. KDL is parsed via the
-[kdl-swift](https://github.com/danini-the-panini/kdl-swift) library (Swift Package Manager).
+```
+~/Library/Containers/com.xvir.LCdrData/Data/Library/Application Support/com.xvir.LCdrData/config.kdl
+```
 
-The configuration file lives at:
-`~/Library/Application Support/com.xvir.LCdrData/config.kdl`
-
-Example configuration:
+It is created the first time you apply a change, and deleting it restores every default.
 
 ```kdl
 panel {
@@ -265,251 +193,42 @@ appearance {
 }
 
 bookmarks {
-    bookmark "Projects" "~/Projects"
-    bookmark "Downloads" "~/Downloads"
+    - "Projects|~/Projects"
+    - "Downloads|~/Downloads"
 }
 
 editor {
     default-app "com.apple.TextEdit"
 }
-
-keyboard {
-    // Override default shortcuts (function keys for file ops).
-    // Plain Delete / forward-delete always mean “go to parent” in the main window;
-    // they are not assigned here.
-    copy F5
-    move F6
-    delete F8
-    mkdir F7
-}
 ```
 
-### Configuration Window
+Each `bookmarks` entry is a `label|path` pair and becomes an item in the Favorites menu;
+`~` expands to your home folder.
 
-The configuration window is a dedicated macOS window (opened via Cmd+, or the app menu)
-laid out as **two side-by-side panels** (split view), consistent with the app’s dual-panel
+### The settings window
+
+`⌘,` opens a window laid out as two side-by-side panes, echoing the app's own dual-panel
 metaphor:
 
-1. **Left panel — default configuration (read-only)** — A scrollable, monospaced view of
-   the **full default** configuration expressed in KDL, with the same syntax highlighting
-   as the editable side (keywords, strings, numbers, comments, node names in distinct
-   colors). It lists **every** supported option together with its built-in default value.
-   This pane is not editable; it is the reference for “what the app assumes” when the user
-   file does not override something.
+1. **Left — the defaults, read-only.** The complete default configuration in KDL, syntax
+   highlighted, listing every supported option with its built-in value. This is the
+   reference for what the app assumes when you have not said otherwise.
+2. **Right — your overrides, editable.** Only what you write here is saved. Anything you set
+   overrides the corresponding default; anything you leave out keeps it.
+3. **Apply** parses and validates your text, then applies the merged result to the running
+   app immediately — no restart, and every open window updates. If the KDL does not parse,
+   an inline message points at the problem and nothing is applied.
+4. **Cancel** discards unsaved edits and reverts the right pane to the last applied version.
 
-2. **Right panel — your customizations** — A scrollable, monospaced **editable** KDL text
-   area for the user’s overrides. Only what appears here is persisted as the user config
-   (see path above). Any option or value you set in the right panel **overwrites** the
-   corresponding default from the left panel for the running app; options you omit keep
-   their defaults.
+The window never auto-saves. Nothing takes effect until you click Apply.
 
-3. **"Apply" button** — Parses the right panel’s KDL, validates it, merges it on top of the
-   defaults, and applies the **effective** configuration to the running app. If parsing
-   fails, an inline error message is shown with the line number and description of the
-   problem; the config is not applied.
+## Not in scope yet
 
-4. **"Cancel" button** — Discards unsaved edits in the right panel and closes the window,
-   reverting that panel to the last-applied user configuration.
+Deliberately absent from the current design, in rough order of appeal:
 
-The window does **not** auto-save. Changes only take effect when the user explicitly
-clicks "Apply". On successful apply, the right panel’s KDL is written to the config file
-on disk and all observable state that depends on configuration is updated immediately.
-
-### Configuration Data Flow
-
-Effective configuration is **defaults ∪ user file**: bundled default KDL (shown read-only
-in the configuration window’s left panel) is merged with `config.kdl` from disk (edited
-in the right panel); user values win on conflict.
-
-```
-bundled default KDL  ──┐
-                       ├──► merge ──► AppConfiguration (effective)
-config.kdl on disk  ───┘
-       ▲
-       │ read on launch; write on Apply
- ConfigurationService          ← reads/writes user file, parses KDL via kdl-swift
-       │
-       ▼
- AppState / ViewModels         ← observe configuration changes
-```
-
-### ConfigurationService
-
-```swift
-@Observable
-final class ConfigurationService {
-    var current: AppConfiguration
-    
-    func load() throws                       // Read user file, merge with bundled defaults
-    func apply(fromUserKDL kdlText: String) throws  // Parse overrides, merge, validate, write user file
-    func defaultKDLText() -> String          // Bundled full defaults (left pane, read-only)
-    func userKDLText() -> String             // Last-applied user overrides (right pane)
-}
-```
-
-## File System Interaction
-
-### Directory Listing
-
-Use `FileManager.default.contentsOfDirectory(at:includingPropertiesForKeys:options:)`
-with resource keys pre-fetched for performance:
-
-```swift
-let keys: [URLResourceKey] = [
-    .nameKey, .isDirectoryKey, .fileSizeKey,
-    .contentModificationDateKey, .creationDateKey,
-    .isHiddenKey, .isSymbolicLinkKey
-]
-```
-
-Run listing on a background thread; publish results to the view model.
-
-### File Watching
-
-Use `DispatchSource.makeFileSystemObjectSource` or `FSEventStreamCreate` to watch
-the current directory for changes and auto-refresh the panel.
-
-### Security-Scoped Bookmarks
-
-Since the app runs in a sandbox with user-selected file access:
-
-- When the user selects a folder via `NSOpenPanel`, persist a security-scoped bookmark
-- On relaunch, resolve the bookmark and call `startAccessingSecurityScopedResource()`
-- Store bookmarks in `UserDefaults` or a small plist file
-- The `BookmarkService` handles the full lifecycle
-
-### File Operations
-
-Use `FileManager` for copy/move/delete. For long operations:
-
-- Run on a background `OperationQueue` with configurable concurrency
-- Report progress via `Progress` objects bridged to SwiftUI
-- Support cancellation via cooperative `Task` cancellation
-
-## Window and Layout
-
-### Minimum Window Size
-
-800 x 500 points. Default: 1100 x 700.
-
-### Window Configuration
-
-```swift
-WindowGroup {
-    MainWindowView()
-}
-.defaultSize(width: 1100, height: 700)
-.windowResizability(.contentMinSize)
-```
-
-### Layout Sketch
-
-```
-┌──────────────────────────────────────────────────────────┐
-│  [Toolbar: Back/Fwd | Bookmarks | Search | Preferences]  │
-├────────────────────────┬─────────────────────────────────┤
-│  /Users/dan/Documents  │  /Users/dan/Downloads           │  Path bars
-├────────────────────────┼─────────────────────────────────┤
-│  ..                    │  ..                              │
-│  > Projects/      4 KB │  archive.zip          12.3 MB   │
-│  > Photos/       12 KB │  report.pdf            2.1 MB   │
-│    notes.txt      1 KB │  > screenshots/        4 KB     │
-│    readme.md      3 KB │    image.png          845 KB    │
-│                        │                                  │
-│                        │                                  │
-├────────────────────────┼─────────────────────────────────┤
-│  3 items, 8 KB         │  4 items, 15.2 MB               │  Status bars
-├────────────────────────┴─────────────────────────────────┤
-│  [F3 View] [F5 Copy] [F6 Move] [F7 Mkdir] [F8 Delete]   │  Command bar
-└──────────────────────────────────────────────────────────┘
-```
-
-## Keyboard Shortcut Map
-
-| Shortcut          | Action                          |
-|-------------------|---------------------------------|
-| Tab               | Switch active panel             |
-| Enter             | Enter directory, or rename focused **file** |
-| F2                | Rename focused item (not `..`)  |
-| Delete / forward delete | Go to parent directory (list focused; not while editing path) |
-| Cmd+Down / Dbl-click | Open file / enter directory  |
-| Cmd+Up            | Go to parent directory (menu)   |
-| Cmd+L             | Focus path bar (go to path)     |
-| Cmd+Shift+O       | Open Folder…                    |
-| Cmd+R             | Refresh panel                   |
-| Cmd+Shift+.       | Toggle hidden files             |
-| Cmd+[ / Cmd+]     | History back / forward          |
-| Cmd+A             | Select all (excludes `..`)      |
-| Cmd+Shift+A       | Collapse selection to focused row |
-| Cmd+Option+C      | Copy selected paths to clipboard |
-| Cmd+Delete        | Permanent delete (with confirmation) |
-| Space             | Quick Look preview (same as F3) |
-| F3                | Quick Look preview              |
-| F4                | Open in editor                  |
-| F5                | Copy to other panel             |
-| F6                | Move to other panel             |
-| F7                | Create new folder               |
-| F8                | Move to Trash                   |
-| Home / End        | First / last list row           |
-| Arrows            | Navigate list                   |
-| Type characters   | Incremental filename search     |
-
-## Dependencies
-
-| Package | URL | Purpose |
-|---------|-----|---------|
-| kdl-swift | https://github.com/danini-the-panini/kdl-swift | KDL 2.0 parser for configuration files |
-| swift-mocking | https://github.com/DanielCardonaRojas/swift-mocking | Mock generation for unit tests |
-
-Added via Swift Package Manager in Xcode (File > Add Package Dependencies).
-
-## Sandbox and Entitlements
-
-Required entitlements (`LCdrData.entitlements`):
-
-```xml
-<key>com.apple.security.app-sandbox</key>          <true/>
-<key>com.apple.security.files.user-selected.read-write</key>  <true/>
-<key>com.apple.security.files.bookmarks.app-scope</key>       <true/>
-```
-
-The project has `read-write` user-selected file access and app-scope bookmarks,
-enabling copy, move, rename, and delete operations. Bookmarked folders persist
-across launches.
-
-## Implementation Phases
-
-### Phase 1 — Skeleton and Navigation
-- Dual-panel layout with resizable splitter
-- Directory listing with FileItem model
-- Basic navigation: enter directories, go to parent, path bar
-- Column sorting
-- Panel switching with Tab
-
-### Phase 2 — File Operations
-- Copy, move, delete (to Trash) with confirmation dialogs
-- New folder creation
-- Rename (inline editing)
-- Progress reporting for long operations
-- Conflict resolution dialog
-
-### Phase 3 — Power User Features
-- Keyboard shortcut system (full map above)
-- Type-ahead incremental search
-- Space-to-preview (mirrors F3 Quick Look)
-- Hidden files toggle
-- Back/forward history
-- Command bar with function key labels
-
-### Phase 4 — Configuration and Polish
-- KDL 2.0 configuration system (ConfigurationService, AppConfiguration model)
-- Configuration window: dual-pane KDL (read-only defaults, editable overrides), syntax highlighting, Apply/Cancel
-- Security-scoped bookmarks (remember folders across launches)
-- Bookmarks sidebar / favorites
-- File watching with auto-refresh
-- Drag and drop (within panels, to/from Finder)
-- Menu bar integration with standard macOS File/Edit/View menus
-
-### Phase 5 — Advanced Features
-- Tabs per panel
-
+- **Tabs** — several directories per panel.
+- **Remappable shortcuts** — the keyboard map above is currently fixed.
+- **A toolbar** and a **volumes list**, for pointer-driven navigation.
+- **An inline preview pane**, as an alternative to the Quick Look panel.
+- **Search** beyond type-ahead — by name across a tree, or by content.
+- **Archive browsing** — entering a zip or tar as though it were a directory.

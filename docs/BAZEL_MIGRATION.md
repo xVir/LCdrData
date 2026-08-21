@@ -581,10 +581,18 @@ Tuist reports `The scheme LCdrData's test action has no tests to run, finishing
 early` and exits 0 without running anything. Comparing against that would be
 meaningless — and it looks alarmingly like a regression the first time you see it.
 
-The Phase 0 baseline is **193 test cases**; see
-[parity-baseline/README.md](parity-baseline/README.md), which also explains why
-the count must come from Swift Testing's summary line rather than from grepping
-`✔` marks.
+The Phase 0 baseline is **193 test cases**, from
+`tuist test "LCdrData" --skip-ui-tests`. Take the figure from Swift Testing's own
+summary line, which both runners print:
+
+```
+✔ Test run with 193 tests in 23 suites passed after 2.160 seconds.
+```
+
+Do not count `✔` lines with grep. That over-counts by including the run-summary
+line itself, and counting `Suite .* passed` gives 24 against 22 distinct suite
+names and Swift Testing's own figure of 23. The per-case total is consistent
+across both build systems; the suite tally is not a reliable comparison.
 
 **Exit criteria:** `bazel test //:LCdrDataTests` passes, and its log reports
 `Test run with 193 tests ... passed` — matching Tuist case-for-case.
@@ -748,17 +756,75 @@ Two flags are load-bearing when comparing test results —
 `--nocache_test_results` for Bazel and `--no-selective-testing` for Tuist. Without
 them either side reports success without running anything.
 
-**Results are recorded in [parity-baseline/REPORT.md](parity-baseline/REPORT.md).**
-**All five items pass.** Every difference is accounted for: `NSMainStoryboardFile`
-absent by design, and `LCdrData.debug.dylib` plus `__preview.dylib` absent because
-Bazel links one self-contained binary where Xcode splits out a debug dylib.
+#### Results — at parity
 
-For item 4, reset the container first — both builds share bundle ID
-`com.xvir.LCdrData` and therefore one `BookmarkStore`, so without a reset the
-first-launch grant paths are never exercised. `rm -rf` on the container reports
-`Operation not permitted` for the SIP-protected metadata plist, which is harmless:
-`Data/` is still removed, and that is where the bookmarks live. `sudo` does not
-help and should not be used.
+Run 2026-08-20 at commit `582fb81`, Xcode 26.6, Bazel 9.2.0, against both
+configurations. All five items pass and every difference is intended.
+
+**Info.plist** differs from the baseline by exactly one key, `NSMainStoryboardFile`,
+absent by design per finding 2.6. Everything else matches, including
+`CFBundleIdentifier`, `CFBundleName`, both version keys, `LSMinimumSystemVersion`,
+`NSPrincipalClass` and the icon keys.
+
+**Entitlements** are correct in both arms of the `select()`: release carries only
+`app-sandbox` and `files.user-selected.read-write`, debug adds `get-task-allow`
+and the two `temporary-exception` entries. That matches Xcode, whose Debug build
+also carries `get-task-allow`.
+
+**Bundle contents** differ by exactly two absences, `LCdrData.debug.dylib` and
+`__preview.dylib`, because Bazel links one self-contained binary where Xcode
+splits out a debug dylib — corroborated by the sizes, 58 KB of stub in the
+baseline against 4.8 MB (debug) or 2.9 MB (release) of real program. Nothing is
+present in the Bazel bundle that the baseline lacks. `DefaultConfig.kdl` is
+byte-identical at `Contents/Resources/DefaultConfig.kdl`, which is where
+`ConfigurationService` looks it up — the highest-risk resource question in the
+migration, and settled. `Assets.car` is larger and `AppIcon.icns` smaller than
+the baseline because Bazel compiles the Icon Composer `.icon` bundle rather than
+the `.appiconset`, emitting light, dark and tinted renditions from different
+source geometry; both were visually verified with `ictool`. Both configurations
+are ad-hoc signed and pass `codesign --verify --deep --strict`.
+
+**Unit tests** matched exactly: 193 cases, zero failures, on both runners.
+
+**The sandbox smoke test** passed all seven flows from [CONTEXT.md](CONTEXT.md) —
+startup Home prompt, granting, `~` expansion resolving to the real home rather
+than the container, the reactive grant prompt, bookmark restore across launches,
+session resume, and writing into a granted directory. It was run against the
+**release** build, which carries the minimal entitlement set and is therefore the
+configuration that can actually break. Confirm the running process is the Bazel
+binary and not a Tuist copy: both share bundle ID `com.xvir.LCdrData`, so `open`
+can activate the wrong one.
+
+Reset the container before this item, or the first-launch grant paths are never
+exercised. `rm -rf ~/Library/Containers/com.xvir.LCdrData` reports `Operation not
+permitted` for the SIP-protected metadata plist and the container directory. That
+is harmless — `Data/` is still removed, and that is where the bookmarks and
+`UserDefaults` live. `sudo` does **not** help; do not reach for it. Verify the
+reset took effect rather than trusting the exit code:
+
+```bash
+defaults read com.xvir.LCdrData bookmarks    # expect: does not exist
+```
+
+Note that piping that to `head` is not a valid check: `head` exits 0 on empty
+input, so it reports success either way.
+
+#### Re-verifying later
+
+Capture the Tuist reference from a **clean, non-test** build, isolated from the
+shared DerivedData:
+
+```bash
+xcodebuild -workspace LCdrData.xcworkspace -scheme LCdrData \
+    -configuration Debug -derivedDataPath /tmp/lcdr-baseline-dd build
+```
+
+The distinction matters. The app produced by `tuist test` additionally embeds
+`LCdrDataTests.xctest` and eight XCTest-related frameworks and dylibs, none of
+which a Bazel `macos_application` contains, so diffing against a test-hosted
+build produces roughly 85 spurious differences. Snapshot it with
+`plutil -p ...Info.plist`, `codesign -d --entitlements :-` and `find`, excluding
+`_CodeSignature`.
 
 **Exit criteria:** documented diff with every remaining difference justified.
 **Met.**

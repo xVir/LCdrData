@@ -9,10 +9,11 @@ a reference to Lt. Cmdr. Data from Star Trek: The Next Generation.
 Built with SwiftUI, Xcode 26.4, Swift 5.0, targeting macOS 26.4.
 Bundle identifier: `com.xvir.LCdrData`.
 
-See **[docs/DESIGN.md](docs/DESIGN.md)** for the full design document — architecture, data
-models, feature list, keyboard shortcuts, implementation phases, and sandbox requirements.
-**[docs/CONTEXT.md](docs/CONTEXT.md)** defines the project's vocabulary, and
-**[docs/CURRENT_ARCH.md](docs/CURRENT_ARCH.md)** describes the architecture as built.
+See **[docs/DESIGN.md](docs/DESIGN.md)** for the product spec — layout, behaviour, the
+keyboard map, folder access and configuration, all from the user's side, with no architecture
+in it. **[docs/CURRENT_ARCH.md](docs/CURRENT_ARCH.md)** is the counterpart: the architecture
+as built, module layering, and where the code and the spec disagree.
+**[docs/CONTEXT.md](docs/CONTEXT.md)** defines the project's vocabulary.
 
 ## Which tool for which task
 
@@ -269,14 +270,13 @@ LCdrData/
 ├── LCdrDataUITests/            # UI tests (XCTest)
 ├── Derived/                    # Tuist-generated files (gitignored)
 ├── docs/
-│   ├── DESIGN.md               # Full design document
+│   ├── DESIGN.md               # Product spec — behaviour and UX, no architecture
 │   ├── CONTEXT.md              # Project vocabulary and domain terms
 │   ├── CURRENT_ARCH.md         # Architecture as built
 │   ├── BAZEL_MIGRATION.md      # Why the Bazel/Tuist split looks like this
 │   ├── FUTURE_IMPROVEMENTS.md
 │   ├── MULTIWINDOW.md
-│   ├── SANDBOX_ACCESS_REDESIGN.md
-│   └── parity-baseline/        # Tuist reference bundle + parity report
+│   └── SANDBOX_ACCESS_REDESIGN.md
 ├── README.md                   # Project overview, build and run instructions
 └── AGENTS.md                   # This file (CLAUDE.md is a symlink to it)
 ```

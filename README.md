@@ -188,7 +188,7 @@ LCdrData/
 
 | | |
 |---|---|
-| [docs/DESIGN.md](docs/DESIGN.md) | Full design document, feature spec and phases |
+| [docs/DESIGN.md](docs/DESIGN.md) | Product spec — layout, behaviour, keyboard map, configuration |
 | [docs/CURRENT_ARCH.md](docs/CURRENT_ARCH.md) | The architecture as built |
 | [docs/CONTEXT.md](docs/CONTEXT.md) | Project vocabulary — panel, cursor, listing, session |
 | [docs/BAZEL_MIGRATION.md](docs/BAZEL_MIGRATION.md) | Why Bazel and Tuist both stay |

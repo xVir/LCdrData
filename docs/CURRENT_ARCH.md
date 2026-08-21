@@ -5,11 +5,11 @@ A snapshot of the **as-built** architecture, distinct from the intended design.
 > **`DESIGN.md`** is the spec — what LCdrData is meant to become.
 > **`CURRENT_ARCH.md`** (this file) is the reality — what the code on `develop` actually does today.
 >
-> When the two disagree, the code wins; see [§9 Divergence from DESIGN.md](#9-divergence-from-designmd).
+> When the two disagree, the code wins; see [§10 Divergence from DESIGN.md](#10-divergence-from-designmd).
 >
-> _Last updated: 2026-05-01 (branch `develop`)._
+> _Last updated: 2026-08-21 (branch `develop`), after the layered modularisation._
 
-LCdrData is a native macOS dual-panel file manager built with SwiftUI on Swift 6 with strict concurrency. All types default to `@MainActor`. The app is sandboxed with user-selected read-write file access and app-scope security-scoped bookmarks. Configuration is a KDL document.
+LCdrData is a native macOS dual-panel file manager built with SwiftUI on Swift 6 strict concurrency. All types default to `@MainActor`. The app is sandboxed with user-selected read-write file access and app-scope security-scoped bookmarks. Configuration is a KDL document. Multiple windows are supported, each with its own panel pair over one shared set of services.
 
 ---
 
@@ -17,23 +17,26 @@ LCdrData is a native macOS dual-panel file manager built with SwiftUI on Swift 6
 
 ```
 LCdrData/
-├── Tuist.swift                Tuist generation config
-├── Project.swift              Target manifest
-├── Tuist/Package.swift        SPM dependency declarations
+├── MODULE.bazel               Bazel dependencies (bzlmod)
+├── BUILD.bazel                Shared config only; targets are per-package
+├── defs.bzl                   Shared SWIFT_COPTS and PACKAGE_NAME
+├── .bazelversion              9.2.0 (pinned)
+├── Bazel/                     Hand-written Info.plist and entitlements
+├── Project.swift              Tuist target manifest (mirrors the module split)
+├── Tuist/Package.swift        SPM declarations — read by Tuist AND Bazel
 ├── .tuist-version             4.182.0 (pinned)
-├── LCdrData/                  App target sources
-│   ├── App/                   @main + AppDelegate
-│   ├── Models/                Value types
-│   ├── Services/              File I/O, sandbox, config, watching
-│   ├── ViewModels/            @Observable state coordinators
-│   ├── Views/                 SwiftUI presentation
-│   ├── Utilities/             Formatters, key shortcuts, env keys
-│   └── Resources/             DefaultConfig.kdl, Assets.xcassets
-├── LCdrDataTests/             Swift Testing unit tests
+├── LCdrData/                  BUILD.bazel here defines //LCdrData (the app)
+│   ├── Core/                  Layer 1 — Models/ and Utilities/, one module
+│   ├── Services/              Layer 2 — file I/O, sandbox, config, watching
+│   ├── ViewModels/            Layer 3 — @Observable state coordinators
+│   ├── App/                   Layer 4 (AppEnvironment) + layer 6 (entry point)
+│   ├── Views/                 Layer 5 — SwiftUI presentation
+│   └── Resources/             DefaultConfig.kdl
+├── LCdrDataTests/             Swift Testing unit tests, one target per module
 └── LCdrDataUITests/           XCTest UI tests
 ```
 
-The `.xcodeproj` and `.xcworkspace` are not committed; run `tuist install && tuist generate` after pulling.
+Bazel is the build system; Tuist generates the Xcode project. The `.xcodeproj` and `.xcworkspace` are not committed — run `tuist install && tuist generate` when you need the IDE. See `AGENTS.md` for which tool does which job and `BAZEL_MIGRATION.md` for why the split exists.
 
 ---
 
@@ -41,91 +44,149 @@ The `.xcodeproj` and `.xcworkspace` are not committed; run `tuist install && tui
 
 | Setting | Value |
 |---|---|
-| Tuist | 4.182.0 |
-| Swift | 5.0 (compiler), but Swift 6 concurrency features enabled |
+| Bazel | 9.2.0 (builds the app, runs unit tests) |
+| Tuist | 4.182.0 (Xcode project, UI tests) |
+| Swift | 5.0 (compiler), with Swift 6 concurrency features enabled |
 | Deployment target | macOS 26.4 |
 | Destinations | `.mac` only |
 | Bundle ID (app) | `com.xvir.LCdrData` |
-| App Sandbox | enabled (`ENABLE_APP_SANDBOX=YES`) |
+| App Sandbox | enabled |
 | User-selected files | `readwrite` |
-| Bookmarks | `ENABLE_APP_SANDBOXED_FILES_BOOKMARKS_APP_SCOPE=YES` |
+| Bookmarks | app-scope |
 | Default actor isolation | `MainActor` |
 | Approachable concurrency | `YES` |
 | Member import visibility | `YES` |
+| Swift package name | `lcdrdata` — must match `PACKAGE_NAME` in `defs.bzl` for `package` declarations to resolve |
 
-Two test targets: `LCdrDataTests` (Swift Testing — `import Testing`, `@Test`, `#expect`) and `LCdrDataUITests` (XCTest). Per `CLAUDE.md`, only unit tests should be run during routine development.
+Debug builds carry extra entitlements (`get-task-allow` plus two `testmanagerd` exceptions) because an app-hosted `macos_unit_test` cannot otherwise bootstrap. `--config=release` selects the two production keys.
 
 ---
 
-## 3. Layers
+## 3. Module layering
 
-### 3.1 App/ — entry point
+The app is six Swift modules, stacked so dependencies only ever point downward:
 
-| File | Purpose |
-|---|---|
-| `LCdrDataApp.swift` | `@main` struct. Creates a single `AppState`; sets up the `WindowGroup` (1100×700 default, 800×500 min); wires custom commands into File / Edit / Navigation / Favorites menus; declares the `Settings` scene that hosts `ConfigurationView`. |
-| `AppDelegate.swift` | `NSApplicationDelegate`. Quits when the last window closes; on `applicationWillTerminate` calls `AppState.savePanelPaths()` and `releasePanelSecurityScope()`. |
+```
+App  →  Views  →  AppEnvironment  →  ViewModels  →  Services  →  Core
+```
 
-### 3.2 Models/ — value types (all `Sendable`)
+| Layer | Module | Bazel target | May be depended on by |
+|---|---|---|---|
+| 1 | `Core` | `//LCdrData/Core` | everything |
+| 2 | `Services` | `//LCdrData/Services` | ViewModels, Views, App, most tests |
+| 3 | `ViewModels` | `//LCdrData/ViewModels` | Views, App |
+| 4 | `AppEnvironment` | `//LCdrData/App:AppEnvironment` | Views, App |
+| 5 | `Views` | `//LCdrData/Views` | App only |
+| 6 | `App` | `//LCdrData/App:LCdrDataLib` | the app bundle |
 
-| File | Purpose |
-|---|---|
-| `FileItem.swift` | `struct FileItem: Identifiable, Hashable, Sendable`. Carries name, URL, sizes, dates, hidden/symlink flags, plus a synthetic `isParentDirectory` flag for the `..` row. The `id: UUID` is **deterministically derived from the URL** via SHA256 (`stableID(for:)`), which keeps SwiftUI list identity stable across reloads and avoids row flicker. `init` and the static helpers are `nonisolated`. |
-| `PanelState.swift` | Per-panel state container: `currentDirectory`, `items`, `selectedItemIDs`, `focusedItemID`, `sortDescriptor`, `showHiddenFiles`, `history`, `historyIndex`. |
-| `SortDescriptor.swift` | `FileSortDescriptor { Column { name, size, dateModified, dateCreated, kind }, ascending }` with `mutating func toggle(column:)` — same column flips direction, new column resets to ascending. |
-| `FileOperation.swift` | `FileOperationKind` (copy / move / delete / permanentDelete / createFolder / rename), `FileOperationStatus` (pending / inProgress / completed / failed(String) / cancelled), `FileOperationProgress` (`totalItems`, `completedItems`, `currentItemName`, computed `fractionCompleted`), and the operation struct itself. |
-| `AppConfiguration.swift` | Effective configuration with sane defaults (hidden off, sort by name asc, font 13pt, date format `yyyy-MM-dd HH:mm`, editor `com.apple.TextEdit`); nested `BookmarkEntry { label, path }`; computed `sortDescriptor`. |
+Three facts about this shape are load-bearing:
 
-### 3.3 Services/ — protocol-fronted I/O
+- **`Core` merges Models and Utilities** because they are mutually dependent — `CommandCatalog` needs `KeyboardShortcuts`, `FileFormatter` needs `FileItem`. They are subdirectories of one Bazel package rather than packages of their own.
+- **`AppEnvironment` is its own layer**, sharing the `App/` directory with layer 6 but built as a separate target. `Views` needs it while it needs `ViewModels`, which is what breaks the App ↔ Views cycle.
+- **Each module's BUILD file names, via `visibility`, exactly which packages may depend on it**, so a layering violation is an analysis-time error rather than a review comment. It bites in both directions: `Core` cannot reach up to `Services`, and a test target for one layer cannot reach past it either.
 
-All service protocols are `Sendable, nonisolated` so they can be called from any actor. Concrete implementations push blocking work onto detached tasks.
+Types that cross a module boundary are declared `package`, not `public` — roughly forty of them. The widening stops at the package rather than becoming API.
 
-| File | Purpose |
-|---|---|
-| `FileSystemService.swift` | `FileSystemServiceProtocol.listDirectory(at:showHidden:) async throws -> [FileItem]`. The implementation runs inside `Task.detached`, pre-fetches resource keys (name, isDirectory, fileSize, modification/creation dates, hidden, symbolic-link), and resolves symlink targets to mark `isSymlinkToDirectory`. |
-| `FileOperationService.swift` | Copy, move, trash (returns trash URLs), permanent delete, create folder, rename. Long-running calls accept `@Sendable` callbacks: `onProgress: (FileOperationProgress) -> Void` and `onConflict: (FileConflict) async -> ConflictResolution { overwrite \| skip \| rename(String) }`. Errors are typed via `FileOperationError`. |
-| `ConfigurationService.swift` | `@Observable`, `@MainActor`. Reads bundled `Resources/DefaultConfig.kdl`, merges user overrides from `~/Library/Application Support/com.xvir.LCdrData/config.kdl`, exposes `current: AppConfiguration` plus `lastAppliedUserKDL` for the editor's right pane. Parses with `kdl-swift`. |
-| `BookmarkService.swift` | Static helpers around security-scoped bookmark data — `bookmarkData(for:)`, `url(fromBookmarkData:)`. Resolution does **not** auto-start the security scope; callers manage `startAccessingSecurityScopedResource()` themselves. |
-| `SandboxAccessService.swift` | `@Observable`. When a permission error surfaces, presents an `NSOpenPanel` pre-navigated to the offending directory so the user can grant access; tracks `grantedURLs` for the session. `isPermissionError(_:)` recognises POSIX `EPERM` and Cocoa file-permission errors (codes 257, 513). |
-| `DirectoryWatcher.swift` | `@unchecked Sendable`. Wraps `DispatchSource.makeFileSystemObjectSource` over a file descriptor opened with `O_EVTONLY`. Watches write/delete/rename/attrib/extend/revoke and fires `onChange` on the main queue. |
-| `PanelPathStore.swift` | `Sendable` UserDefaults wrapper. Saves/restores `panelPath.{left,right}` plus optional `panelBookmark.{left,right}` so panel directories survive across launches even for sandboxed paths. Bookmark resolution is tried first; raw paths are the fallback. |
-| `QuickLookPreviewController.swift` | `@MainActor` adapter for the system Quick Look preview panel. |
+---
 
-### 3.4 ViewModels/ — `@Observable` coordinators (all `@MainActor`)
+## 4. Layers, file by file
+
+### 4.1 Core/Models — value types
 
 | File | Purpose |
 |---|---|
-| `AppState.swift` | App-level state. Owns `leftPanel` and `rightPanel` (`PanelViewModel`s), tracks `activePanel: PanelSide`, owns the shared `FileOperationViewModel` and the `ConfigurationService`. Restores panel directories on init, exposes `switchActivePanel()`, `savePanelPaths()`, `releasePanelSecurityScope()`, `applyEffectiveConfiguration()`, `presentOpenFolderPanel()`, `copySelectedPathsToPasteboard()`, `navigateActivePanelToFavorite(path:)`. |
-| `PanelViewModel.swift` | One per panel. Drives directory loading, sorting, selection, focus, history (back/forward), path-bar editing, sandbox-retry flow, and Quick Look. Type-ahead lives here: `typeAheadBuffer` plus `typeAheadResetInterval = 1.0` second of silence resets the buffer (`PanelViewModel.swift:34`). After file operations, `reloadKeepingSelection()` preserves selected IDs and falls back gracefully if the focused item was deleted. |
-| `FileOperationViewModel.swift` | The dialog-and-progress coordinator. Drives confirmation alerts, the new-folder alert, the rename sheet, the conflict dialog (with apply-to-all), and the progress overlay. Modal flows are implemented with `CheckedContinuation` so an in-flight async operation can `await` user input without blocking the main actor. Cancellation is via the stored `currentTask: Task<Void, Never>?`. |
+| `FileItem.swift` | `struct FileItem: Identifiable, Hashable, Sendable`. One directory entry: URL, sizes, dates, hidden/symlink flags, plus a synthetic `isParentDirectory` flag for the `..` row. `id` is **deterministically derived from the URL** via SHA256 over `"file:"`/`"parent:"` plus the standardised path, so SwiftUI list identity survives reloads without flicker. `init` and the static helpers are `nonisolated`. |
+| `PanelState.swift` | Per-panel snapshot: `currentDirectory`, `items`, `cursor`, `sortDescriptor`, `showHiddenFiles`, `history`, `historyIndex`. |
+| `Cursor.swift` | `struct Cursor: Sendable, Equatable` — the panel's attention model. `focused: UUID?` is the single row driving Quick Look, the sort anchor and type-ahead; `selected: Set<UUID>` is what the next file operation acts on. Owns both the user-event mutations (`userDidSelect`, `selectAll`, `focusFirst`…) and `resolve(intent:listing:previousListing:previousCursor:)`, which decides where the cursor lands after a reload. |
+| | `Cursor.Intent` makes that decision explicit at the call site: `.fresh`, `.keepSelection`, `.landOnChild(URL)` after going to a parent, `.landOnNeighbourOf([URL])` after a delete or move, `.landOnNew(URL)` after a rename or mkdir. |
+| `Command.swift` | `enum Command: Equatable` — the closed set of user actions, 22 cases across navigation, open/view, selection, file operations and clipboard. Mostly parameterless; `.openItem(FileItem)` and `.rename(FileItem)` carry explicit targets. |
+| `CommandCatalog.swift` | Maps `Command` to its keyboard binding and nothing else — `binding(for:)`, `shortcut(for:)`, `keyEquivalent(for:)`. Deliberately excludes titles, which each surface labels itself. |
+| `FileContextMenuModel.swift` | The pure decision layer behind context menus: given a selection and a listing, resolves the `.selection` / `.parent` / `.background` variant and the real (non-`..`) items to act on. |
+| `FileOperation.swift` | `FileOperationKind` (copy / move / delete / permanentDelete / createFolder / rename), `FileOperationStatus`, `FileOperationProgress` with computed `fractionCompleted`, and the operation struct with its `displayDescription`. |
+| `PanelSession.swift` | `struct PanelSession: Hashable, Codable, Sendable` — the identity of one window's panel pair (`id`, `leftPath`, `rightPath`), which is what `WindowGroup(for:)` restores. |
+| `SortDescriptor.swift` | `FileSortDescriptor` with `Column { name, size, dateModified, dateCreated, kind }`; `toggle(column:)` flips direction on the same column and resets to ascending on a new one. |
+| `AppConfiguration.swift` | Effective settings with defaults (hidden off, sort by name ascending, font 13, date `yyyy-MM-dd HH:mm`, editor `com.apple.TextEdit`); nested `BookmarkEntry { label, path }`; computed `sortDescriptor`. |
 
-### 3.5 Views/ — SwiftUI presentation
+### 4.2 Core/Utilities
 
 | File | Purpose |
 |---|---|
-| `MainWindowView.swift` | Root view. Builds an `HSplitView` with two `PanelView`s (min 300pt each), stacks `CommandBarView` underneath, and owns the keyboard `KeyShortcutModifier` that maps Tab / Return / Cmd+L / F2–F8 / Delete / Cmd+Delete / Space / type-ahead. Hosts confirmation, conflict, new-folder, rename, and error dialogs. Reloads both panels via `.task` and `NSApplication.didBecomeActiveNotification`. |
-| `PanelView.swift` | One panel: `PathBarView` → `FileTableView` (or error message) → `StatusBarView`. Active panel gets a tinted border and accent-coloured background. Tap activates the panel. |
-| `FileTableView.swift` | The scrollable list. Multi-select bound to `selectedItemIDs`; `ScrollViewReader` scrolls to `focusedItemID`; intercepts `.onDeleteCommand` (so the OS' default delete behaviour doesn't fire); accepts `.fileURL` drag-drops; pulls font size and date format out of custom `EnvironmentKey`s. |
-| `PathBarView.swift` | Breadcrumb path components plus an editable text field (entered via Cmd+L). |
-| `CommandBarView.swift` | Bottom strip of six F-key buttons (F3 View, F4 Edit, F5 Copy, F6 Move, F7 Mkdir, F8 Delete); each is disabled when not applicable. |
+| `KeyboardShortcuts.swift` | The F2–F8 `KeyEquivalent` values SwiftUI does not expose, built from Unicode private-use scalars `0xF705`–`0xF70B` to match the `NSF*FunctionKey` constants. Consumed by `CommandCatalog`. |
+| `TildePathExpander.swift` | Expands `~` and `~/…` against the **real account home** via `getpwuid`, not the sandbox container home, which is what `NSHomeDirectory()` would give. Fronted by `HomeDirectoryProviding` so tests can stub the account database. Only exact `~` and `~/…` expand; `~user` passes through. |
+| `FileFormatter.swift` | `formatSize` via `ByteCountFormatter`, `formatDate` with a configurable pattern, and `kind(for:)` returning "Parent" / "Alias" / "Folder" / extension / "Document". |
+| `KDLSyntaxHighlighter.swift` | Builds an `AttributedString` from KDL source for the configuration editor. |
+| `PanelDisplayPreferences.swift` | `EnvironmentKey`s for `lcPanelDateFormat` and `lcPanelFontSize`, so the table pulls display preferences from the environment instead of ViewModels plumbing them through. |
+| `Notifications.swift` | `Notification.Name.lcdrConfigurationApplied`. It lives in Core so `Views` can observe it without depending on `App`. |
+
+### 4.3 Services — protocol-fronted I/O
+
+Service protocols are `Sendable, nonisolated` so they can be called from any actor; the implementations push blocking work onto detached tasks.
+
+| File | Purpose |
+|---|---|
+| `FileSystemService.swift` | `FileSystemServiceProtocol.listDirectory(at:showHidden:) async throws -> [FileItem]`. Runs in `Task.detached`, pre-fetches resource keys, and resolves symlink targets to mark `isSymlinkToDirectory`. |
+| `FileOperationService.swift` | Copy, move, trash (returns trash URLs), permanent delete, create folder, rename. Long-running calls take `@Sendable` callbacks — `onProgress: (FileOperationProgress) -> Void` and `onConflict: (FileConflict) async -> ConflictResolution`. Per-item cancellation via `Task.checkCancellation()`; a source and destination resolving to the same path is a no-op rather than an error. Typed failures via `FileOperationError`. |
+| `ConfigurationService.swift` | `@Observable`, `@MainActor`. Reads bundled `DefaultConfig.kdl`, merges user overrides, exposes `current: AppConfiguration` and `lastAppliedUserKDL` for the editor's right pane. Parses with `kdl-swift`. |
+| `BookmarkStore.swift` | The bookmark database: `BookmarkStore` persists security-scoped bookmark blobs in `UserDefaults` keyed by path, resolves them, refreshes stale ones, and answers `bookmarkCovering(url:)` by longest matching prefix. `@unchecked Sendable`, `NSLock`-guarded. Fronted by `BookmarkStoreProtocol`, with bookmark encoding itself behind `BookmarkSerializing` so tests never touch the real macOS API. |
+| `BookmarkService.swift` | `nonisolated static` helpers wrapping `.withSecurityScope` bookmark creation and resolution, returning refreshed data when stale. Resolution deliberately does **not** start the security scope. |
+| `SandboxAccessService.swift` | `package actor`. Coordinates access requests, coalescing concurrent ones single-flight by `AccessRequestContext.dedupKey`, and saves a bookmark on grant. `isPermissionError(_:)` is `nonisolated static` and recognises POSIX `EPERM` plus Cocoa file-permission codes 257 and 513. |
+| `AccessPresenter.swift` | `AccessPresenter` protocol — `present(_ context:) async -> URL?`. `NSOpenPanelAccessPresenter` (`@MainActor`) drives a context-titled `NSOpenPanel` pre-navigated to the offending directory; `NoopAccessPresenter` always declines. |
+| `AccessRequestContext.swift` | Why access is being asked for: `.startup`, `.reactive(displayURL:resolvedTarget:)`, `.manualGrant(suggestedURL:)`. Supplies the dedup key. |
+| `DirectorySession.swift` | Watches one directory over an `O_EVTONLY` file descriptor with `DispatchSource.makeFileSystemObjectSource` (write/delete/rename/attrib/extend/revoke), debouncing to `onChange` after **0.28 s** with a generation token cancelling superseded timers. `@unchecked Sendable`; `onChange` is `@MainActor`. Short-lived — replaced on navigation, and it manages no security scope of its own. |
+| `PanelSessionStore.swift` | `PanelSessionStoring` over `UserDefaults`: the last left/right directory paths, so a relaunch resumes even when macOS window restoration does not run. |
+| `QuickLookPreviewController.swift` | `@MainActor` `QLPreviewPanelDataSource` adapter for the system Quick Look panel. |
+
+### 4.4 ViewModels — `@Observable` coordinators
+
+| File | Purpose |
+|---|---|
+| `PanelViewModel.swift` | One per panel, plus `enum PanelSide`. Drives listing, cursor, sorting, history, path-bar editing, type-ahead (1 s of silence resets the buffer), Quick Look, and the reactive sandbox retry. `reload(_ intent:)` takes a `Cursor.Intent`, so every caller states where the cursor should land rather than leaving it to be inferred. Navigation goes through `performAtomicNavigation`, which snapshots state and rolls back if access is refused. |
+| `AppState.swift` | **Per-window** state: `leftPanel`, `rightPanel`, `activePanel`, the window's `FileOperationViewModel`, its `QuickLookPreviewController`, and a reference to the shared `ConfigurationService`. Exposes `switchActivePanel()`, `applyEffectiveConfiguration()`, `presentOpenFolderPanel()`, `copySelectedPathsToPasteboard()`, `navigateActivePanelToFavorite(path:)`, and a computed `commands: CommandRunner`. |
+| `CommandRunner.swift` | `package struct`. The single executor for `Command`, resolving active and inactive panels from one `AppState` and answering `isEnabled(_:)` so every surface greys out consistently. |
+| `FileOperationViewModel.swift` | The dialog-and-progress coordinator: confirmation, new-folder and rename prompts, the conflict dialog with apply-to-all, and the progress overlay. Conflict resolution suspends on a `CheckedContinuation` so an in-flight async operation can await user input; cancellation is via the stored `currentTask`. |
+| `FocusedAppState.swift` | Declares `ActiveAppStateKey` and `FocusedValues.appState` so menu commands act on the key window's `AppState` rather than a captured one. (There is no type named `FocusedAppState`.) |
+
+### 4.5 App/AppEnvironment — shared services
+
+`AppEnvironment` is the one thing every window shares: `ConfigurationService`, `BookmarkStore`, `SandboxAccessService`, `PanelSessionStore`, the security-scope activator, and a weak `mostRecentAppState`.
+
+| Method | Purpose |
+|---|---|
+| `start()` | Idempotent. Starts the security scope on every stored bookmark, then — if no bookmark covers the account home — requests startup access to it. |
+| `makeFreshSession()` | Seeds a new window, preferring the frontmost window's paths, then the last saved session, then home for both panels. |
+| `rememberLastSession(_:)` | Writes the current paths through `PanelSessionStore`. |
+| `releaseAllScopes()` | Stops every active scope; called from `applicationWillTerminate`. |
+
+Scope activation is fronted by `SecurityScopeActivating` so tests can observe start/stop calls without touching real bookmarks.
+
+### 4.6 Views — SwiftUI presentation
+
+| File | Purpose |
+|---|---|
+| `WindowRootView.swift` | The per-window shell, and not where the UI lives. It builds the window's `AppState` from its `PanelSession`, publishes it as a focused scene value, awaits `env.start()`, saves a bookmark and updates the session binding on every directory change, and applies configuration when `lcdrConfigurationApplied` arrives. |
+| `MainWindowView.swift` | The dual-panel layout: `HSplitView` of two `PanelView`s (min 300 pt each) over `CommandBarView`. Hosts the confirmation, conflict, new-folder, rename and error dialogs plus the progress overlay, and contains the private `KeyShortcutModifier` that routes window-level keys. |
+| `PanelView.swift` | One panel: `PathBarView` → `FileTableView` (or an error state) → `StatusBarView`, with the active panel tinted and bordered. Tapping activates it. |
+| `FileTableView.swift` | The list itself, with sortable column headers, selection bound to the cursor, scroll-to-focused, context menus, drag out and `.fileURL` drop in. Intercepts `.onDeleteCommand` to navigate to the parent, because the table consumes Delete before window-level routing sees it. |
+| `PathBarView.swift` | Breadcrumb components, the Cmd+L editable field, and a copy-path button. |
+| `CommandBarView.swift` | The bottom F3–F8 strip; each button asks `CommandRunner.isEnabled` and calls `perform`. |
 | `StatusBarView.swift` | Item counts and selected-size summary. |
-| `FileOperationProgressView.swift` | Sheet showing operation progress with a Cancel button. |
-| `ConflictResolutionView.swift` | Overwrite / Skip / Rename dialog with an apply-to-all toggle. |
-| `RenameDialogView.swift` | Inline rename sheet for a single item. |
-| `ConfigurationView.swift` | The Settings window. Two-pane `HSplitView`: left is a read-only render of bundled `DefaultConfig.kdl` with KDL syntax highlighting; right is an editable `TextEditor` for user overrides. Apply parses and writes; Cancel reverts to the last applied user KDL. |
+| `FileContextMenu.swift` | The secondary-click menu, in three variants resolved by `FileContextMenuModel`, routed through `CommandRunner`. |
+| `FileOperationProgressView.swift` | The copy/move progress overlay with Cancel. Not shown for trash or delete. |
+| `ConflictResolutionView.swift` | Overwrite / Skip / Rename with an apply-to-all toggle; resumes the continuation in `FileOperationViewModel`. |
+| `RenameDialogView.swift` | The rename sheet for a single item. |
+| `ConfigurationView.swift` | The Settings window: a two-pane `HSplitView` with syntax-highlighted bundled defaults on the left and an editable overrides pane on the right. Apply parses, merges and writes; Cancel reverts to the last applied text. |
 
-### 3.6 Utilities/
+### 4.7 App — entry point
 
 | File | Purpose |
 |---|---|
-| `KeyboardShortcuts.swift` | Centralised shortcut enum. Cmd+Up / Cmd+Down for parent/open, Cmd+L for path bar, Cmd+R refresh, Cmd+\[ / Cmd+] history, Cmd+Shift+. toggles hidden, Cmd+Delete permanent delete. F-keys are constructed from Unicode private-use scalars `0xF705`–`0xF70B` (matching macOS `NSF*FunctionKey` constants), since SwiftUI's `KeyEquivalent` does not expose them directly. |
-| `FileFormatter.swift` | `formatSize(_:)` via `ByteCountFormatter`, `formatDate(_:)` with a configurable pattern, `kind(for:)` returning "Parent" / "Alias" / "Folder" / extension / "Document". |
-| `KDLSyntaxHighlighter.swift` | Produces an `AttributedString` from KDL text for the configuration editor. |
-| `PanelDisplayPreferences.swift` | Defines `EnvironmentKey`s for `lcPanelDateFormat` and `lcPanelFontSize` so the table can pull display preferences from the environment without ViewModels having to plumb them through. |
+| `LCdrDataApp.swift` | `@main`. Holds the single `@State AppEnvironment`, declares `WindowGroup(for: PanelSession.self)` with `env.makeFreshSession()` as its default value, attaches `MainCommands`, and declares the `Settings` scene hosting `ConfigurationView`. |
+| `MainCommands.swift` | The menu bar — Open Folder, Grant Folder Access, the config-driven Favorites menu, and navigation, selection and delete commands, all acting on `@FocusedValue(\.appState)` with shortcuts from `CommandCatalog`. |
+| `AppDelegate.swift` | Quits when the last window closes; releases all security scopes on terminate. |
 
-### 3.7 Resources/
+### 4.8 Resources
 
-`DefaultConfig.kdl` — the bundled defaults consumed by `ConfigurationService`. Current contents:
+`DefaultConfig.kdl` — the bundled defaults, at `Contents/Resources/DefaultConfig.kdl`, which is where `ConfigurationService` looks:
 
 ```kdl
 panel {
@@ -146,111 +207,153 @@ editor {
 }
 ```
 
-Bookmark entries use a `label|path` string format inside a list-of-children block; `~` is expanded to the user's home directory at parse time.
+Bookmark entries use a `label|path` string inside a dash-list block, and `~` is expanded at parse time.
 
 ---
 
-## 4. Concurrency model
+## 5. Concurrency model
 
-- `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` makes every type implicitly `@MainActor` unless explicitly opted out — so all ViewModels, UI-touching services, and views are main-thread by default.
-- Data models (`FileItem`, `FileOperation*`, `FileSortDescriptor`, `AppConfiguration`, `BookmarkEntry`, `PanelState`) are `Sendable` value types.
-- Service **protocols** are `Sendable, nonisolated`; their implementations push blocking I/O into `Task.detached` blocks. This is why `FileSystemService.listDirectory` and every `FileOperationService` method are safe to call from `@MainActor` ViewModels without blocking the UI.
-- Long-running operations that need to talk back to the UI use `@Sendable` callbacks for progress and conflict resolution. Conflict resolution further uses `CheckedContinuation` so the async operation can pause until `ConflictResolutionView` resumes it from the main actor.
-- `FileItem.init` and `stableID(for:)` are `nonisolated` so the type composes cleanly inside Sendable contexts (e.g. arrays returned from detached tasks).
-- `DirectoryWatcher` is `@unchecked Sendable` — `DispatchSource` is thread-safe but not auto-`Sendable`.
+- `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` makes every type implicitly `@MainActor` unless it opts out, so ViewModels, views and UI-touching services are main-thread by default.
+- Data models (`FileItem`, `Cursor`, `FileOperation*`, `FileSortDescriptor`, `AppConfiguration`, `PanelSession`) are `Sendable` value types. `PanelState` is not — it holds main-actor state.
+- Service **protocols** are `Sendable, nonisolated`; implementations push blocking I/O into `Task.detached`. That is why `listDirectory` and the `FileOperationService` methods are safe to call from `@MainActor` without blocking the UI.
+- `SandboxAccessService` is a genuine `actor`, which is what makes its single-flight dedup correct under concurrent requests from several windows.
+- `BookmarkStore` and `DirectorySession` are `@unchecked Sendable` with explicit synchronisation — an `NSLock` and a private serial `DispatchQueue` respectively — because `UserDefaults` and `DispatchSource` are thread-safe but not automatically `Sendable`.
+- Long-running operations talk back through `@Sendable` callbacks, and conflict resolution uses a `CheckedContinuation` so the async operation can pause until the sheet resumes it.
+- `FileItem.init` and `stableID(for:)` are `nonisolated` so the type composes inside Sendable contexts, such as arrays returned from detached tasks.
 
 ---
 
-## 5. Data flow walk-throughs
+## 6. Data flow walk-throughs
 
-### Launch
-1. `LCdrDataApp` builds `AppState` as `@State` once.
-2. `AppState.init` loads `ConfigurationService`, asks `PanelPathStore.restore()` for the last left/right URLs (bookmark resolution first, raw path fallback), and constructs both `PanelViewModel`s sharing one `SandboxAccessService`.
-3. `MainWindowView.task` calls `loadDirectory()` on each panel.
-4. `FileSystemService.listDirectory` runs on a detached task with pre-fetched resource keys.
-5. The panel sorts the result, prepends a synthetic `..` entry via `FileItem.parentEntry`, starts a `DirectoryWatcher` on the new path, and publishes `state.items`.
+### Launch, and opening a window
+
+1. `LCdrDataApp` creates one `AppEnvironment` as `@State`.
+2. `WindowGroup(for: PanelSession.self)` restores a session, or asks `makeFreshSession()` for one — frontmost window's paths, else the last saved session, else home.
+3. `WindowRootView` resolves each path through `bookmarkStore.resolve(path:)` (falling back to a plain file URL), builds this window's `AppState`, publishes it as a focused scene value, and awaits `env.start()`.
+4. `start()` activates the security scope on every stored bookmark and, if none covers the account home, requests startup access to it.
+5. `MainWindowView.task` reloads both panels; each listing runs in a detached task, is sorted, gets a synthetic `..` row prepended, and starts a `DirectorySession` on the new directory.
+
+`⌘N` repeats steps 2–5. Nothing is shared between windows except `AppEnvironment`.
+
+### Reactive sandbox grant
+
+1. `PanelViewModel.navigate(to:)` → `performAtomicNavigation`, which snapshots the panel first.
+2. `reload(.fresh)` calls `listDirectory`, which throws; `SandboxAccessService.isPermissionError` recognises it.
+3. `performAtomicNavigation` awaits `requestAccessIfNeeded(context: .reactive(...))`, which presents an `NSOpenPanel` at the resolved target and, on grant, saves a bookmark.
+4. Granted, it reloads. Refused, it restores the snapshot and reloads with `.keepSelection`, so a denied navigation leaves no visible trace.
+
+`WindowRootView` separately saves a bookmark on every successful directory change, which is how granted folders accumulate. "Grant Folder Access…" in the menu bar goes straight to `requestAccessIfNeeded(context: .manualGrant(...))`.
+
+### A command, from keystroke to effect
+
+Four surfaces raise commands, and all four go through one executor:
+
+| Surface | How it reaches `CommandRunner` |
+|---|---|
+| Window keys | `KeyShortcutModifier.onKeyPress` → `perform` |
+| Command bar | button → `appState.commands.perform` |
+| Menu bar | `@FocusedValue(\.appState)` → `focused?.commands.perform` |
+| Context menu | button → `appState.commands.perform` |
+
+The split between the window and the menu bar is deliberate. Keys that must work regardless of menu routing — Tab, Return, Home/End, Space, F2–F8, plain Delete, `⌘⌫`, and type-ahead — are handled in `KeyShortcutModifier`. Everything with a natural menu home — parent, refresh, hidden toggle, history, select all, trash — is declared in `MainCommands` with its shortcut from `CommandCatalog`. `F5`, `F6` and `F7` have no menu item at all.
 
 ### F5 Copy
-1. The keyboard handler in `MainWindowView` calls `FileOperationViewModel.requestCopy(from:to:)` with the active panel's selection and the inactive panel's directory.
-2. The VM builds a confirmation message and shows the alert.
-3. On confirm, `executeCopy` invokes `FileOperationService.copy(...)` with `@Sendable` progress and conflict callbacks.
-4. The progress callback drives the progress overlay; the conflict callback suspends on a `CheckedContinuation` until the user resolves `ConflictResolutionView`, then resumes with `.overwrite | .skip | .rename`.
-5. On completion, both panels run `reloadKeepingSelection()`, which preserves selected IDs (or falls back to a sensible focus position if items disappeared).
+
+1. `KeyShortcutModifier` → `runner.perform(.copy)` → `fileOperations.requestCopy(from: active, to: inactive)`.
+2. The view model collects the selected non-parent items and raises the confirmation dialog.
+3. On confirm, `confirmOperation` spawns a task into `executeCopy`, which registers a `FileOperation`, shows the overlay, and calls `FileOperationService.copy`.
+4. Progress callbacks drive the overlay. A conflict callback suspends on a `CheckedContinuation` until `ConflictResolutionView` resumes it with `.overwrite`, `.skip` or `.rename` — optionally applied to the rest of the batch.
+5. On completion both panels reload with an explicit intent, so the cursor lands predictably rather than resetting.
 
 ### Configuration apply
-1. The user edits the right pane in `ConfigurationView` and clicks Apply.
-2. `ConfigurationService.apply(fromUserKDL:)` parses the text with `kdl-swift`, merges over the bundled defaults, validates, and writes to `~/Library/Application Support/com.xvir.LCdrData/config.kdl`.
-3. `current: AppConfiguration` and `lastAppliedUserKDL` update.
-4. `AppState.applyEffectiveConfiguration()` propagates the new sort, hidden-files toggle, font size, and date format to both `PanelViewModel`s.
+
+1. Apply in `ConfigurationView` calls `ConfigurationService.apply(fromUserKDL:)`, which parses with `kdl-swift`, merges over the bundled defaults, and writes the user file atomically (or deletes it, if the text is empty).
+2. It posts `.lcdrConfigurationApplied`.
+3. **Every** open `WindowRootView` observes that and calls `appState.applyEffectiveConfiguration()`, which pushes the new sort and hidden-files setting into both panels and reloads them with `.keepSelection`. Font size and date format reach the table through the environment.
+
+The Settings scene never holds an `AppState`; the notification fan-out is what makes one edit apply to every window.
 
 ---
 
-## 6. Persistence surfaces
+## 7. Persistence surfaces
 
 | Surface | Owner | Keys / paths |
 |---|---|---|
-| UserDefaults | `PanelPathStore` | `panelPath.left`, `panelPath.right`, `panelBookmark.left`, `panelBookmark.right` |
-| Application Support | `ConfigurationService` | `~/Library/Application Support/com.xvir.LCdrData/config.kdl` (user overrides only — defaults stay in the bundle) |
-| App-scope bookmarks | `BookmarkService` | Encoded into UserDefaults via `PanelPathStore`; resolved without auto-starting security scope |
+| `UserDefaults` | `BookmarkStore` | `bookmarks` — `[String: Data]`, URL path → security-scoped bookmark blob |
+| `UserDefaults` | `PanelSessionStore` | `lastPanelSession` — `["left": path, "right": path]` |
+| Container Application Support | `ConfigurationService` | `~/Library/Containers/com.xvir.LCdrData/Data/Library/Application Support/com.xvir.LCdrData/config.kdl` — user overrides only; defaults stay in the bundle |
+| Window restoration | macOS | `PanelSession` values, `Codable`, restored by `WindowGroup(for:)` |
+
+The config path resolves inside the sandbox container because `ConfigurationService` asks `FileManager` for `.applicationSupportDirectory`. `~/Library/Application Support/com.xvir.LCdrData` does not exist.
 
 ---
 
-## 7. Dependencies
+## 8. Dependencies
 
 | Package | Where used |
 |---|---|
-| [`kdl-swift`](https://github.com/danini-the-panini/kdl-swift) ≥ 2.0 | `ConfigurationService` only — parses `DefaultConfig.kdl` and user overrides into `KDLDocument` |
-| [`swift-mocking`](https://github.com/DanielCardonaRojas/swift-mocking) ≥ 0.1 | Test target only — generates mocks for the `FileSystemService` and `FileOperationService` protocols |
+| [`kdl-swift`](https://github.com/danini-the-panini/kdl-swift) ≥ 2.0 | `ConfigurationService` only — parses `DefaultConfig.kdl` and user overrides |
 
-System frameworks in use: SwiftUI, AppKit (`NSOpenPanel`, `NSWorkspace`, `NSPasteboard`, `NSApplication`), Foundation, Observation (`@Observable`), Dispatch (`DispatchSource`), Darwin (`open`/`close` for FD-based watching), CryptoKit (SHA256 for `FileItem.id`), UniformTypeIdentifiers (drag-drop UTType matching).
+That is the only direct dependency; it pulls in BigDecimal, BigInt, UInt128 and swift-numerics transitively. It is declared in `Tuist/Package.swift`, which both Tuist and Bazel read, and its Bazel target is a dependency of `Services` alone, since that is where its only consumer lives.
 
----
+No mocking framework: `swift-mocking` was removed during the Bazel migration, as it was declared but never imported and pulled `swift-syntax` in as a macro dependency. Test doubles are written by hand.
 
-## 8. Tests
-
-Unit tests under `LCdrDataTests/` (Swift Testing):
-
-| File | Coverage |
-|---|---|
-| `AppStateTests.swift` | App-level state initialisation, active-panel switching |
-| `ConfigurationServiceTests.swift` | KDL parsing, defaults, user-override merging, file I/O |
-| `FileFormatterTests.swift` | Size / date / kind formatting |
-| `FileItemTests.swift` | Stable SHA256-derived IDs, parent-entry construction |
-| `FileOperationServiceTests.swift` | Copy / move / trash / permanent-delete / mkdir / rename, conflict callbacks, progress reporting |
-| `FileOperationTests.swift` | Operation kind / status / progress models |
-| `FileOperationViewModelTests.swift` | Dialog flows, confirmation, conflict resolution, cancellation |
-| `FileSortDescriptorTests.swift` | Column toggle and direction logic |
-| `FileSystemServiceTests.swift` | Listing behaviour against mock FS |
-| `PanelStateTests.swift` | State initialisation invariants |
-| `PanelViewModelTests.swift` | Loading, selection, navigation, history |
-| `PanelViewModelPhase3Tests.swift` | Keyboard shortcut and type-ahead behaviour |
-
-Mocks for service protocols are produced via `swift-mocking`. Tests are written `@MainActor` because the ViewModels they exercise are main-actor-isolated.
-
-UI tests under `LCdrDataUITests/` (XCTest): `LCdrDataUITests.swift` covers basic launch and interaction; `LCdrDataUITestsLaunchTests.swift` records launch performance metrics. Per `CLAUDE.md`, UI tests are not part of the routine development loop — run them manually only.
+System frameworks: SwiftUI, AppKit (`NSOpenPanel`, `NSWorkspace`, `NSPasteboard`, `NSApplication`), Foundation, Observation, Dispatch, Darwin (`open`/`close`, `getpwuid`), CryptoKit (SHA256 for `FileItem.id`), QuickLookUI, UniformTypeIdentifiers.
 
 ---
 
-## 9. Divergence from DESIGN.md
+## 9. Tests
 
-These items in `DESIGN.md` are not (yet) reflected in code:
+**193 test cases across six unit test targets**, one per module, whose counts **sum** to that total — no single target reports 193.
 
-- **No standalone `SearchService`.** Type-ahead incremental match lives inside `PanelViewModel` (with a 1-second silence reset). There is no separate search facility.
-- **No tabs per panel.** Each side hosts a single panel.
-- **`DefaultConfig.kdl` shape.** DESIGN.md sketches `bookmark "Label" "Path"` per-bookmark nodes; the actual file uses a `bookmarks { - "label|path" ... }` list shape, which is what `ConfigurationService.appConfiguration(from:mergingOnto:)` parses today.
+| Target | Files | Cases | Covers |
+|---|---|---|---|
+| `//LCdrDataTests/Core/Models` | 6 | 50 | `FileItem` identity, `Cursor` resolution, `PanelState`, sort toggling, operation models, context-menu variants |
+| `//LCdrDataTests/Core/Utilities` | 2 | 18 | Size/date/kind formatting, `~` expansion against a stubbed account home |
+| `//LCdrDataTests/Services` | 7 | 46 | Listing, file operations with conflicts and progress, KDL parsing and merging, bookmark storage, session persistence, `DirectorySession`, sandbox access dedup |
+| `//LCdrDataTests/ViewModels` | 5 | 69 | Panel loading, selection, navigation, history, type-ahead, command dispatch, dialog flows and cancellation |
+| `//LCdrDataTests/AppEnvironment` | 1 | 9 | Startup scope activation, session seeding |
+| `//LCdrDataTests/App` | 1 | 1 | `AppDelegate` termination behaviour |
 
-When implementing any of the above, expect to update both files.
+`//LCdrDataTests/TestSupport` holds the fakes shared across targets — `FakeBookmarkStore`, `FakeAccessPresenter`, `RecordingScopeActivator` and friends. All test doubles are hand-written against the service protocols; there is no mocking framework.
+
+Every target is app-hosted (`test_host = "//LCdrData"`) and tagged `local`, since these do not bootstrap inside Bazel's sandbox, and declares `size = "small"`.
+
+One test is **skipped, not run**: `FileOperationServiceTests.trashFile()` is `@Test(.disabled(...))` because `FileManager.trashItem` needs an application context. It still counts toward the 193.
+
+UI tests under `LCdrDataUITests/` (XCTest) cover launch, panel selection and session restore. Bazel compiles them but cannot run them — `rules_apple`'s runner rejects macOS XCUITEST — so `scripts/run-ui-tests.sh` delegates to Tuist. They are not part of the routine development loop.
 
 ---
 
-## 10. Conventions worth preserving
+## 10. Divergence from DESIGN.md
 
-Observations about how the code is organised today, useful for keeping new work consistent:
+`DESIGN.md` describes the product as intended and lists what it does not yet cover — tabs,
+remappable shortcuts, a toolbar, a volumes list, an inline preview pane, search beyond
+type-ahead, and archive browsing. None of those exist in code, and the spec no longer claims
+they do, so they are not divergences.
 
-- **Protocol-fronted services.** Anything I/O-heavy hides behind a `Sendable, nonisolated` protocol so it can be mocked and swapped in tests.
-- **Deterministic identity for list rows.** `FileItem.id` is derived from URL via SHA256 to keep SwiftUI list identity stable across reloads — important for selection preservation and for avoiding row flicker on `reloadKeepingSelection`.
-- **Async continuations for modal dialogs.** `FileOperationViewModel` uses `CheckedContinuation` to pause an in-flight operation while the user resolves a conflict or confirmation, instead of restructuring the operation as a state machine.
-- **`@Sendable` callbacks for boundary crossings.** Progress and conflict callbacks are explicitly `@Sendable` so they're safe to call from detached tasks.
-- **Centralised keyboard shortcuts.** Shortcut definitions live in one `KeyboardShortcuts` enum rather than being scattered across views — including the `0xF705`-and-up scalar trick for F-keys.
-- **Custom `EnvironmentKey`s for display prefs.** `PanelDisplayPreferences` lets the file table pull font size / date format from the environment without ViewModels having to forward them.
-- **No file headers.** Per `CLAUDE.md`, Swift files start directly with `import` lines.
+One genuine divergence remains:
+
+- **`editor.default-app` is parsed but unused.** `ConfigurationService` reads it into
+  `AppConfiguration`, but `F4` calls `NSWorkspace.shared.open`, which uses the system default
+  application rather than the configured bundle ID. The option is therefore inert, while both
+  the settings window and `DefaultConfig.kdl` present it as working.
+
+When closing that gap, or implementing anything from the spec's "not in scope yet" list,
+expect to update both files.
+
+---
+
+## 11. Conventions worth preserving
+
+- **Layering is enforced, not documented.** Adding a dependency means editing the provider's `visibility`, which makes the widening visible in review. Prefer moving code to widening a list — a test that wants a dependency its layer should not have is usually filed in the wrong place.
+- **`package`, not `public`.** Cross-module types widen exactly as far as the package and no further.
+- **Protocol-fronted services.** Anything I/O-heavy hides behind a `Sendable, nonisolated` protocol so it can be faked in tests, and the fakes are written by hand.
+- **Explicit cursor intents.** `reload(_:)` takes a `Cursor.Intent` so each caller states where the cursor should land. This replaced inferring it from what changed, which was the source of several selection bugs.
+- **Deterministic identity for list rows.** `FileItem.id` is SHA256-derived from the URL, keeping SwiftUI list identity stable across reloads.
+- **One executor for commands.** Every surface funnels through `CommandRunner`, and enablement is asked rather than duplicated.
+- **Async continuations for modal dialogs.** `FileOperationViewModel` pauses an in-flight operation on a `CheckedContinuation` instead of restructuring it as a state machine.
+- **`@Sendable` callbacks for boundary crossings.** Progress and conflict callbacks are explicitly `@Sendable` so detached tasks can call them.
+- **Centralised keyboard shortcuts.** Bindings live in `CommandCatalog` alone, including the `0xF705`-and-up scalar trick for F-keys.
+- **Custom `EnvironmentKey`s for display preferences.** The table pulls font size and date format from the environment rather than having ViewModels forward them.
+- **No file headers.** Per `AGENTS.md`, Swift files start directly with `import` lines.
