@@ -164,7 +164,98 @@ decision on ordering before editing 22 files.
 Also note `@testable` requires `-enable-testing`, which `rules_swift` enables only
 for non-`opt` builds. Tests must not be run under `--config=release`.
 
-## 6. Delivery order
+## 6. Reorganise the tests into per-module targets
+
+`LCdrDataTests/` is currently **flat** — 22 files, no subdirectories — while the
+app target is organised into seven folders. Nothing requires that: a Swift module
+is a flat namespace, so directory layout has no effect on visibility or imports,
+and **both build systems already glob recursively**
+(`glob(["LCdrDataTests/**/*.swift"])` and `sources: ["LCdrDataTests/**"]`). Adding
+folders needs no build-file change at all.
+
+Group the tests by **module**, not by the app's current folders — `Models` and
+`Utilities` tests merge into `Core/`, mirroring the module merge in §3:
+
+```
+LCdrDataTests/
+├── Core/             8 files   Models (6) + Utilities (2)
+├── Services/         7 files   6 + FileSystemServiceTests
+├── ViewModels/       5 files   4 + PanelViewModelPhase3Tests
+├── AppEnvironment/   1 file    AppEnvironmentTests
+└── App/              1 file    AppDelegateTests
+```
+
+That accounts for all 22 files (8 + 7 + 5 + 1 + 1). Two need placing by hand
+rather than by filename: `FileSystemServiceTests` belongs in `Services/`, and
+`PanelViewModelPhase3Tests` in `ViewModels/` — name-based grouping mis-sorts the
+latter into `Models/` because no `PanelViewModelPhase3` type exists.
+
+Then one `macos_unit_test` per folder:
+
+```starlark
+swift_library(
+    name = "CoreTestsLib",
+    testonly = True,
+    srcs = glob(["LCdrDataTests/Core/**/*.swift"]),
+    copts = SWIFT_COPTS,
+    module_name = "CoreTests",
+    deps = [":Core"],
+)
+
+macos_unit_test(
+    name = "CoreTests",
+    bundle_id = "com.xvir.LCdrData.CoreTests",   # must be unique per target
+    minimum_os_version = "26.4",
+    tags = ["local"],
+    test_host = ":LCdrData",
+    deps = [":CoreTestsLib"],
+)
+```
+
+### Things that will bite
+
+**No shared test helpers — verified.** Every test double (`FakeBookmarkStore`,
+`MockFileSystemService`, `StubHomeDirectoryProvider`, `FakePanelSessionStore`,
+`FakeBookmarkSerializer`, `FakeAccessPresenter`, `MockFileOperationService`) is
+used *only* in the file that declares it. So no shared `TestSupport` library is
+needed, and the split cannot break a cross-file helper. Re-check this if new tests
+are added before the split happens.
+
+**Test count parity becomes a sum.** Today the check is a single
+`Test run with 193 tests`. Afterwards each target reports its own subtotal and
+**193 is the sum across five targets**. Anyone comparing a single target's output
+against 193 will think tests vanished. Update the guidance in
+[AGENTS.md](../AGENTS.md) at the same time.
+
+**Bundle IDs must be unique.** Five targets sharing `com.xvir.LCdrDataTests` is a
+recipe for confusing runner failures. Suffix per target as above.
+
+**Only three test files actually need an app host.** `test_host` exists because
+`ConfigurationServiceTests` reads `Bundle.main`, and `BookmarkStoreTests` and
+`PanelSessionStoreTests` use `UserDefaults` — all three in the `Services` layer.
+The other four targets may be able to run as **library tests** with no
+`test_host`, which would also drop the need for `tags = ["local"]` and the debug
+entitlements on those targets, making them faster and simpler.
+
+Do not assume it though. `rules_apple` warns that library tests run outside an
+application context, where "certain functionalities might not be present (e.g. UI
+layout, `NSUserDefaults`)". Start by keeping `test_host` everywhere so behaviour
+matches today, then drop it target by target and only keep the change where the
+tests still pass.
+
+**There are no `Views` tests.** All 12 files in `LCdrData/Views/` are untested;
+the three test files with "View" in the name are ViewModel tests. So there is no
+`ViewsTests` target to create — worth knowing rather than hunting for the missing
+folder.
+
+### Do this before the module split
+
+The reorganisation is a pure `git mv` with **no build-file change**, so it is
+independently valuable and independently revertible. Doing it first turns step 6
+of the delivery order from "rewire 22 files' imports inside one target" into "give
+five already-grouped targets one obvious dependency each".
+
+## 7. Delivery order
 
 Bottom-up, one module per commit, `bazel test //...` green at every step. Each
 step leaves the app building, so it can be abandoned partway without leaving a
@@ -173,18 +264,23 @@ mess.
 | Step | Action | Verification |
 |---|---|---|
 | 0 | Move `FileOperationProgress` into `Models`. No Bazel changes | `bazel test //...`, 193 tests |
+| 0b | Reorganise `LCdrDataTests/` into per-module folders (§6). Pure `git mv`, no Bazel changes | 193 tests, still one target |
 | 1 | Extract `Core` (Models + Utilities) as a `swift_library`; `:LCdrDataLib` depends on it | 193 tests |
 | 2 | Extract `Services` | 193 tests |
 | 3 | Extract `ViewModels` | 193 tests |
 | 4 | Extract `AppEnvironment` | 193 tests |
 | 5 | Extract `Views`; `:LCdrDataLib` is now App-layer only | 193 tests |
-| 6 | Update test target deps and `@testable import` lines | 193 tests |
+| 6 | Split the single test target into five per-module `macos_unit_test` targets (§6); fix `@testable import` lines | **Sum** of five targets = 193 |
 | 7 | Enable layering enforcement | 193 tests, no new warnings |
 
 Keep the app target's `module_name` arrangement in mind: `@testable import
 LCdrData` currently resolves because `:LCdrDataLib` sets `module_name =
 "LCdrData"`. Step 6 is where that assumption is renegotiated, so expect the test
-target to be the fiddliest part.
+targets to be the fiddliest part.
+
+From step 6 onward `bazel test //...` reports **six** test targets — five unit
+test targets plus `//:LCdrDataUITests_build_test` — and no single one of them
+reports 193.
 
 At step 7, the feature is:
 
@@ -197,12 +293,13 @@ string in rules_swift 3.6.1 is `swift.layering_check`
 (`swift/internal/feature_names.bzl`). An earlier draft of the migration plan had
 this wrong. Once it passes cleanly, promote it to `.bazelrc` so it is permanent.
 
-## 7. Risks
+## 8. Risks
 
 | Risk | Impact | Mitigation |
 |---|---|---|
 | `public` churn touches ~40 types and their members | **High effort** | Bottom-up, one module per commit; consider `package` over `public` |
-| Test imports fan out across 7 files | Medium | Step 6 is its own commit; decide the import convention first |
+| Test imports fan out across 7 files | Medium | Reorganise the test folders first (step 0b), so step 6 wires five grouped targets instead of rewriting 22 scattered imports |
+| Per-target test counts mistaken for lost tests | Low | 193 becomes a sum across five targets; update the count guidance in `AGENTS.md` in the same commit |
 | A hidden cycle appears once the compiler enforces boundaries | Medium | Substring scanning is approximate — the compiler is the real authority. Expect at least one surprise |
 | Tuist and Bazel diverge | **Medium** | `Project.swift` still defines one flat target. Either mirror the split in Tuist or accept that only Bazel enforces layering — decide explicitly, do not let it drift silently |
 | Behaviour changes during a mechanical refactor | Medium | 193 tests at every step; the UI test suite via `scripts/run-ui-tests.sh` before finishing |
@@ -212,10 +309,13 @@ flat set of sources. After this, Bazel enforces layering and Tuist does not, so
 code that violates a boundary still builds in Xcode and fails in Bazel. That is
 tolerable, but only if it is a known trade rather than a surprise.
 
-## 8. Definition of done
+## 9. Definition of done
 
 - Six `swift_library` targets with explicit `deps`, no cycles.
-- `bazel test //...` green: 193 unit tests, plus UI test compile coverage.
+- Five per-module `macos_unit_test` targets, each with a unique `bundle_id`, whose
+  counts **sum** to 193.
+- `bazel test //...` green across all six test targets, including UI test compile
+  coverage.
 - `--features=swift.layering_check` passes with no undeclared-dependency warnings.
 - `scripts/run-ui-tests.sh` no worse than before (note
   `PanelSelectionUITests.testClickingEmptySpaceKeepsRowSelected` already fails for
