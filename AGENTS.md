@@ -9,8 +9,10 @@ a reference to Lt. Cmdr. Data from Star Trek: The Next Generation.
 Built with SwiftUI, Xcode 26.4, Swift 5.0, targeting macOS 26.4.
 Bundle identifier: `com.xvir.LCdrData`.
 
-See **[DESIGN.md](DESIGN.md)** for the full design document — architecture, data models,
-feature list, keyboard shortcuts, implementation phases, and sandbox requirements.
+See **[docs/DESIGN.md](docs/DESIGN.md)** for the full design document — architecture, data
+models, feature list, keyboard shortcuts, implementation phases, and sandbox requirements.
+**[docs/CONTEXT.md](docs/CONTEXT.md)** defines the project's vocabulary, and
+**[docs/CURRENT_ARCH.md](docs/CURRENT_ARCH.md)** describes the architecture as built.
 
 ## Which tool for which task
 
@@ -231,10 +233,15 @@ LCdrData/
 ├── LCdrDataUITests/            # UI tests (XCTest)
 ├── Derived/                    # Tuist-generated files (gitignored)
 ├── docs/
+│   ├── DESIGN.md               # Full design document
+│   ├── CONTEXT.md              # Project vocabulary and domain terms
+│   ├── CURRENT_ARCH.md         # Architecture as built
 │   ├── BAZEL_MIGRATION.md      # Why the Bazel/Tuist split looks like this
+│   ├── FUTURE_IMPROVEMENTS.md
+│   ├── MULTIWINDOW.md
+│   ├── SANDBOX_ACCESS_REDESIGN.md
 │   └── parity-baseline/        # Tuist reference bundle + parity report
-├── AGENTS.md
-└── DESIGN.md
+└── AGENTS.md                   # This file (CLAUDE.md is a symlink to it)
 ```
 
 > The app icon exists in **two** formats. `rules_apple` rejects `.appiconset` for macOS 26+

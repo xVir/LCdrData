@@ -725,7 +725,7 @@ Diff the Bazel-produced bundle against the Phase 0 snapshot:
 4. Manual smoke test of the sandbox behaviour, which is the app's most
    entitlement-sensitive area: launch, grant folder access, verify the
    `~`-expansion and bookmark-restore paths described in
-   [CONTEXT.md](../CONTEXT.md) still work. An entitlements mistake will not show
+   [CONTEXT.md](CONTEXT.md) still work. An entitlements mistake will not show
    up as a build failure — only as a runtime permission denial.
 5. Unit test count and results match Tuist.
 

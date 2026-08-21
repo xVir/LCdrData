@@ -116,7 +116,7 @@ binary rather than a Tuist copy — both share bundle ID `com.xvir.LCdrData`, so
 `open` can otherwise activate the wrong one.
 
 The container was reset first, to a genuinely empty `BookmarkStore`. All seven
-flows from [CONTEXT.md](../../CONTEXT.md) pass:
+flows from [CONTEXT.md](../CONTEXT.md) pass:
 
 - [x] **Startup Home prompt** — fires on first launch when no bookmark covers `~`.
 - [x] **Granting works** — accepting the `NSOpenPanel` grants access and the panel
