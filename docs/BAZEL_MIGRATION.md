@@ -756,23 +756,29 @@ help and should not be used.
 
 ### Phase 8 — Layered modularisation (follow-up)
 
-Only after the monolith is green. Split `:LCdrDataLib` along the existing folder
-boundaries, which already suggest a layering:
+Optional, and planned separately in
+**[PHASE8_MODULARISATION.md](PHASE8_MODULARISATION.md)** — it needs a real
+dependency analysis rather than a paragraph.
 
-```
-App (4 files)  ->  Views (12)  ->  ViewModels (4)  ->  Services (11)  ->  Models (10)
-                                                        Utilities (5)
-```
+Summary of what that analysis found, since it corrects the sketch this section
+used to carry:
 
-Expect real friction: `internal` access currently spans the whole module, so
-every cross-layer reference becomes a `public` API decision, and any dependency
-cycle between folders must be broken. This is a genuine refactor of the code, not
-a build-file change — which is exactly why it is optional and sits outside the
-critical path.
+- The naive folder layering is **not** acyclic. There are three genuine cycles
+  (`Models` ↔ `Utilities`, `Models` ↔ `Services`, `App` ↔ `Views`) plus two
+  false positives that are only doc comments naming a type.
+- `Models` and `Utilities` are mutually dependent and are best **merged** into one
+  `Core` module rather than layered.
+- `AppEnvironment` has to become its **own module above `ViewModels`**. It cannot
+  stay in `App` (`Views/WindowRootView` needs it) and cannot sit below
+  `ViewModels` (it holds a `weak var mostRecentAppState: AppState?`).
+- Exactly **one source change** is strictly required: `FileOperationProgress`
+  moves from `Services` into `Core`.
+- The real cost is **40 types needing `public`** and 7 test files needing multiple
+  `@testable import` lines.
 
-Deliver it bottom-up (Models and Utilities first, App last), keeping
-`bazel test //...` green at each step. Use `rules_swift`'s
-`--features=swift.layering_check_swift` to catch undeclared dependencies.
+The layering feature is `--features=swift.layering_check`. An earlier version of
+this section said `swift.layering_check_swift`, which does not exist — the only
+layering string in rules_swift 3.6.1 is `swift.layering_check`.
 
 ### Phase 9 — Document the split
 
