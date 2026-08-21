@@ -740,13 +740,19 @@ Two flags are load-bearing when comparing test results —
 them either side reports success without running anything.
 
 **Results are recorded in [parity-baseline/REPORT.md](parity-baseline/REPORT.md).**
-Items 1, 2, 3 and 5 pass, with every difference accounted for: `NSMainStoryboardFile`
+**All five items pass.** Every difference is accounted for: `NSMainStoryboardFile`
 absent by design, and `LCdrData.debug.dylib` plus `__preview.dylib` absent because
-Bazel links one self-contained binary where Xcode splits out a debug dylib. Item 4
-requires a human and carries a container-reset caveat, since both builds share
-bundle ID `com.xvir.LCdrData` and therefore one `BookmarkStore`.
+Bazel links one self-contained binary where Xcode splits out a debug dylib.
+
+For item 4, reset the container first — both builds share bundle ID
+`com.xvir.LCdrData` and therefore one `BookmarkStore`, so without a reset the
+first-launch grant paths are never exercised. `rm -rf` on the container reports
+`Operation not permitted` for the SIP-protected metadata plist, which is harmless:
+`Data/` is still removed, and that is where the bookmarks live. `sudo` does not
+help and should not be used.
 
 **Exit criteria:** documented diff with every remaining difference justified.
+**Met.**
 
 ### Phase 8 — Layered modularisation (follow-up)
 

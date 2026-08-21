@@ -6,9 +6,8 @@ bundle against the Tuist baseline captured in Phase 0 (see
 
 Run 2026-08-20 at commit `582fb81`, Xcode 26.6, Bazel 9.2.0.
 
-**Verdict: at parity.** Every difference is explained and intended. Items 1, 2, 3
-and 5 pass. Item 4, the manual sandbox smoke test, is outstanding and needs a
-human — see the last section.
+**Verdict: at parity.** All five items pass and every difference is explained and
+intended.
 
 ## How the bundles were produced
 
@@ -104,45 +103,55 @@ Both configurations are ad-hoc signed (`Signature=adhoc`), and
 `--no-selective-testing` are load-bearing: without them either side will happily
 report success without running anything.
 
-## 4. Manual sandbox smoke test — OUTSTANDING
+## 4. Manual sandbox smoke test — PASS
 
-This is the one item that cannot be automated, and it is the one that matters
-most: an entitlements mistake does not fail the build, it fails at runtime as a
-permission denial.
+This is the item that cannot be automated, and the one that matters most: an
+entitlements mistake does not fail the build, it fails at runtime as a permission
+denial.
 
-The app to test is `/tmp/parity/release/LCdrData.app` (or rebuild with
-`bazel build //:LCdrData --config=release`). Use the **release** build, since it
-has the minimal entitlement set and is therefore the one that can actually break.
+Tested against the **release** build (`/tmp/parity/release/LCdrData.app`), chosen
+because it carries the minimal two-key entitlement set and is therefore the
+configuration that can actually break. Verified the running process was the Bazel
+binary rather than a Tuist copy — both share bundle ID `com.xvir.LCdrData`, so
+`open` can otherwise activate the wrong one.
 
-> **Reset the container first.** The Bazel and Tuist apps share bundle ID
-> `com.xvir.LCdrData`, so they share one container, `BookmarkStore` and
-> `UserDefaults`. Without a reset you will be testing against folder grants the
-> Tuist build already made, and the first-launch paths will not be exercised:
->
-> ```bash
-> rm -rf ~/Library/Containers/com.xvir.LCdrData
-> ```
+The container was reset first, to a genuinely empty `BookmarkStore`. All seven
+flows from [CONTEXT.md](../../CONTEXT.md) pass:
 
-Checklist, drawn from the flows in [CONTEXT.md](../../CONTEXT.md):
-
-- [ ] **Startup Home prompt.** On first launch with no bookmark covering `~`, the
-      app prompts for Home access.
-- [ ] **Granting works.** Accepting the `NSOpenPanel` grants access and the panel
-      lists the directory contents.
-- [ ] **Tilde expansion.** `~` resolves to the real home directory, not the
-      sandbox container path — the specific bug fixed in `a87d015`.
-- [ ] **Reactive grant prompt.** Navigating to a directory no stored bookmark
-      covers triggers the prompt via the bookmark-coverage gate.
-- [ ] **Bookmark restore across launches.** Quit and relaunch: previously granted
-      directories are accessible with no re-prompt, confirming
-      `AppEnvironment.start()` resolved the stored bookmarks and called
+- [x] **Startup Home prompt** — fires on first launch when no bookmark covers `~`.
+- [x] **Granting works** — accepting the `NSOpenPanel` grants access and the panel
+      lists contents.
+- [x] **Tilde expansion** — `~` resolves to the real home, not the sandbox
+      container path, so the `a87d015` fix holds under Bazel. Corroborated by the
+      stored bookmark being `/Users/<user>` rather than the container path.
+- [x] **Reactive grant prompt** — navigating to an uncovered directory prompts via
+      the bookmark-coverage gate.
+- [x] **Bookmark restore across launches** — no re-prompt after quit and relaunch,
+      confirming `AppEnvironment.start()` resolved the stored bookmarks and called
       `startAccessingSecurityScopedResource()`.
-- [ ] **Session resume.** The previous run's panel directories are restored
-      (`PanelSessionStore`, from `230f1db`). Note this requires a real quit —
-      killing the process skips it by design.
-- [ ] **File operations write successfully** into a granted directory, exercising
-      `files.user-selected.read-write` rather than just read access.
+- [x] **Session resume** — the previous run's panel directories are restored
+      (`PanelSessionStore`, `230f1db`).
+- [x] **File operations write successfully** into a granted directory, exercising
+      `files.user-selected.read-write` rather than read-only access.
 
-If any item fails, compare against the same flow in the Tuist build before
-concluding the Bazel bundle is at fault — several of these depend on container
-state rather than on entitlements.
+Ending state: 15 bookmarks accumulated across the run, from an empty start.
+
+### Resetting the container, for future runs
+
+`rm -rf ~/Library/Containers/com.xvir.LCdrData` reports
+`Operation not permitted` for `.com.apple.containermanagerd.metadata.plist` and
+for the container directory itself. Both are protected by SIP, and `sudo` does
+**not** help — do not reach for it.
+
+That error is nonetheless harmless: the command still deletes `Data/`, which is
+where the bookmarks and `UserDefaults` live, and `containermanagerd` recreates
+`Data/` on the next launch. The reset works despite the error text.
+
+Confirm the reset actually took effect rather than trusting the exit code:
+
+```bash
+defaults read com.xvir.LCdrData bookmarks    # expect: does not exist
+```
+
+Note that `defaults read ... | head` is not a valid check — `head` exits 0 on
+empty input, so it reports success either way. Compare byte counts instead.
