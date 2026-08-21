@@ -794,10 +794,31 @@ because an undocumented two-build-system repo is genuinely confusing to walk int
    build system", and keep the `.tuist-version` pin documented.
 4. Add `MODULE.bazel`, `BUILD.bazel`, `.bazelrc`, `.bazelversion`, `Bazel/` and
    `scripts/` to the Project Structure tree.
-5. Update `.gitignore` for `bazel-*`, keeping every existing Tuist entry.
+5. Update `.gitignore` for `bazel-*`, keeping every existing Tuist entry. (Already
+   done in Phase 1.)
+
+While here, correct the `swift-mocking` references Phase 0 made stale. `AGENTS.md`
+recommended it for new mocks and listed it as a dependency; leaving that in place
+would send the next contributor after a package that is no longer resolvable. The
+codebase already writes doubles by hand (`FakeBookmarkStore`,
+`MockFileSystemService`, `StubHomeDirectoryProvider`), so the guidance now
+describes what the tests actually do.
 
 **Exit criteria:** a clean clone can be built and unit-tested with Bazel, and
-opened in Xcode with Tuist, following `AGENTS.md` alone.
+opened in Xcode with Tuist, following `AGENTS.md` alone. **Met** — verified
+against a fresh `git clone` into a temporary directory:
+
+| Documented command | Result from clean clone |
+|---|---|
+| `bazel build //:LCdrData` | 127 actions, success, **no setup step needed** |
+| `bazel test //:LCdrDataTests` | `Test run with 193 tests in 23 suites passed` |
+| `bazel test //...` | 2 test targets, both pass |
+| `tuist install` + `tuist generate` | `.xcodeproj` and `.xcworkspace` produced |
+| `scripts/run-ui-tests.sh` | Executable bit survives the clone; syntax valid |
+
+Worth noting that Bazel needs no equivalent of `tuist install` — it resolves
+everything on the first build, which is why the two workflows are documented
+separately rather than as one sequence.
 
 ---
 

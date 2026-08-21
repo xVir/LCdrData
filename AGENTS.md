@@ -12,10 +12,63 @@ Bundle identifier: `com.xvir.LCdrData`.
 See **[DESIGN.md](DESIGN.md)** for the full design document — architecture, data models,
 feature list, keyboard shortcuts, implementation phases, and sandbox requirements.
 
-## Tuist
+## Which tool for which task
 
-The project uses **Tuist 4** to generate the Xcode project and workspace. The `.xcodeproj`
-and `.xcworkspace` are **not** checked into git — they are generated from the manifest files.
+This repo uses **two build tools on purpose**. Neither is being phased out.
+
+| Task | Tool | Command |
+|------|------|---------|
+| Build the app | **Bazel** | `bazel build //:LCdrData` |
+| Run unit tests | **Bazel** | `bazel test //:LCdrDataTests` |
+| Generate an Xcode project | **Tuist** | `tuist generate` |
+| Run UI tests | **Tuist**, via script | `scripts/run-ui-tests.sh` |
+| Declare a dependency | **Both** read `Tuist/Package.swift` |
+
+Bazel is the build system. Tuist keeps the two jobs it does better: generating a working
+Xcode project (so SwiftUI previews and the debugger behave normally), and running macOS
+UI tests, which Bazel's Apple test runner cannot drive at all.
+
+There is only **one** dependency manifest. `Tuist/Package.swift` is read by Tuist and, via
+`rules_swift_package_manager`, by Bazel too — so there is no second version list to drift.
+
+See **[docs/BAZEL_MIGRATION.md](docs/BAZEL_MIGRATION.md)** for why the split falls this way,
+and for the non-obvious constraints behind it.
+
+## Bazel
+
+Bazel builds the app and runs the unit tests. Version pinned in `.bazelversion`: **9.2.0**.
+
+### Manifest Files
+
+| File | Purpose |
+|------|---------|
+| `MODULE.bazel` | bzlmod dependencies (`rules_apple`, `rules_swift`, `apple_support`, `rules_swift_package_manager`) |
+| `MODULE.bazel.lock` | Committed on purpose, for reproducible resolution |
+| `BUILD.bazel` | App, unit test, and UI test targets |
+| `.bazelrc` | macOS deployment target, pinned `DEVELOPER_DIR`, the `release` config |
+| `.bazelignore` | Keeps Bazel out of `Tuist/.build`, `Derived/`, and the generated Xcode projects |
+| `Bazel/Info.plist` | Hand-written app plist |
+| `Bazel/LCdrData.entitlements` | Production entitlements (release builds) |
+| `Bazel/LCdrData.debug.entitlements` | Adds `get-task-allow` and the `testmanagerd` exceptions |
+
+No setup step is needed — Bazel resolves everything on first build.
+
+### Gotchas
+
+- **Debug builds carry extra entitlements, and must.** An app-hosted `macos_unit_test`
+  cannot bootstrap without them: the sandboxed host is refused its connection to
+  `testmanagerd`. `--config=release` selects the two-key production set.
+- **`bazel build //:LCdrData` outputs `bazel-bin/LCdrData.zip`**, not a `.app` directory.
+  Unzip it to inspect or run it.
+- **The unit test target is tagged `local`.** It does not run inside Bazel's sandbox.
+- **UI tests are tagged `manual`**, so wildcards skip them. `//:LCdrDataUITests_build_test`
+  provides their compile coverage instead.
+
+## Xcode Project Generation (Tuist)
+
+**Tuist 4** generates the Xcode project and workspace — it is not the build system, but it is
+still the way to get an IDE. The `.xcodeproj` and `.xcworkspace` are **not** checked into git;
+they are generated from the manifest files.
 
 ### Tuist Version
 
@@ -27,11 +80,12 @@ Pinned in `.tuist-version`: **4.182.0**
 |------|---------|
 | `Tuist.swift` | Tuist project configuration (generation options) |
 | `Project.swift` | Project manifest — defines targets, settings, and dependencies |
-| `Tuist/Package.swift` | SPM dependency declarations (consumed by Tuist) |
+| `Tuist/Package.swift` | SPM dependency declarations — read by **both** Tuist and Bazel |
 
 ### Tuist Workflow
 
-After cloning or pulling changes, always run these two commands before opening the project:
+Needed before opening the project in Xcode, after cloning or pulling changes. Not needed to
+build or test with Bazel:
 
 ```bash
 # 1. Fetch/resolve SPM dependencies
@@ -58,15 +112,30 @@ tuist dump
 
 ## Build Commands
 
+Use Bazel:
+
 ```bash
-# Build (Debug) — via workspace (after tuist generate)
+# Build (debug — the default configuration)
+bazel build //:LCdrData
+
+# Build (release — optimised, production entitlements)
+bazel build //:LCdrData --config=release
+
+# Clean
+bazel clean
+```
+
+The output is `bazel-bin/LCdrData.zip`. Unzip it to get `LCdrData.app`:
+
+```bash
+unzip -o bazel-bin/LCdrData.zip -d /tmp/lcdr && open /tmp/lcdr/LCdrData.app
+```
+
+Building through Xcode still works after `tuist generate`, and is the right choice when you
+need the debugger or previews:
+
+```bash
 xcodebuild -workspace "LCdrData.xcworkspace" -scheme "LCdrData" -configuration Debug build
-
-# Build (Release)
-xcodebuild -workspace "LCdrData.xcworkspace" -scheme "LCdrData" -configuration Release build
-
-# Clean build
-xcodebuild -workspace "LCdrData.xcworkspace" -scheme "LCdrData" clean build
 ```
 
 ## Test Commands
@@ -76,36 +145,54 @@ The project uses two test frameworks:
 - **XCTest** (`import XCTest`) for UI tests — class-based, `XCTestCase` subclass
 
 > **During development, only run unit tests (`LCdrDataTests`).** UI tests (`LCdrDataUITests`)
-> require a running app and must be run manually — do not run them as part of automated or
+> require a running app and a GUI login session — do not run them as part of automated or
 > routine development workflows.
 
-```bash
-# Run unit tests only (use this during development)
-tuist test "LCdrData" --skip-ui-tests
-
-# Run a SINGLE unit test (Swift Testing: TargetName/StructName/functionName)
-tuist test "LCdrData" --test-targets "LCdrDataTests/LCdrDataTests/example"
-```
-
-Alternatively, via `xcodebuild` directly:
+### Unit tests — Bazel
 
 ```bash
-# Run unit tests only (use this during development)
-xcodebuild test -workspace "LCdrData.xcworkspace" -scheme "LCdrData" -destination 'platform=macOS' \
-  -only-testing:"LCdrDataTests"
+# Run unit tests (use this during development)
+bazel test //:LCdrDataTests
 
-# Run UI tests only (manual only — do not run during development)
-xcodebuild test -workspace "LCdrData.xcworkspace" -scheme "LCdrData" -destination 'platform=macOS' \
-  -only-testing:"LCdrDataUITests"
+# Run everything Bazel is willing to run: unit tests + UI test compile coverage
+bazel test //...
 
-# Run a SINGLE unit test (Swift Testing: TargetName/StructName/functionName)
-xcodebuild test -workspace "LCdrData.xcworkspace" -scheme "LCdrData" -destination 'platform=macOS' \
-  -only-testing:"LCdrDataTests/LCdrDataTests/example"
-
-# Run a SINGLE UI test (XCTest: TargetName/ClassName/testMethodName)
-xcodebuild test -workspace "LCdrData.xcworkspace" -scheme "LCdrData" -destination 'platform=macOS' \
-  -only-testing:"LCdrDataUITests/LCdrDataUITests/testExample"
+# Force a re-run, ignoring cached results
+bazel test //:LCdrDataTests --nocache_test_results
 ```
+
+The suite is **193 test cases**. Take the count from Swift Testing's own summary line in the
+test log — `Test run with 193 tests in 23 suites passed` — rather than counting `✔` marks,
+which over-counts by including that summary.
+
+### UI tests — Tuist, via script
+
+```bash
+scripts/run-ui-tests.sh                                # whole suite
+scripts/run-ui-tests.sh PanelSelectionUITests          # one class
+scripts/run-ui-tests.sh PanelSelectionUITests/testFoo  # one test
+```
+
+`bazel test //:LCdrDataUITests` does **not** work: `rules_apple`'s test runner rejects macOS
+XCUITEST outright. Bazel builds these targets but never runs them. The script delegates to
+Tuist and checks for a GUI session first, since without an Aqua session UI tests hang rather
+than fail.
+
+> `PanelSelectionUITests.testClickingEmptySpaceKeepsRowSelected` currently fails, and did so
+> before the Bazel migration. It asserts on blank space below the file rows, so it depends on
+> window size and directory contents.
+
+### Running tests through Tuist
+
+Occasionally useful for comparison, or to run a test in Xcode's harness:
+
+```bash
+tuist test "LCdrData" --skip-ui-tests --no-selective-testing
+```
+
+`--no-selective-testing` matters. By default Tuist skips the run when target hashes are
+unchanged, reporting `no tests to run, finishing early` and exiting 0 — which looks alarmingly
+like a regression and is useless as a comparison.
 
 ## Lint / Format
 
@@ -116,14 +203,25 @@ If added later, update this section.
 
 ```
 LCdrData/
+├── MODULE.bazel                # Bazel dependencies (bzlmod)
+├── MODULE.bazel.lock           # Committed for reproducible resolution
+├── BUILD.bazel                 # App, unit test and UI test targets
+├── .bazelrc                    # Deployment target, DEVELOPER_DIR, release config
+├── .bazelversion               # Pinned Bazel version (9.2.0)
+├── .bazelignore                # Directories Bazel must not traverse
+├── Bazel/                      # Hand-written Info.plist and entitlements
 ├── Tuist.swift                 # Tuist project configuration
 ├── Project.swift               # Project manifest (targets, settings, deps)
 ├── Tuist/
-│   └── Package.swift           # SPM dependency declarations
+│   ├── BUILD.bazel             # Exports the manifests to Bazel
+│   └── Package.swift           # SPM dependencies — read by Tuist AND Bazel
 ├── .tuist-version              # Pinned Tuist version (4.182.0)
+├── scripts/
+│   └── run-ui-tests.sh         # UI test runner (delegates to Tuist)
 ├── LCdrData/                   # Main app target
 │   ├── App/                    # App entry point and delegate
-│   ├── Assets.xcassets/        # Asset catalog (colors, app icon)
+│   ├── AppIcon.icon/           # Icon Composer bundle (used by Bazel)
+│   ├── Assets.xcassets/        # Asset catalog (.appiconset used by Tuist)
 │   ├── Models/                 # Data models
 │   ├── Services/               # File system and sandbox services
 │   ├── Utilities/              # Formatters, keyboard shortcuts
@@ -132,9 +230,16 @@ LCdrData/
 ├── LCdrDataTests/              # Unit tests (Swift Testing)
 ├── LCdrDataUITests/            # UI tests (XCTest)
 ├── Derived/                    # Tuist-generated files (gitignored)
+├── docs/
+│   ├── BAZEL_MIGRATION.md      # Why the Bazel/Tuist split looks like this
+│   └── parity-baseline/        # Tuist reference bundle + parity report
 ├── AGENTS.md
 └── DESIGN.md
 ```
+
+> The app icon exists in **two** formats. `rules_apple` rejects `.appiconset` for macOS 26+
+> targets, so Bazel uses `AppIcon.icon` (Icon Composer) while Tuist continues to use the
+> `.appiconset`. Change one and you probably want to change the other.
 
 ## Swift Concurrency Settings
 
@@ -218,8 +323,11 @@ Image(systemName: "globe")
 - Design code for testability: use protocol-based dependencies injected via initializer
 - Avoid static methods — use instance methods on injectable types instead
 - Break large classes into smaller, focused types that are easier to test in isolation
-- Use [swift-mocking](https://github.com/DanielCardonaRojas/swift-mocking) for creating
-  mocks in tests — define protocols for dependencies and mock them via swift-mocking
+- Write test doubles **by hand**. Define a protocol for the dependency and implement a
+  `Fake*` / `Mock*` / `Stub*` type in the test target, as `FakeBookmarkStore`,
+  `MockFileSystemService` and `StubHomeDirectoryProvider` already do. No mocking framework
+  is used — `swift-mocking` was removed, since it was declared but never imported and it
+  pulled `swift-syntax` in as a macro dependency
 - Follow the Arrange / Act / Assert pattern in every test
 
 **Unit tests (Swift Testing):**
@@ -259,10 +367,20 @@ final class SomeUITests: XCTestCase {
 | Package | URL | Purpose |
 |---------|-----|---------|
 | kdl-swift | https://github.com/danini-the-panini/kdl-swift | KDL 2.0 parser for configuration files |
-| swift-mocking | https://github.com/DanielCardonaRojas/swift-mocking | Mock generation for unit tests |
 
-Dependencies are managed via Swift Package Manager in Xcode.
-Declared in `Tuist/Package.swift` and resolved by `tuist install`.
+`kdl-swift` is the only direct dependency. It pulls in BigDecimal, BigInt, UInt128 and
+swift-numerics transitively.
+
+Declare dependencies in **`Tuist/Package.swift` only** — it is the single source of truth
+that both tools read. After changing it:
+
+```bash
+tuist install    # re-resolve, updating Tuist/Package.resolved
+bazel mod tidy   # sync MODULE.bazel's use_repo list
+```
+
+Bazel consumes the same manifest through `rules_swift_package_manager`, so there is no
+second place to add a version.
 
 ### App Sandbox
 
