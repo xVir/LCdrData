@@ -375,3 +375,39 @@ expect to update both files.
 - **Centralised keyboard shortcuts.** Bindings live in `CommandCatalog` alone, including the `0xF705`-and-up scalar trick for F-keys.
 - **Custom `EnvironmentKey`s for display preferences.** The table pulls font size and date format from the environment rather than having ViewModels forward them.
 - **No file headers.** Per `AGENTS.md`, Swift files start directly with `import` lines.
+
+---
+
+## 12. Known framework issues
+
+### The `NSTableView` reentrancy warning
+
+Navigating into a directory with a few hundred entries logs:
+
+```
+WARNING: Application performed a reentrant operation in its NSTableView delegate.
+This warning will become an assert in the future.
+```
+
+It is cosmetic — nothing in the app misbehaves — and it comes from SwiftUI's `List`, not
+from our code. **This has been investigated to exhaustion; please do not start over.**
+
+Instrumented runs against a 283-row listing ruled out every application-side suspect. The
+warning does not fire from the selection binding, the row tap gestures, Return routing, or
+`scrollTo`: it lands 25–42 ms *after* the `state.items` and `state.cursor` assignments have
+both returned, on no stack of ours. It correlates with one thing only — the number of rows
+being inserted:
+
+| Reload | Rows | Warning |
+|---|---|---|
+| Fresh listing | 0 → 283 | yes |
+| Refresh in place | 283 → 283 | no |
+| Navigating back up | 5–13 → 283 | yes, 5 of 5 |
+
+Only reloads that *grow* the list to 283 rows warn. Replacing `state.items` wholesale versus
+mutating it in place (`removeAll(keepingCapacity:)` then `append(contentsOf:)`) makes no
+difference — both were measured, both warn. That matches the widely reported `List` bug that
+appears somewhere above ~200 rows and reproduces in Apple's own sample code.
+
+What remains is an `NSTableView` bridge for the file table, replacing `List`. That is a real
+piece of work and is not justified by a cosmetic warning, so it has not been done.
