@@ -193,18 +193,18 @@ bazel test //...
 bazel test //LCdrDataTests/... --nocache_test_results
 ```
 
-The suite is **201 test cases split across eight targets** — Core/Models 50,
-Core/Formatting 11, Core/Bindings 8, Core/Utilities 7, Services 46, ViewModels 69,
-AppEnvironment 9, App 1. They **sum** to 201; no single target reports that number, so a
-target showing 50 is not a sign of lost tests.
+The suite is **239 test cases split across eight targets** — Core/Models 61,
+Core/Formatting 12, Core/Bindings 8, Core/Utilities 7, Services 61, ViewModels 79,
+AppEnvironment 10, App 1. They **sum** to 239; no single target reports that number, so a
+target showing 61 is not a sign of lost tests.
 
 Take counts from Swift Testing's own summary line in each test log
-(`Test run with 50 tests in ... passed`) rather than counting `✔` marks, which over-counts
+(`Test run with 61 tests in ... passed`) rather than counting `✔` marks, which over-counts
 by including the summary line itself. Note the line reads "1 test" singular for
 `AppTests`.
 
 > One test is currently **skipped**, not run: `FileOperationServiceTests.trashFile()` is
-> marked `@Test(.disabled(...))`. It still counts toward the 201, so a green run does not
+> marked `@Test(.disabled(...))`. It still counts toward the 239, so a green run does not
 > mean every test executed. `FileManager.trashItem` needs an application context, which
 > makes it the only test requiring `test_host` — see
 > [docs/PHASE8_MODULARISATION.md](docs/PHASE8_MODULARISATION.md) section 6.
@@ -412,9 +412,9 @@ final class SomeUITests: XCTestCase {
 | Package | URL | Purpose |
 |---------|-----|---------|
 | kdl-swift | https://github.com/danini-the-panini/kdl-swift | KDL 2.0 parser for configuration files |
+| ZIPFoundation | https://github.com/weichsel/ZIPFoundation | ZIP archive listing and mutation |
 
-`kdl-swift` is the only direct dependency. It pulls in BigDecimal, BigInt, UInt128 and
-swift-numerics transitively.
+`kdl-swift` pulls in BigDecimal, BigInt, UInt128 and swift-numerics transitively.
 
 Declare dependencies in **`Tuist/Package.swift` only** — it is the single source of truth
 that both tools read. After changing it:

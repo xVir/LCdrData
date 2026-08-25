@@ -292,6 +292,30 @@ struct FileOperationViewModelTests {
         #expect(vm.confirmationMessage.contains("Trash"))
     }
 
+    @Test func requestDeleteInsideArchiveUsesPermanentArchiveWording() {
+        let container = URL(fileURLWithPath: "/tmp/files.zip")
+        let file = FileItem(
+            archiveContainer: container,
+            internalPath: "folder/test.txt",
+            name: "test.txt",
+            isDirectory: false
+        )
+        let vm = FileOperationViewModel(operationService: MockFileOperationService())
+        let panel = makeMockPanelViewModel(items: [file], selectedIDs: [file.id])
+        panel.state.location = .zipArchive(container: container, internalPath: "folder")
+
+        vm.requestDelete(from: panel)
+
+        #expect(vm.confirmationMessage.contains("from archive"))
+        #expect(!vm.confirmationMessage.contains("Trash"))
+        guard case .browseDelete(let items, let source, false)? = vm.pendingOperationType else {
+            Issue.record("expected archive delete operation")
+            return
+        }
+        #expect(items == [file])
+        #expect(source == panel.state.location)
+    }
+
     @Test func requestPermanentDeleteSetsConfirmationState() {
         let file = FileItem(
             url: URL(fileURLWithPath: "/tmp/source/test.txt"),

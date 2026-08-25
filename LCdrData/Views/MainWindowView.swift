@@ -138,17 +138,17 @@ package struct MainWindowView: View {
             Button("Create") {
                 Task {
                     let panel = appState.activePanelViewModel
-                    let dir = panel.state.currentDirectory
+                    let location = panel.state.location
                     let folderName = ops.newFolderName
                         .trimmingCharacters(in: .whitespacesAndNewlines)
 
-                    await ops.performCreateFolder(in: dir)
+                    await ops.performCreateFolder(at: location)
 
-                    if folderName.isEmpty {
+                    if folderName.isEmpty || location.isArchive {
                         await panel.reload(.keepSelection)
                         await appState.inactivePanelViewModel.reload(.keepSelection)
-                    } else {
-                        let newFolderURL = dir.appendingPathComponent(folderName)
+                    } else if case .directory(let directory) = location {
+                        let newFolderURL = directory.appendingPathComponent(folderName)
                         await panel.reload(.landOnNew(newFolderURL))
                         await appState.inactivePanelViewModel.reload(.keepSelection)
                         panel.highlight(url: newFolderURL)
@@ -169,11 +169,15 @@ package struct MainWindowView: View {
                         let panel = appState.activePanelViewModel
                         await ops.performRename(newName: newName)
 
-                        let parentDir = item.url.deletingLastPathComponent()
-                        let newURL = parentDir.appendingPathComponent(newName)
-                        await panel.reload(.landOnNew(newURL))
+                        if item.archiveContainer != nil {
+                            await panel.reload(.keepSelection)
+                        } else {
+                            let parentDir = item.url.deletingLastPathComponent()
+                            let newURL = parentDir.appendingPathComponent(newName)
+                            await panel.reload(.landOnNew(newURL))
+                            panel.highlight(url: newURL)
+                        }
                         await appState.inactivePanelViewModel.reload(.keepSelection)
-                        panel.highlight(url: newURL)
                     }
                 }
             }
@@ -205,27 +209,8 @@ package struct MainWindowView: View {
     // MARK: - Actions
 
     private func handleReturn() {
-        let panel = appState.activePanelViewModel
-
-        // If exactly one non-parent, non-directory item is selected, rename it.
-        // If a directory or parent is selected, navigate into it.
-        let targetID: UUID? = if panel.state.cursor.selected.count == 1 {
-            panel.state.cursor.selected.first
-        } else {
-            panel.state.cursor.focused
-        }
-
-        guard let targetID,
-              let item = panel.state.items.first(where: { $0.id == targetID }) else {
-            return
-        }
-
-        if item.isNavigableDirectory {
-            runner.perform(.openItem(item))
-        } else {
-            // Rename on Enter for non-directory items (macOS convention)
-            runner.perform(.rename(item))
-        }
+        guard let command = runner.returnCommand else { return }
+        runner.perform(command)
     }
 
     private func handleTypeAheadKeyPress(_ press: KeyPress) -> KeyPress.Result {

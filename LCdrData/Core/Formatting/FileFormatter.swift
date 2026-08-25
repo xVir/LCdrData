@@ -44,7 +44,12 @@ package enum FileFormatter {
         if item.isSymlink { return "Alias" }
         if item.isDirectory { return "Folder" }
 
-        let ext = item.url.pathExtension.lowercased()
+        let ext: String
+        if let internalPath = item.archiveInternalPath {
+            ext = (internalPath as NSString).pathExtension.lowercased()
+        } else {
+            ext = item.url.pathExtension.lowercased()
+        }
         if ext.isEmpty { return "Document" }
         return ext.uppercased()
     }

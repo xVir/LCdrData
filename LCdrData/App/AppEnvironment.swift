@@ -104,8 +104,10 @@ package final class AppEnvironment {
     package func makeFreshSession() -> PanelSession {
         if let frontmost = mostRecentAppState {
             return PanelSession(
-                leftPath: frontmost.leftPanel.state.currentDirectory.path,
-                rightPath: frontmost.rightPanel.state.currentDirectory.path
+                leftPath: frontmost.leftPanel.state.location.persistentDirectory.path,
+                rightPath: frontmost.rightPanel.state.location.persistentDirectory.path,
+                leftLocation: frontmost.leftPanel.state.location,
+                rightLocation: frontmost.rightPanel.state.location
             )
         }
         if let last = sessionStore.loadLastPaths() {

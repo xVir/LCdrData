@@ -67,11 +67,17 @@ package final class FileOperationViewModel {
     // MARK: - Dependencies
 
     private let operationService: FileOperationServiceProtocol
+    private let browseOperationService: BrowseOperationServiceProtocol
 
     // MARK: - Init
 
-    package init(operationService: FileOperationServiceProtocol = FileOperationService()) {
+    package init(
+        operationService: FileOperationServiceProtocol = FileOperationService(),
+        browseOperationService: BrowseOperationServiceProtocol? = nil
+    ) {
         self.operationService = operationService
+        self.browseOperationService = browseOperationService
+            ?? BrowseOperationService(fileService: operationService)
     }
 
     // MARK: - Selected Items Helper
@@ -93,13 +99,16 @@ package final class FileOperationViewModel {
         let items = selectedItems(from: sourcePanel)
         guard !items.isEmpty else { return }
 
-        let sourceURLs = items.map(\.url)
-        let destination = destinationPanel.state.currentDirectory
+        let destination = destinationPanel.state.location
 
         let count = items.count
         let itemWord = count == 1 ? "item" : "items"
-        confirmationMessage = "Copy \(count) \(itemWord) to \(destination.lastPathComponent)?"
-        pendingOperationType = .copy(sources: sourceURLs, destination: destination)
+        confirmationMessage = "Copy \(count) \(itemWord) to \(destination.displayPath)?"
+        pendingOperationType = .browseCopy(
+            items: items,
+            source: sourcePanel.state.location,
+            destination: destination
+        )
         showConfirmationDialog = true
     }
 
@@ -113,14 +122,46 @@ package final class FileOperationViewModel {
         let items = selectedItems(from: sourcePanel)
         guard !items.isEmpty else { return }
 
-        let sourceURLs = items.map(\.url)
-        let destination = destinationPanel.state.currentDirectory
+        let destination = destinationPanel.state.location
 
         let count = items.count
         let itemWord = count == 1 ? "item" : "items"
-        confirmationMessage = "Move \(count) \(itemWord) to \(destination.lastPathComponent)?"
-        pendingOperationType = .move(sources: sourceURLs, destination: destination)
+        confirmationMessage = "Move \(count) \(itemWord) to \(destination.displayPath)?"
+        pendingOperationType = .browseMove(
+            items: items,
+            source: sourcePanel.state.location,
+            destination: destination
+        )
         showConfirmationDialog = true
+    }
+
+    /// Copies file URLs supplied by an external drag into a panel location.
+    package func performDrop(urls: [URL], to destination: BrowseLocation) async {
+        let items = urls.map { url in
+            let values = try? url.resourceValues(forKeys: [.isDirectoryKey])
+            return FileItem(
+                url: url,
+                name: url.lastPathComponent,
+                isDirectory: values?.isDirectory == true
+            )
+        }
+        guard !items.isEmpty else { return }
+
+        do {
+            try await browseOperationService.copy(
+                items: items,
+                from: .directory(urls[0].deletingLastPathComponent()),
+                to: destination,
+                onProgress: { _ in },
+                onConflict: { [weak self] conflict in
+                    guard let self else { return .skip }
+                    return await self.resolveConflict(conflict)
+                }
+            )
+        } catch {
+            errorMessage = error.localizedDescription
+            showErrorAlert = true
+        }
     }
 
     // MARK: - Delete
@@ -130,11 +171,19 @@ package final class FileOperationViewModel {
         let items = selectedItems(from: panel)
         guard !items.isEmpty else { return }
 
-        let sourceURLs = items.map(\.url)
         let count = items.count
         let itemWord = count == 1 ? "item" : "items"
-        confirmationMessage = "Move \(count) \(itemWord) to Trash?"
-        pendingOperationType = .delete(items: sourceURLs)
+        switch panel.state.location {
+        case .directory:
+            confirmationMessage = "Move \(count) \(itemWord) to Trash?"
+        case .zipArchive:
+            confirmationMessage = "Delete \(count) \(itemWord) from archive? This cannot be undone."
+        }
+        pendingOperationType = .browseDelete(
+            items: items,
+            source: panel.state.location,
+            permanently: false
+        )
         showConfirmationDialog = true
     }
 
@@ -143,12 +192,15 @@ package final class FileOperationViewModel {
         let items = selectedItems(from: panel)
         guard !items.isEmpty else { return }
 
-        let sourceURLs = items.map(\.url)
         let count = items.count
         let itemWord = count == 1 ? "item" : "items"
         confirmationMessage =
             "Permanently delete \(count) \(itemWord)? This cannot be undone."
-        pendingOperationType = .permanentDelete(items: sourceURLs)
+        pendingOperationType = .browseDelete(
+            items: items,
+            source: panel.state.location,
+            permanently: true
+        )
         showConfirmationDialog = true
     }
 
@@ -162,11 +214,16 @@ package final class FileOperationViewModel {
 
     /// Creates a new folder in the specified directory.
     package func performCreateFolder(in directory: URL) async {
+        await performCreateFolder(at: .directory(directory))
+    }
+
+    /// Creates a new folder at a filesystem or archive location.
+    package func performCreateFolder(at location: BrowseLocation) async {
         let name = newFolderName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return }
 
         do {
-            _ = try await operationService.createFolder(in: directory, name: name)
+            try await browseOperationService.createDirectory(at: location, name: name)
         } catch {
             errorMessage = error.localizedDescription
             showErrorAlert = true
@@ -190,7 +247,17 @@ package final class FileOperationViewModel {
         }
 
         do {
-            _ = try await operationService.rename(item: item.url, to: newName)
+            let location: BrowseLocation
+            if let container = item.archiveContainer, let internalPath = item.archiveInternalPath {
+                let parentPath = (internalPath as NSString).deletingLastPathComponent
+                location = .zipArchive(
+                    container: container,
+                    internalPath: parentPath == "." ? "" : parentPath
+                )
+            } else {
+                location = .directory(item.url.deletingLastPathComponent())
+            }
+            try await browseOperationService.rename(item: item, at: location, to: newName)
         } catch {
             errorMessage = error.localizedDescription
             showErrorAlert = true
@@ -277,7 +344,119 @@ package final class FileOperationViewModel {
             await performRename(newName: newName)
             await reloadSource()
             await reloadDestination()
+
+        case .browseCopy(let items, let source, let destination):
+            await executeBrowseTransfer(
+                kind: .copy,
+                items: items,
+                source: source,
+                destination: destination,
+                reloadSource: reloadSource,
+                reloadDestination: reloadDestination
+            )
+
+        case .browseMove(let items, let source, let destination):
+            await executeBrowseTransfer(
+                kind: .move,
+                items: items,
+                source: source,
+                destination: destination,
+                reloadSource: reloadSource,
+                reloadDestination: reloadDestination
+            )
+
+        case .browseDelete(let items, let source, let permanently):
+            await executeBrowseDelete(
+                items: items,
+                source: source,
+                permanently: permanently,
+                reloadSource: reloadSource,
+                reloadDestination: reloadDestination
+            )
         }
+    }
+
+    private func executeBrowseTransfer(
+        kind: FileOperationKind,
+        items: [FileItem],
+        source: BrowseLocation,
+        destination: BrowseLocation,
+        reloadSource: @escaping () async -> Void,
+        reloadDestination: @escaping () async -> Void
+    ) async {
+        let operationID = UUID()
+        activeOperations.append(
+            FileOperation(
+                id: operationID,
+                kind: kind,
+                sourceURLs: items.map(\.url),
+                destinationURL: destination.watchURL,
+                status: .inProgress
+            )
+        )
+        showProgressOverlay = true
+
+        do {
+            let onProgress: @Sendable (FileOperationProgress) -> Void = { [weak self] progress in
+                Task { @MainActor [weak self] in
+                    self?.updateProgress(operationID: operationID, progress: progress)
+                }
+            }
+            let onConflict: @Sendable (FileConflict) async -> ConflictResolution = { [weak self] conflict in
+                guard let self else { return .skip }
+                return await self.resolveConflict(conflict)
+            }
+            if kind == .copy {
+                try await browseOperationService.copy(
+                    items: items,
+                    from: source,
+                    to: destination,
+                    onProgress: onProgress,
+                    onConflict: onConflict
+                )
+            } else {
+                try await browseOperationService.move(
+                    items: items,
+                    from: source,
+                    to: destination,
+                    onProgress: onProgress,
+                    onConflict: onConflict
+                )
+            }
+            updateStatus(operationID: operationID, status: .completed)
+        } catch is CancellationError {
+            updateStatus(operationID: operationID, status: .cancelled)
+        } catch {
+            updateStatus(operationID: operationID, status: .failed(error.localizedDescription))
+            errorMessage = error.localizedDescription
+            showErrorAlert = true
+        }
+
+        showProgressOverlay = false
+        await reloadSource()
+        await reloadDestination()
+        cleanUpCompletedOperations(operationID: operationID)
+    }
+
+    private func executeBrowseDelete(
+        items: [FileItem],
+        source: BrowseLocation,
+        permanently: Bool,
+        reloadSource: @escaping () async -> Void,
+        reloadDestination: @escaping () async -> Void
+    ) async {
+        do {
+            try await browseOperationService.delete(
+                items: items,
+                from: source,
+                permanently: permanently
+            )
+        } catch {
+            errorMessage = error.localizedDescription
+            showErrorAlert = true
+        }
+        await reloadSource()
+        await reloadDestination()
     }
 
     private func executeCopy(

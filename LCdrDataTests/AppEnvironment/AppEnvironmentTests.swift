@@ -104,6 +104,36 @@ struct AppEnvironmentTests {
         _ = frontmost  // keep alive — mostRecentAppState is weak
     }
 
+    @Test func archiveLocationIsClonedLiveButCollapsesWhenEncodedForRestore() throws {
+        // Arrange
+        let env = makeEnvironment(sessionStore: FakePanelSessionStore())
+        let frontmost = AppState(
+            leftDirectory: URL(fileURLWithPath: "/Users/test/Documents", isDirectory: true),
+            rightDirectory: URL(fileURLWithPath: "/Users/test/Downloads", isDirectory: true)
+        )
+        let archiveLocation = BrowseLocation.zipArchive(
+            container: URL(fileURLWithPath: "/Users/test/Documents/files.zip"),
+            internalPath: "folder"
+        )
+        frontmost.leftPanel.state.location = archiveLocation
+        env.mostRecentAppState = frontmost
+
+        // Act
+        let liveSession = env.makeFreshSession()
+        let restoredSession = try JSONDecoder().decode(
+            PanelSession.self,
+            from: JSONEncoder().encode(liveSession)
+        )
+
+        // Assert
+        #expect(liveSession.leftLocation == archiveLocation)
+        #expect(liveSession.leftPath == "/Users/test/Documents")
+        #expect(restoredSession.leftLocation == nil)
+        #expect(restoredSession.leftPath == "/Users/test/Documents")
+
+        _ = frontmost
+    }
+
     @Test func startRegistersScopeForEveryStoredBookmark() async {
         // Arrange — bookmark store seeded with two URLs *and* the user's
         // Home directory so start() doesn't fire the startup prompt.

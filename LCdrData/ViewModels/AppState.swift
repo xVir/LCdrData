@@ -29,6 +29,7 @@ package final class AppState {
         leftDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
         rightDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
         fileOperationService: FileOperationServiceProtocol = FileOperationService(),
+        archiveService: ArchiveServiceProtocol = ArchiveService(),
         configuration: ConfigurationService,
         sandboxAccess: SandboxAccessService,
         pathExpander: TildePathExpander = TildePathExpander()
@@ -43,6 +44,7 @@ package final class AppState {
             sortDescriptor: cfg.sortDescriptor,
             showHiddenFiles: cfg.panelShowHiddenFiles,
             directoryWatchingEnabled: true,
+            archiveService: archiveService,
             sandboxAccessService: sandboxAccess
         )
         self.rightPanel = PanelViewModel(
@@ -51,11 +53,16 @@ package final class AppState {
             sortDescriptor: cfg.sortDescriptor,
             showHiddenFiles: cfg.panelShowHiddenFiles,
             directoryWatchingEnabled: true,
+            archiveService: archiveService,
             sandboxAccessService: sandboxAccess
         )
         self.activePanel = .left
         self.fileOperations = FileOperationViewModel(
-            operationService: fileOperationService
+            operationService: fileOperationService,
+            browseOperationService: BrowseOperationService(
+                fileService: fileOperationService,
+                archiveService: archiveService
+            )
         )
     }
 
@@ -64,7 +71,8 @@ package final class AppState {
     package convenience init(
         leftDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
         rightDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
-        fileOperationService: FileOperationServiceProtocol = FileOperationService()
+        fileOperationService: FileOperationServiceProtocol = FileOperationService(),
+        archiveService: ArchiveServiceProtocol = ArchiveService()
     ) {
         let configuration = ConfigurationService()
         try? configuration.load()
@@ -76,6 +84,7 @@ package final class AppState {
             leftDirectory: leftDirectory,
             rightDirectory: rightDirectory,
             fileOperationService: fileOperationService,
+            archiveService: archiveService,
             configuration: configuration,
             sandboxAccess: sandboxAccess
         )

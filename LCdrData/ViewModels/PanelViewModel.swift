@@ -29,6 +29,8 @@ package final class PanelViewModel {
     package var state: PanelState
     package var isLoading: Bool = false
     package var errorMessage: String?
+    /// Whether mutating operations are allowed at the current location.
+    package private(set) var isLocationWritable: Bool = true
     /// True when the last load failure was a sandbox permission denial.
     package var isPermissionError: Bool = false
 
@@ -49,8 +51,10 @@ package final class PanelViewModel {
 
     package let side: PanelSide
     private let fileSystemService: FileSystemServiceProtocol
+    private let archiveService: ArchiveServiceProtocol
     private let sandboxAccessService: SandboxAccessService
     private let directoryWatchingEnabled: Bool
+    private var temporaryExtractionDirectories: [URL] = []
 
     // MARK: - Init
 
@@ -61,6 +65,7 @@ package final class PanelViewModel {
         showHiddenFiles: Bool? = nil,
         directoryWatchingEnabled: Bool = false,
         fileSystemService: FileSystemServiceProtocol = FileSystemService(),
+        archiveService: ArchiveServiceProtocol = ArchiveService(),
         sandboxAccessService: SandboxAccessService = SandboxAccessService(
             presenter: NoopAccessPresenter(),
             bookmarkStore: BookmarkStore()
@@ -74,6 +79,7 @@ package final class PanelViewModel {
             showHiddenFiles: showHiddenFiles ?? false
         )
         self.fileSystemService = fileSystemService
+        self.archiveService = archiveService
         self.sandboxAccessService = sandboxAccessService
     }
 
@@ -97,15 +103,27 @@ package final class PanelViewModel {
         let previousCursor = state.cursor
 
         do {
-            let items = try await fileSystemService.listDirectory(
-                at: state.currentDirectory,
-                showHidden: state.showHiddenFiles
-            )
+            let items: [FileItem]
+            switch state.location {
+            case .directory(let url):
+                isLocationWritable = true
+                items = try await fileSystemService.listDirectory(
+                    at: url,
+                    showHidden: state.showHiddenFiles
+                )
+            case .zipArchive(let container, let internalPath):
+                isLocationWritable = await archiveService.isWritable(container: container)
+                items = try await archiveService.list(
+                    container: container,
+                    internalPath: internalPath,
+                    showHidden: state.showHiddenFiles
+                )
+            }
 
             let sorted = sortItems(items)
             var displayItems: [FileItem] = []
-            if state.currentDirectory.path != "/" {
-                displayItems.append(FileItem.parentEntry(for: state.currentDirectory))
+            if !Self.sameLocation(state.location, .directory(URL(fileURLWithPath: "/"))) {
+                displayItems.append(FileItem.parentEntry(for: state.location))
             }
             displayItems.append(contentsOf: sorted)
 
@@ -118,6 +136,9 @@ package final class PanelViewModel {
             )
             adoptDirectorySession()
         } catch {
+            if state.location.isArchive {
+                isLocationWritable = false
+            }
             isPermissionError = SandboxAccessService.isPermissionError(error)
             errorMessage = isPermissionError
                 ? "The app doesn't have permission to access this folder."
@@ -152,7 +173,7 @@ package final class PanelViewModel {
             currentSession = nil
             return
         }
-        let url = state.currentDirectory
+        let url = state.location.watchURL
         if let session = currentSession,
            session.url == url {
             return
@@ -173,24 +194,37 @@ package final class PanelViewModel {
     /// the panel offers the user the reactive grant prompt; if access isn't
     /// granted the navigation is atomically reverted to the prior state.
     package func navigate(to url: URL) async {
+        await navigate(to: .directory(url))
+    }
+
+    package func navigate(to location: BrowseLocation) async {
         clearDirectoryNavigationExtras()
 
-        let currentDir = state.currentDirectory
+        let currentLocation = state.location
         let intent: Cursor.Intent
-        if url.standardizedFileURL.path == currentDir.deletingLastPathComponent().standardizedFileURL.path {
-            intent = .landOnChild(currentDir)
+        if Self.sameLocation(location, currentLocation.parent) {
+            switch currentLocation {
+            case .directory(let url):
+                intent = .landOnChild(url)
+            case .zipArchive(let container, let internalPath) where internalPath.isEmpty:
+                intent = .landOnChild(container)
+            case .zipArchive:
+                intent = .fresh
+            }
         } else {
             intent = .fresh
         }
 
-        await performAtomicNavigation(intent: intent, displayURL: url) {
+        await performAtomicNavigation(intent: intent, displayURL: location.watchURL) {
             // Truncate forward history if we navigated back previously
-            if self.state.historyIndex < self.state.history.count - 1 {
-                self.state.history = Array(self.state.history.prefix(self.state.historyIndex + 1))
+            if self.state.historyIndex < self.state.locationHistory.count - 1 {
+                self.state.locationHistory = Array(
+                    self.state.locationHistory.prefix(self.state.historyIndex + 1)
+                )
             }
-            self.state.currentDirectory = url
-            self.state.history.append(url)
-            self.state.historyIndex = self.state.history.count - 1
+            self.state.location = location
+            self.state.locationHistory.append(location)
+            self.state.historyIndex = self.state.locationHistory.count - 1
         }
     }
 
@@ -203,8 +237,8 @@ package final class PanelViewModel {
         mutate: () -> Void
     ) async {
         let snapshot = NavigationSnapshot(
-            currentDirectory: state.currentDirectory,
-            history: state.history,
+            location: state.location,
+            history: state.locationHistory,
             historyIndex: state.historyIndex,
             cursor: state.cursor
         )
@@ -212,30 +246,36 @@ package final class PanelViewModel {
         mutate()
         await reload(intent)
 
-        guard isPermissionError else { return }
-
-        let granted = await sandboxAccessService.requestAccessIfNeeded(
-            context: .reactive(
-                displayURL: displayURL,
-                resolvedTarget: displayURL.resolvingSymlinksInPath()
-            )
-        )
-        if granted != nil {
-            await reload(intent)
-        }
+        guard errorMessage != nil else { return }
 
         if isPermissionError {
-            state.currentDirectory = snapshot.currentDirectory
-            state.history = snapshot.history
+            let granted = await sandboxAccessService.requestAccessIfNeeded(
+                context: .reactive(
+                    displayURL: displayURL,
+                    resolvedTarget: displayURL.resolvingSymlinksInPath()
+                )
+            )
+            if granted != nil {
+                await reload(intent)
+            }
+        }
+
+        if errorMessage != nil {
+            let navigationError = errorMessage
+            let navigationWasPermissionError = isPermissionError
+            state.location = snapshot.location
+            state.locationHistory = snapshot.history
             state.historyIndex = snapshot.historyIndex
             state.cursor = snapshot.cursor
             await reload(.keepSelection)
+            errorMessage = navigationError
+            isPermissionError = navigationWasPermissionError
         }
     }
 
     private struct NavigationSnapshot {
-        let currentDirectory: URL
-        let history: [URL]
+        let location: BrowseLocation
+        let history: [BrowseLocation]
         let historyIndex: Int
         let cursor: Cursor
     }
@@ -244,8 +284,8 @@ package final class PanelViewModel {
     /// After loading the parent listing, the cursor will land on the folder
     /// we just left so the user can easily re-enter it.
     package func navigateToParent() async {
-        let parent = state.currentDirectory.deletingLastPathComponent()
-        guard parent != state.currentDirectory else { return }
+        let parent = state.location.parent
+        guard parent != state.location else { return }
         await navigate(to: parent)
     }
 
@@ -254,22 +294,22 @@ package final class PanelViewModel {
     package func navigateBack() async {
         guard state.historyIndex > 0 else { return }
         clearDirectoryNavigationExtras()
-        let target = state.history[state.historyIndex - 1]
-        await performAtomicNavigation(intent: .fresh, displayURL: target) {
+        let target = state.locationHistory[state.historyIndex - 1]
+        await performAtomicNavigation(intent: .fresh, displayURL: target.watchURL) {
             self.state.historyIndex -= 1
-            self.state.currentDirectory = target
+            self.state.location = target
         }
     }
 
     /// Navigate forward in history. On permission denial of the forward-target,
     /// the navigation reverts atomically.
     package func navigateForward() async {
-        guard state.historyIndex < state.history.count - 1 else { return }
+        guard state.historyIndex < state.locationHistory.count - 1 else { return }
         clearDirectoryNavigationExtras()
-        let target = state.history[state.historyIndex + 1]
-        await performAtomicNavigation(intent: .fresh, displayURL: target) {
+        let target = state.locationHistory[state.historyIndex + 1]
+        await performAtomicNavigation(intent: .fresh, displayURL: target.watchURL) {
             self.state.historyIndex += 1
-            self.state.currentDirectory = target
+            self.state.location = target
         }
     }
 
@@ -279,8 +319,14 @@ package final class PanelViewModel {
             await navigateToParent()
             return
         }
-        if item.isNavigableDirectory {
-            await navigate(to: item.url)
+        if item.isArchive {
+            await navigate(to: .zipArchive(container: item.url, internalPath: ""))
+        } else if item.isNavigableDirectory {
+            if let container = item.archiveContainer, let internalPath = item.archiveInternalPath {
+                await navigate(to: .zipArchive(container: container, internalPath: internalPath))
+            } else {
+                await navigate(to: item.url)
+            }
         } else {
             NSWorkspace.shared.open(item.url)
         }
@@ -503,11 +549,47 @@ package final class PanelViewModel {
         return item.url
     }
 
+    /// Prepares a selected archive member on disk for Quick Look or opening.
+    package func preparedSelectedFileURL() async -> URL? {
+        guard let item = singleSelectedNonDirectoryItem(), !item.isDirectory else { return nil }
+        return await preparedFileURL(for: item)
+    }
+
+    package func preparedFileURL(for item: FileItem) async -> URL? {
+        guard
+            let container = item.archiveContainer,
+            let internalPath = item.archiveInternalPath
+        else {
+            return item.url
+        }
+
+        do {
+            let temporaryDirectory = FileManager.default.temporaryDirectory
+                .appendingPathComponent("LCdrData-Preview-\(UUID().uuidString)", isDirectory: true)
+            try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+            try await archiveService.extract(
+                container: container,
+                paths: [internalPath],
+                to: temporaryDirectory
+            )
+            temporaryExtractionDirectories.append(temporaryDirectory)
+            return temporaryDirectory.appendingPathComponent(item.name)
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
     /// Opens the selected file with the default application (F4).
     package func openSelectedFileWithDefaultApp() {
         guard let item = singleSelectedNonDirectoryItem() else { return }
         guard !item.isDirectory else { return }
         NSWorkspace.shared.open(item.url)
+    }
+
+    package func openPreparedSelectedFileWithDefaultApp() async {
+        guard let url = await preparedSelectedFileURL() else { return }
+        NSWorkspace.shared.open(url)
     }
 
     private func singleSelectedNonDirectoryItem() -> FileItem? {
@@ -521,6 +603,21 @@ package final class PanelViewModel {
     private func clearDirectoryNavigationExtras() {
         resetTypeAheadBuffer()
         isPathBarEditing = false
+    }
+
+    private static func sameLocation(_ lhs: BrowseLocation, _ rhs: BrowseLocation) -> Bool {
+        switch (lhs, rhs) {
+        case (.directory(let left), .directory(let right)):
+            return left.standardizedFileURL.path == right.standardizedFileURL.path
+        case (
+            .zipArchive(let leftContainer, let leftPath),
+            .zipArchive(let rightContainer, let rightPath)
+        ):
+            return leftContainer.standardizedFileURL.path == rightContainer.standardizedFileURL.path
+                && leftPath == rightPath
+        default:
+            return false
+        }
     }
 
     /// Filters the full listing; keeps `..` when the filter is non-empty.

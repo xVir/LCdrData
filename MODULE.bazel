@@ -18,4 +18,4 @@ swift_deps.from_package(
     resolved = "//Tuist:Package.resolved",
     swift = "//Tuist:Package.swift",
 )
-use_repo(swift_deps, "swift_package", "swiftpkg_kdl_swift")
+use_repo(swift_deps, "swift_package", "swiftpkg_kdl_swift", "swiftpkg_zipfoundation")

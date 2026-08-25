@@ -31,6 +31,8 @@ package struct WindowRootView: View {
             configuration: env.configuration,
             sandboxAccess: env.sandboxAccess
         )
+        state.leftPanel.state.location = session.wrappedValue.leftLocation ?? .directory(leftURL)
+        state.rightPanel.state.location = session.wrappedValue.rightLocation ?? .directory(rightURL)
         _appState = State(initialValue: state)
         env.mostRecentAppState = state
     }
@@ -45,20 +47,26 @@ package struct WindowRootView: View {
                     env.mostRecentAppState = appState
                 }
             }
-            .onChange(of: appState.leftPanel.state.currentDirectory) { _, newURL in
-                env.bookmarkStore.save(url: newURL)
+            .onChange(of: appState.leftPanel.state.location) { _, newLocation in
+                let persistentDirectory = newLocation.persistentDirectory
+                env.bookmarkStore.save(url: persistentDirectory)
                 session = PanelSession(
                     id: session.id,
-                    leftPath: newURL.path,
-                    rightPath: session.rightPath
+                    leftPath: persistentDirectory.path,
+                    rightPath: session.rightPath,
+                    leftLocation: newLocation,
+                    rightLocation: session.rightLocation
                 )
             }
-            .onChange(of: appState.rightPanel.state.currentDirectory) { _, newURL in
-                env.bookmarkStore.save(url: newURL)
+            .onChange(of: appState.rightPanel.state.location) { _, newLocation in
+                let persistentDirectory = newLocation.persistentDirectory
+                env.bookmarkStore.save(url: persistentDirectory)
                 session = PanelSession(
                     id: session.id,
                     leftPath: session.leftPath,
-                    rightPath: newURL.path
+                    rightPath: persistentDirectory.path,
+                    leftLocation: session.leftLocation,
+                    rightLocation: newLocation
                 )
             }
             .onChange(of: session) { _, newValue in

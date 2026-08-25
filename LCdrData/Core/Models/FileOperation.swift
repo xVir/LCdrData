@@ -66,7 +66,7 @@ package enum FileOperationStatus: Sendable, Equatable {
 }
 
 /// Reports progress for a file operation.
-package struct FileOperationProgress: Sendable {
+package nonisolated struct FileOperationProgress: Sendable {
     package let totalItems: Int
     package let completedItems: Int
     package let currentItemName: String

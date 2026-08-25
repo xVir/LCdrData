@@ -34,7 +34,7 @@ package struct PathBarView: View {
         .background(.bar)
         .onChange(of: viewModel.isPathBarEditing) { _, editing in
             if editing {
-                editedPath = viewModel.state.currentDirectory.path
+                editedPath = viewModel.state.location.displayPath
                 pathFieldFocused = true
             }
         }
@@ -50,10 +50,10 @@ package struct PathBarView: View {
     private var breadcrumbs: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 2) {
-                ForEach(pathComponents, id: \.url) { component in
+                ForEach(pathComponents, id: \.location) { component in
                     Button {
                         Task {
-                            await viewModel.navigate(to: component.url)
+                            await viewModel.navigate(to: component.location)
                         }
                     } label: {
                         Text(component.name)
@@ -62,7 +62,7 @@ package struct PathBarView: View {
                     }
                     .buttonStyle(.plain)
 
-                    if component.url != viewModel.state.currentDirectory {
+                    if component.location != viewModel.state.location {
                         Image(systemName: "chevron.right")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
@@ -71,7 +71,7 @@ package struct PathBarView: View {
             }
         }
         .accessibilityIdentifier("pathBar.\(viewModel.side.identifier)")
-        .accessibilityValue(viewModel.state.currentDirectory.path)
+        .accessibilityValue(viewModel.state.location.displayPath)
     }
 
     // MARK: - Copy Path Button
@@ -80,7 +80,7 @@ package struct PathBarView: View {
         Button {
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
-            pasteboard.setString(viewModel.state.currentDirectory.path, forType: .string)
+            pasteboard.setString(viewModel.state.location.displayPath, forType: .string)
 
             withAnimation(.easeInOut(duration: 0.2)) {
                 showCopyConfirmation = true
@@ -129,16 +129,45 @@ package struct PathBarView: View {
 
     private struct PathComponent: Hashable {
         let name: String
-        let url: URL
+        let location: BrowseLocation
     }
 
     private var pathComponents: [PathComponent] {
+        switch viewModel.state.location {
+        case .directory(let url):
+            return directoryComponents(through: url)
+        case .zipArchive(let container, let internalPath):
+            var components = directoryComponents(through: container.deletingLastPathComponent())
+            components.append(
+                PathComponent(
+                    name: container.lastPathComponent,
+                    location: .zipArchive(container: container, internalPath: "")
+                )
+            )
+
+            var accumulatedPath = ""
+            for segment in internalPath.split(separator: "/") {
+                accumulatedPath = accumulatedPath.isEmpty
+                    ? String(segment)
+                    : accumulatedPath + "/" + segment
+                components.append(
+                    PathComponent(
+                        name: String(segment),
+                        location: .zipArchive(container: container, internalPath: accumulatedPath)
+                    )
+                )
+            }
+            return components
+        }
+    }
+
+    private func directoryComponents(through locationURL: URL) -> [PathComponent] {
         var components: [PathComponent] = []
-        var url = viewModel.state.currentDirectory.standardizedFileURL
+        var url = locationURL.standardizedFileURL
 
         while url.path != "/" {
             components.insert(
-                PathComponent(name: url.lastPathComponent, url: url),
+                PathComponent(name: url.lastPathComponent, location: .directory(url)),
                 at: 0
             )
             url = url.deletingLastPathComponent()
@@ -146,7 +175,7 @@ package struct PathBarView: View {
 
         // Add root
         components.insert(
-            PathComponent(name: "/", url: URL(fileURLWithPath: "/")),
+            PathComponent(name: "/", location: .directory(URL(fileURLWithPath: "/"))),
             at: 0
         )
 

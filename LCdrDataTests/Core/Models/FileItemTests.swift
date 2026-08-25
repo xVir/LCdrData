@@ -190,4 +190,67 @@ struct FileItemTests {
         #expect(regularDir.url.standardizedFileURL.path == parentEntry.url.standardizedFileURL.path)
         #expect(regularDir.id != parentEntry.id)
     }
+
+    @Test func archiveEntriesHaveStableIdentityFromContainerAndInternalPath() {
+        // Arrange
+        let container = URL(fileURLWithPath: "/tmp/files.zip")
+
+        // Act
+        let first = FileItem(
+            archiveContainer: container,
+            internalPath: "folder/file.txt",
+            name: "file.txt",
+            isDirectory: false
+        )
+        let second = FileItem(
+            archiveContainer: container,
+            internalPath: "folder/file.txt",
+            name: "file.txt",
+            isDirectory: false
+        )
+
+        // Assert
+        #expect(first.id == second.id)
+    }
+
+    @Test func zipFileIsEnterableWithoutBeingNavigableDirectory() {
+        // Arrange
+        let item = FileItem(
+            url: URL(fileURLWithPath: "/tmp/FILES.ZIP"),
+            name: "FILES.ZIP",
+            isDirectory: false
+        )
+
+        // Assert
+        #expect(item.isEnterable)
+        #expect(item.isNavigableDirectory == false)
+    }
+
+    @Test func archiveParentEntryTargetsParentInternalLocation() {
+        // Arrange
+        let container = URL(fileURLWithPath: "/tmp/files.zip")
+        let location = BrowseLocation.zipArchive(container: container, internalPath: "folder/nested")
+
+        // Act
+        let parent = FileItem.parentEntry(for: location)
+
+        // Assert
+        #expect(parent.isParentDirectory)
+        #expect(parent.archiveContainer == container)
+        #expect(parent.archiveInternalPath == "folder")
+    }
+
+    @Test func zipEntryInsideArchiveIsNotEnterable() {
+        // Arrange
+        let item = FileItem(
+            archiveContainer: URL(fileURLWithPath: "/tmp/outer.zip"),
+            internalPath: "inner.zip",
+            name: "inner.zip",
+            isDirectory: false
+        )
+
+        // Assert
+        #expect(item.isArchive == false)
+        #expect(item.isEnterable == false)
+    }
 }

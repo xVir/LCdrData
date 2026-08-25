@@ -111,8 +111,7 @@ package struct FileTableView: View {
     }
 
     private func handleExternalFileDrop(providers: [NSItemProvider], into viewModel: PanelViewModel) async {
-        let destinationDirectory = viewModel.state.currentDirectory
-        let fm = FileManager.default
+        var sourceURLs: [URL] = []
         for provider in providers {
             do {
                 let object = try await provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier)
@@ -124,16 +123,17 @@ package struct FileTableView: View {
                     return nil
                 }()
                 guard let url = sourceURL else { continue }
-                let name = url.lastPathComponent
-                let dest = destinationDirectory.appendingPathComponent(name)
-                if url.standardizedFileURL == dest.standardizedFileURL { continue }
-                if fm.fileExists(atPath: dest.path) { continue }
-                try fm.copyItem(at: url, to: dest)
+                sourceURLs.append(url)
             } catch {
                 continue
             }
         }
+        await appState.fileOperations.performDrop(
+            urls: sourceURLs,
+            to: viewModel.state.location
+        )
         await viewModel.reload(.keepSelection)
+        await appState.inactivePanelViewModel.reload(.keepSelection)
     }
 
     // MARK: - Column Headers
@@ -280,6 +280,22 @@ private struct FileRowView: View {
         .onDrag {
             guard !item.isParentDirectory else {
                 return NSItemProvider()
+            }
+            if item.archiveContainer != nil {
+                let provider = NSItemProvider()
+                provider.suggestedName = item.name
+                provider.registerFileRepresentation(
+                    forTypeIdentifier: UTType.data.identifier,
+                    fileOptions: [],
+                    visibility: .all
+                ) { completion in
+                    Task { @MainActor in
+                        let url = await viewModel.preparedFileURL(for: item)
+                        completion(url, false, nil)
+                    }
+                    return nil
+                }
+                return provider
             }
             return NSItemProvider(contentsOf: item.url) ?? NSItemProvider()
         }

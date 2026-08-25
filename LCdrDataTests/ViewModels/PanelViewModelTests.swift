@@ -77,6 +77,39 @@ nonisolated final class MutableMockFileSystemService: FileSystemServiceProtocol,
     }
 }
 
+nonisolated final class MockArchiveService: ArchiveServiceProtocol, Sendable {
+    let itemsByPath: [String: [FileItem]]
+    let writable: Bool
+    let listError: ArchiveServiceError?
+
+    nonisolated init(
+        itemsByPath: [String: [FileItem]] = [:],
+        writable: Bool = true,
+        listError: ArchiveServiceError? = nil
+    ) {
+        self.itemsByPath = itemsByPath
+        self.writable = writable
+        self.listError = listError
+    }
+
+    func list(container: URL, internalPath: String, showHidden: Bool) async throws -> [FileItem] {
+        if let listError { throw listError }
+        return itemsByPath[internalPath] ?? []
+    }
+
+    func extract(container: URL, paths: [String], to destination: URL) async throws {}
+
+    func add(container: URL, internalPath: String, sources: [URL]) async throws {}
+
+    func remove(container: URL, paths: [String]) async throws {}
+
+    func createDirectory(container: URL, internalPath: String, name: String) async throws {}
+
+    func rename(container: URL, path: String, newName: String) async throws {}
+
+    func isWritable(container: URL) async -> Bool { writable }
+}
+
 // MARK: - Tests
 
 @MainActor
@@ -106,6 +139,109 @@ struct PanelViewModelTests {
                 modificationDate: Date(timeIntervalSince1970: 500)
             ),
         ]
+    }
+
+    @Test func openZipFileEntersArchiveRootAndLoadsListing() async {
+        // Arrange
+        let container = URL(fileURLWithPath: "/tmp/files.zip")
+        let archiveRow = FileItem(
+            url: container,
+            name: "files.zip",
+            isDirectory: false
+        )
+        let member = FileItem(
+            archiveContainer: container,
+            internalPath: "inside.txt",
+            name: "inside.txt",
+            isDirectory: false
+        )
+        let vm = PanelViewModel(
+            side: .left,
+            initialDirectory: URL(fileURLWithPath: "/tmp"),
+            fileSystemService: MockFileSystemService(items: [archiveRow]),
+            archiveService: MockArchiveService(itemsByPath: ["": [member]])
+        )
+        await vm.reload(.fresh)
+
+        // Act
+        await vm.openItem(archiveRow)
+
+        // Assert
+        #expect(vm.state.location == .zipArchive(container: container, internalPath: ""))
+        #expect(vm.state.items.contains { $0.name == "inside.txt" })
+    }
+
+    @Test func leavingArchiveRootReturnsToZipRow() async {
+        // Arrange
+        let parentDirectory = URL(fileURLWithPath: "/tmp", isDirectory: true)
+        let container = parentDirectory.appendingPathComponent("files.zip")
+        let archiveRow = FileItem(url: container, name: "files.zip", isDirectory: false)
+        let vm = PanelViewModel(
+            side: .left,
+            initialDirectory: parentDirectory,
+            fileSystemService: MockFileSystemService(items: [archiveRow]),
+            archiveService: MockArchiveService()
+        )
+        await vm.reload(.fresh)
+        await vm.openItem(archiveRow)
+
+        // Act
+        await vm.navigateToParent()
+
+        // Assert
+        #expect(vm.state.location == .directory(parentDirectory))
+        #expect(vm.state.cursor.focused == archiveRow.id)
+        #expect(vm.state.cursor.selected == [archiveRow.id])
+    }
+
+    @Test func corruptZipKeepsPanelAtParentLocation() async {
+        // Arrange
+        let parentDirectory = URL(fileURLWithPath: "/tmp", isDirectory: true)
+        let container = parentDirectory.appendingPathComponent("files.zip")
+        let archiveRow = FileItem(url: container, name: "files.zip", isDirectory: false)
+        let vm = PanelViewModel(
+            side: .left,
+            initialDirectory: parentDirectory,
+            fileSystemService: MockFileSystemService(items: [archiveRow]),
+            archiveService: MockArchiveService(listError: .unreadable)
+        )
+        await vm.reload(.fresh)
+
+        // Act
+        await vm.openItem(archiveRow)
+
+        // Assert
+        #expect(vm.state.location == .directory(parentDirectory))
+        #expect(vm.errorMessage != nil)
+    }
+
+    @Test func archiveFolderCanBeEnteredAndHistoryCanReturnToRoot() async {
+        // Arrange
+        let container = URL(fileURLWithPath: "/tmp/files.zip")
+        let archiveRow = FileItem(url: container, name: "files.zip", isDirectory: false)
+        let folder = FileItem(
+            archiveContainer: container,
+            internalPath: "folder",
+            name: "folder",
+            isDirectory: true
+        )
+        let vm = PanelViewModel(
+            side: .left,
+            initialDirectory: URL(fileURLWithPath: "/tmp"),
+            fileSystemService: MockFileSystemService(items: [archiveRow]),
+            archiveService: MockArchiveService(itemsByPath: ["": [folder], "folder": []])
+        )
+        await vm.reload(.fresh)
+        await vm.openItem(archiveRow)
+
+        // Act
+        await vm.openItem(folder)
+        await vm.navigateBack()
+
+        // Assert
+        #expect(vm.state.location == .zipArchive(container: container, internalPath: ""))
+        #expect(vm.state.locationHistory.count == 3)
+        #expect(vm.state.historyIndex == 1)
     }
 
     @Test func loadDirectoryPopulatesItems() async {

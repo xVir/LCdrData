@@ -104,15 +104,16 @@ One consequence of `MemberImportVisibility` is worth knowing: a file can need `i
 
 | File | Purpose |
 |---|---|
-| `FileItem.swift` | `struct FileItem: Identifiable, Hashable, Sendable`. One directory entry: URL, sizes, dates, hidden/symlink flags, plus a synthetic `isParentDirectory` flag for the `..` row. `id` is **deterministically derived from the URL** via SHA256 over `"file:"`/`"parent:"` plus the standardised path, so SwiftUI list identity survives reloads without flicker. `init` and the static helpers are `nonisolated`. |
-| `PanelState.swift` | Per-panel snapshot: `currentDirectory`, `items`, `cursor`, `sortDescriptor`, `showHiddenFiles`, `history`, `historyIndex`. |
+| `BrowseLocation.swift` | The real place a panel is browsing: `.directory(URL)` or `.zipArchive(container:internalPath:)`. Supplies archive-aware parent navigation, display path, watcher URL, and the real containing directory used for persistence. |
+| `FileItem.swift` | `nonisolated struct FileItem: Identifiable, Hashable, Sendable`. Filesystem and archive rows share one model; archive identity stores the real container plus internal path and hashes `"zip:<container>!<path>"`. `isEnterable` includes filesystem directories and top-level `.zip` files without treating zip members as nested archives. |
+| `PanelState.swift` | Per-panel snapshot: `location`, `items`, `cursor`, `sortDescriptor`, `showHiddenFiles`, location history and index. Compatibility accessors expose the persistent filesystem directory where older call sites require one. |
 | `Cursor.swift` | `struct Cursor: Sendable, Equatable` — the panel's attention model. `focused: UUID?` is the single row driving Quick Look, the sort anchor and type-ahead; `selected: Set<UUID>` is what the next file operation acts on. Owns both the user-event mutations (`userDidSelect`, `selectAll`, `focusFirst`…) and `resolve(intent:listing:previousListing:previousCursor:)`, which decides where the cursor lands after a reload. |
 | | `Cursor.Intent` makes that decision explicit at the call site: `.fresh`, `.keepSelection`, `.landOnChild(URL)` after going to a parent, `.landOnNeighbourOf([URL])` after a delete or move, `.landOnNew(URL)` after a rename or mkdir. |
 | `Command.swift` | `enum Command: Equatable` — the closed set of user actions, 22 cases across navigation, open/view, selection, file operations and clipboard. Mostly parameterless; `.openItem(FileItem)` and `.rename(FileItem)` carry explicit targets. |
 | `CommandCatalog.swift` | Maps `Command` to its keyboard binding and nothing else — `binding(for:)`, `shortcut(for:)`, `keyEquivalent(for:)`. Deliberately excludes titles, which each surface labels itself. |
 | `FileContextMenuModel.swift` | The pure decision layer behind context menus: given a selection and a listing, resolves the `.selection` / `.parent` / `.background` variant and the real (non-`..`) items to act on. |
 | `FileOperation.swift` | `FileOperationKind` (copy / move / delete / permanentDelete / createFolder / rename), `FileOperationStatus`, `FileOperationProgress` with computed `fractionCompleted`, and the operation struct with its `displayDescription`. |
-| `PanelSession.swift` | `struct PanelSession: Hashable, Codable, Sendable` — the identity of one window's panel pair (`id`, `leftPath`, `rightPath`), which is what `WindowGroup(for:)` restores. |
+| `PanelSession.swift` | Window identity and collapsed left/right paths for `WindowGroup(for:)`. Optional live `BrowseLocation`s let `⌘N` clone archive interiors; custom Codable deliberately omits them so relaunch restores only real containing directories. |
 | `SortDescriptor.swift` | `FileSortDescriptor` with `Column { name, size, dateModified, dateCreated, kind }`; `toggle(column:)` flips direction on the same column and resets to ascending on a new one. |
 | `AppConfiguration.swift` | Effective settings with defaults (hidden off, sort by name ascending, font 13, date `yyyy-MM-dd HH:mm`, editor `com.apple.TextEdit`); nested `BookmarkEntry { label, path }`; computed `sortDescriptor`. |
 
@@ -135,13 +136,15 @@ Service protocols are `Sendable, nonisolated` so they can be called from any act
 |---|---|
 | `FileSystemService.swift` | `FileSystemServiceProtocol.listDirectory(at:showHidden:) async throws -> [FileItem]`. Runs in `Task.detached`, pre-fetches resource keys, and resolves symlink targets to mark `isSymlinkToDirectory`. |
 | `FileOperationService.swift` | Copy, move, trash (returns trash URLs), permanent delete, create folder, rename. Long-running calls take `@Sendable` callbacks — `onProgress: (FileOperationProgress) -> Void` and `onConflict: (FileConflict) async -> ConflictResolution`. Per-item cancellation via `Task.checkCancellation()`; a source and destination resolving to the same path is a no-op rather than an error. Typed failures via `FileOperationError`. |
+| `ArchiveService.swift` | `ArchiveServiceProtocol` and its ZIPFoundation-backed actor. Lists explicit and implicit folders, extracts with zip-slip checks, packs files and trees, removes prefixes, creates folders, renames, and rejects mutations when the container is not writable. |
+| `BrowseOperationService.swift` | Routes copy, move, delete, mkdir, and rename across the filesystem/zip location matrix. Cross-archive transfers use scoped temporary extraction, preserve conflict choices, and only remove source members that were actually transferred. |
 | `ConfigurationService.swift` | `@Observable`, `@MainActor`. Reads bundled `DefaultConfig.kdl`, merges user overrides, exposes `current: AppConfiguration` and `lastAppliedUserKDL` for the editor's right pane. Parses with `kdl-swift`. |
 | `BookmarkStore.swift` | The bookmark database: `BookmarkStore` persists security-scoped bookmark blobs in `UserDefaults` keyed by path, resolves them, refreshes stale ones, and answers `bookmarkCovering(url:)` by longest matching prefix. `@unchecked Sendable`, `NSLock`-guarded. Fronted by `BookmarkStoreProtocol`, with bookmark encoding itself behind `BookmarkSerializing` so tests never touch the real macOS API. |
 | `BookmarkService.swift` | `nonisolated static` helpers wrapping `.withSecurityScope` bookmark creation and resolution, returning refreshed data when stale. Resolution deliberately does **not** start the security scope. |
 | `SandboxAccessService.swift` | `package actor`. Coordinates access requests, coalescing concurrent ones single-flight by `AccessRequestContext.dedupKey`, and saves a bookmark on grant. `isPermissionError(_:)` is `nonisolated static` and recognises POSIX `EPERM` plus Cocoa file-permission codes 257 and 513. |
 | `AccessPresenter.swift` | `AccessPresenter` protocol — `present(_ context:) async -> URL?`. `NSOpenPanelAccessPresenter` (`@MainActor`) drives a context-titled `NSOpenPanel` pre-navigated to the offending directory; `NoopAccessPresenter` always declines. |
 | `AccessRequestContext.swift` | Why access is being asked for: `.startup`, `.reactive(displayURL:resolvedTarget:)`, `.manualGrant(suggestedURL:)`. Supplies the dedup key. |
-| `DirectorySession.swift` | Watches one directory over an `O_EVTONLY` file descriptor with `DispatchSource.makeFileSystemObjectSource` (write/delete/rename/attrib/extend/revoke), debouncing to `onChange` after **0.28 s** with a generation token cancelling superseded timers. `@unchecked Sendable`; `onChange` is `@MainActor`. Short-lived — replaced on navigation, and it manages no security scope of its own. |
+| `DirectorySession.swift` | Watches a directory or the current zip container over an `O_EVTONLY` file descriptor with `DispatchSource.makeFileSystemObjectSource` (write/delete/rename/attrib/extend/revoke), debouncing to `onChange` after **0.28 s**. Short-lived and replaced on navigation. |
 | `PanelSessionStore.swift` | `PanelSessionStoring` over `UserDefaults`: the last left/right directory paths, so a relaunch resumes even when macOS window restoration does not run. |
 | `QuickLookPreviewController.swift` | `@MainActor` `QLPreviewPanelDataSource` adapter for the system Quick Look panel. |
 
@@ -149,10 +152,10 @@ Service protocols are `Sendable, nonisolated` so they can be called from any act
 
 | File | Purpose |
 |---|---|
-| `PanelViewModel.swift` | One per panel, plus `enum PanelSide`. Drives listing, cursor, sorting, history, path-bar editing, type-ahead (1 s of silence resets the buffer), Quick Look, and the reactive sandbox retry. `reload(_ intent:)` takes a `Cursor.Intent`, so every caller states where the cursor should land rather than leaving it to be inferred. Navigation goes through `performAtomicNavigation`, which snapshots state and rolls back if access is refused. |
+| `PanelViewModel.swift` | One per panel. Dispatches listing by `BrowseLocation`, enters and leaves zip locations atomically, watches the directory or container, tracks archive writability, and temporarily extracts members for Quick Look/F4/drag-out. |
 | `AppState.swift` | **Per-window** state: `leftPanel`, `rightPanel`, `activePanel`, the window's `FileOperationViewModel`, its `QuickLookPreviewController`, and a reference to the shared `ConfigurationService`. Exposes `switchActivePanel()`, `applyEffectiveConfiguration()`, `presentOpenFolderPanel()`, `copySelectedPathsToPasteboard()`, `navigateActivePanelToFavorite(path:)`, and a computed `commands: CommandRunner`. |
 | `CommandRunner.swift` | `package struct`. The single executor for `Command`, resolving active and inactive panels from one `AppState` and answering `isEnabled(_:)` so every surface greys out consistently. |
-| `FileOperationViewModel.swift` | The dialog-and-progress coordinator: confirmation, new-folder and rename prompts, the conflict dialog with apply-to-all, and the progress overlay. Conflict resolution suspends on a `CheckedContinuation` so an in-flight async operation can await user input; cancellation is via the stored `currentTask`. |
+| `FileOperationViewModel.swift` | The dialog-and-progress coordinator over `BrowseOperationService`: location-aware confirmations, external drops, mkdir/rename/delete, and cross-filesystem/archive copy and move. Conflict resolution still suspends on a `CheckedContinuation`. |
 | `FocusedAppState.swift` | Declares `ActiveAppStateKey` and `FocusedValues.appState` so menu commands act on the key window's `AppState` rather than a captured one. (There is no type named `FocusedAppState`.) |
 
 ### 4.5 App/AppEnvironment — shared services
@@ -302,8 +305,10 @@ The config path resolves inside the sandbox container because `ConfigurationServ
 | Package | Where used |
 |---|---|
 | [`kdl-swift`](https://github.com/danini-the-panini/kdl-swift) ≥ 2.0 | `ConfigurationService` only — parses `DefaultConfig.kdl` and user overrides |
+| [`ZIPFoundation`](https://github.com/weichsel/ZIPFoundation) ≥ 0.9.20 | `ArchiveService` only — reads and rewrites zip containers |
 
-That is the only direct dependency; it pulls in BigDecimal, BigInt, UInt128 and swift-numerics transitively. It is declared in `Tuist/Package.swift`, which both Tuist and Bazel read, and its Bazel target is a dependency of `Services` alone, since that is where its only consumer lives.
+Both direct dependencies are declared in `Tuist/Package.swift`, which Tuist and Bazel read.
+Their Bazel targets are dependencies of `Services` alone.
 
 No mocking framework: `swift-mocking` was removed during the Bazel migration, as it was declared but never imported and pulled `swift-syntax` in as a macro dependency. Test doubles are written by hand.
 
@@ -313,17 +318,17 @@ System frameworks: SwiftUI, AppKit (`NSOpenPanel`, `NSWorkspace`, `NSPasteboard`
 
 ## 9. Tests
 
-**201 test cases across eight unit test targets**, whose counts **sum** to that total — no single target reports 201. The test tree mirrors the production module layout one directory at a time, so every module's tests are a package of their own.
+**239 test cases across eight unit test targets**, whose counts **sum** to that total — no single target reports 239. The test tree mirrors the production module layout one directory at a time, so every module's tests are a package of their own.
 
 | Target | Files | Cases | Covers |
 |---|---|---|---|
 | `//LCdrDataTests/Core/Utilities` | 1 | 7 | `~` expansion against a stubbed account home |
-| `//LCdrDataTests/Core/Models` | 6 | 50 | `FileItem` identity, `Cursor` resolution, `PanelState`, sort toggling, operation models, context-menu variants |
+| `//LCdrDataTests/Core/Models` | 7 | 61 | Browse locations, archive/file identity, cursor resolution, panel history, sorting, operation models, context menus |
 | `//LCdrDataTests/Core/Bindings` | 1 | 8 | Every `Command`'s key and modifiers, and which commands have none |
-| `//LCdrDataTests/Core/Formatting` | 1 | 11 | Size, date and kind formatting |
-| `//LCdrDataTests/Services` | 7 | 46 | Listing, file operations with conflicts and progress, KDL parsing and merging, bookmark storage, session persistence, `DirectorySession`, sandbox access dedup |
-| `//LCdrDataTests/ViewModels` | 5 | 69 | Panel loading, selection, navigation, history, type-ahead, command dispatch, dialog flows and cancellation |
-| `//LCdrDataTests/AppEnvironment` | 1 | 9 | Startup scope activation, session seeding |
+| `//LCdrDataTests/Core/Formatting` | 1 | 12 | Size, date and filesystem/archive kind formatting |
+| `//LCdrDataTests/Services` | 9 | 61 | Filesystem and ZIP listing/operations, conflicts, extraction safety, watching, configuration, bookmarks, sessions, sandbox access |
+| `//LCdrDataTests/ViewModels` | 5 | 79 | Panel/archive navigation, selection, history, type-ahead, command guards, Return activation, dialog flows and cancellation |
+| `//LCdrDataTests/AppEnvironment` | 1 | 10 | Startup scope activation, session seeding, archive-location collapse |
 | `//LCdrDataTests/App` | 1 | 1 | `AppDelegate` termination behaviour |
 
 `Views` has no unit test target: the views are covered by the UI tests instead.

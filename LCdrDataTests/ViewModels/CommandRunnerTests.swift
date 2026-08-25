@@ -41,11 +41,14 @@ struct CommandRunnerTests {
 
         // Assert
         #expect(appState.fileOperations.showConfirmationDialog)
-        guard case .delete(let urls)? = appState.fileOperations.pendingOperationType else {
+        guard case .browseDelete(let items, let source, false)? =
+            appState.fileOperations.pendingOperationType
+        else {
             Issue.record("expected a pending delete operation")
             return
         }
-        #expect(urls == [a.url])
+        #expect(items == [a])
+        #expect(source == appState.leftPanel.state.location)
     }
 
     @Test func copyRequestsCopyConfirmation() {
@@ -58,11 +61,15 @@ struct CommandRunnerTests {
 
         // Assert
         #expect(appState.fileOperations.showConfirmationDialog)
-        guard case .copy(let sources, _)? = appState.fileOperations.pendingOperationType else {
+        guard case .browseCopy(let items, let source, let destination)? =
+            appState.fileOperations.pendingOperationType
+        else {
             Issue.record("expected a pending copy operation")
             return
         }
-        #expect(sources == [a.url])
+        #expect(items == [a])
+        #expect(source == appState.leftPanel.state.location)
+        #expect(destination == appState.rightPanel.state.location)
     }
 
     @Test func newFolderShowsDialog() {
@@ -121,6 +128,88 @@ struct CommandRunnerTests {
         #expect(appState.commands.isEnabled(.selectAll))
         #expect(appState.commands.isEnabled(.newFolder))
         #expect(appState.commands.isEnabled(.goToParent))
+    }
+
+    @Test func readOnlyArchiveDisablesMutatingAndFinderCommands() async {
+        // Arrange
+        let container = URL(fileURLWithPath: "/tmp/files.zip")
+        let item = FileItem(
+            archiveContainer: container,
+            internalPath: "file.txt",
+            name: "file.txt",
+            isDirectory: false
+        )
+        let appState = AppState(
+            archiveService: MockArchiveService(
+                itemsByPath: ["": [item]],
+                writable: false
+            )
+        )
+        await appState.leftPanel.navigate(
+            to: .zipArchive(container: container, internalPath: "")
+        )
+        appState.leftPanel.state.cursor = Cursor(focused: item.id, selected: [item.id])
+
+        // Act / Assert
+        #expect(!appState.commands.isEnabled(.trash))
+        #expect(!appState.commands.isEnabled(.permanentDelete))
+        #expect(!appState.commands.isEnabled(.newFolder))
+        #expect(!appState.commands.isEnabled(.rename(item)))
+        #expect(!appState.commands.isEnabled(.revealInFinder))
+    }
+
+    // MARK: - Return activation
+
+    @Test func returnOnArchiveEntersItRatherThanRenamingIt() {
+        // Arrange
+        let archive = FileItem(
+            url: URL(fileURLWithPath: "/dir/files.zip"),
+            name: "files.zip",
+            isDirectory: false
+        )
+        let appState = makeAppState(items: [archive], selected: [archive.id])
+
+        // Act
+        let command = appState.commands.returnCommand
+
+        // Assert
+        #expect(command == .openItem(archive))
+    }
+
+    @Test func returnOnRegularFileRenamesIt() {
+        // Arrange
+        let a = file("a.txt")
+        let appState = makeAppState(items: [a], selected: [a.id])
+
+        // Act
+        let command = appState.commands.returnCommand
+
+        // Assert
+        #expect(command == .rename(a))
+    }
+
+    @Test func returnOnDirectoryOpensIt() {
+        // Arrange
+        let folder = FileItem(
+            url: URL(fileURLWithPath: "/dir/sub"),
+            name: "sub",
+            isDirectory: true
+        )
+        let appState = makeAppState(items: [folder], selected: [], focused: folder.id)
+
+        // Act
+        let command = appState.commands.returnCommand
+
+        // Assert
+        #expect(command == .openItem(folder))
+    }
+
+    @Test func returnWithoutACursorTargetDoesNothing() {
+        // Arrange
+        let appState = makeAppState(items: [], selected: [])
+
+        // Act / Assert
+        #expect(appState.commands.returnCommand == nil)
     }
 
     // MARK: - Rename target resolution

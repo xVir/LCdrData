@@ -17,6 +17,8 @@ package struct ConflictResolutionView: View {
         switch conflict {
         case .destinationExists(_, let destination):
             return destination.lastPathComponent
+        case .archiveDestinationExists(_, let destinationName):
+            return destinationName
         }
     }
 

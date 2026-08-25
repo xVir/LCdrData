@@ -26,5 +26,6 @@ swift_library(
     deps = [
         "//LCdrData/Core/Models",
         "@swiftpkg_kdl_swift//:KDL",
+        "@swiftpkg_zipfoundation//:ZIPFoundation",
     ],
 )

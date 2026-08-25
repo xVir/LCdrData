@@ -47,4 +47,16 @@ struct PanelStateTests {
         #expect(state.sortDescriptor.ascending == false)
         #expect(state.showHiddenFiles == true)
     }
+
+    @Test func initialDirectoryBecomesBrowseLocationAndHistoryEntry() {
+        // Arrange
+        let url = URL(fileURLWithPath: "/tmp")
+
+        // Act
+        let state = PanelState(currentDirectory: url)
+
+        // Assert
+        #expect(state.location == .directory(url))
+        #expect(state.locationHistory == [.directory(url)])
+    }
 }

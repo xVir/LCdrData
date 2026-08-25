@@ -583,7 +583,7 @@
           "REPO_MAPPING:rules_swift_package_manager+,bazel_skylib bazel_skylib+",
           "REPO_MAPPING:rules_swift_package_manager+,bazel_tools bazel_tools",
           "REPO_MAPPING:rules_swift_package_manager+,cgrindel_bazel_starlib cgrindel_bazel_starlib+",
-          "FILE:@@//Tuist/Package.resolved 24c96b6e65a59c7d0cc19a15e0522eef2a585b2c63fb414149a1710980782327"
+          "FILE:@@//Tuist/Package.resolved 22c682ab1e14650360858681dc485fd94a67e327ea182b948a6cc930a968f976"
         ],
         "generatedRepoSpecs": {
           "swift_package": {
@@ -600,6 +600,22 @@
               "commit": "ab851f823aceefc90e59c6c450294c3abaaf8721",
               "remote": "https://github.com/danini-the-panini/kdl-swift",
               "version": "2.0.0",
+              "env": {},
+              "env_inherit": [],
+              "cached_json_directory": "",
+              "replace_scm_with_registry": false,
+              "target_deps": {},
+              "module_aliases": {},
+              "dep_module_aliases": ""
+            }
+          },
+          "swiftpkg_zipfoundation": {
+            "repoRuleId": "@@rules_swift_package_manager+//swiftpkg/internal:swift_package.bzl%swift_package",
+            "attributes": {
+              "bazel_package_name": "swiftpkg_zipfoundation",
+              "commit": "22787ffb59de99e5dc1fbfe80b19c97a904ad48d",
+              "remote": "https://github.com/weichsel/ZIPFoundation",
+              "version": "0.9.20",
               "env": {},
               "env_inherit": [],
               "cached_json_directory": "",
@@ -677,6 +693,7 @@
         "moduleExtensionMetadata": {
           "explicitRootModuleDirectDeps": [
             "swiftpkg_kdl_swift",
+            "swiftpkg_zipfoundation",
             "swift_package"
           ],
           "explicitRootModuleDirectDevDeps": [],

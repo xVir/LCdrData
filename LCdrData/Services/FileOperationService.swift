@@ -4,10 +4,11 @@ import Models
 /// Describes the type of conflict encountered during a file operation.
 package enum FileConflict: Sendable {
     case destinationExists(source: URL, destination: URL)
+    case archiveDestinationExists(sourceName: String, destinationName: String)
 }
 
 /// Describes how to resolve a file conflict.
-package enum ConflictResolution: Sendable {
+package enum ConflictResolution: Sendable, Equatable {
     case overwrite
     case skip
     case rename(newName: String)
@@ -22,6 +23,9 @@ package enum FileOperationType: Sendable, Equatable {
     case permanentDelete(items: [URL])
     case createFolder(at: URL, name: String)
     case rename(item: URL, newName: String)
+    case browseCopy(items: [FileItem], source: BrowseLocation, destination: BrowseLocation)
+    case browseMove(items: [FileItem], source: BrowseLocation, destination: BrowseLocation)
+    case browseDelete(items: [FileItem], source: BrowseLocation, permanently: Bool)
 }
 
 /// Protocol defining file operation capabilities for testability.

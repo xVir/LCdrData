@@ -94,4 +94,14 @@ struct FileFormatterTests {
         )
         #expect(FileFormatter.kind(for: item) == "Document")
     }
+
+    @Test func kindForArchiveMemberUsesMemberExtension() {
+        let item = FileItem(
+            archiveContainer: URL(fileURLWithPath: "/tmp/files.zip"),
+            internalPath: "folder/file.txt",
+            name: "file.txt",
+            isDirectory: false
+        )
+        #expect(FileFormatter.kind(for: item) == "TXT")
+    }
 }

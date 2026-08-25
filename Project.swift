@@ -126,6 +126,7 @@ let project = Project(
             dependencies: [
                 .target(name: "Models"),
                 .external(name: "KDL"),
+                .external(name: "ZIPFoundation"),
             ],
             settings: .settings(
                 base: coreSettings

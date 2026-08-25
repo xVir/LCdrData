@@ -18,5 +18,6 @@ let package = Package(
     name: "LCdrData",
     dependencies: [
         .package(url: "https://github.com/danini-the-panini/kdl-swift", from: "2.0.0"),
+        .package(url: "https://github.com/weichsel/ZIPFoundation", from: "0.9.20"),
     ]
 )

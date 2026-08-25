@@ -70,7 +70,8 @@ launch restores where you left off.
   Directories group before files.
 - A `..` row sits at the top of every listing except the filesystem root.
 - Click to select, `⌘`-click to add to the selection, `⇧`-click for a range.
-- `Return` enters a directory; on a **file** it starts a rename, the way Finder does.
+- `Return` enters a directory or a `.zip`; on any other **file** it starts a rename, the way
+  Finder does.
   `F2` renames whatever is focused, orthodox-style. Neither applies to `..`.
 - Double-click or `⌘↓` opens a file and enters a directory.
 - `Delete` and forward delete go to the **parent directory** — the same as activating `..` —
@@ -100,7 +101,7 @@ Everything acts on the active panel's selection, with the other panel as the des
 | Move to Trash | `F8` | With confirmation |
 | Delete permanently | `⌘⌫` | Bypasses the Trash, with confirmation |
 | New folder | `F7` | Create a directory in the active panel |
-| Rename | `Return` / `F2` | `Return` is Finder-style, `F2` orthodox |
+| Rename | `Return` / `F2` | `Return` is Finder-style and only on non-enterable files, `F2` orthodox |
 | View | `F3` / `Space` | Quick Look preview |
 | Edit | `F4` | Open in the default application |
 | Refresh | `⌘R` | Reload the active panel |
@@ -124,7 +125,7 @@ filename — the buffer clears after a second of silence.
 | Shortcut | Action |
 |---|---|
 | `Tab` | Switch active panel |
-| `Return` | Enter directory, or rename a focused **file** |
+| `Return` | Enter a directory or `.zip`, or rename any other focused **file** |
 | `F2` | Rename the focused item (not `..`) |
 | `Delete` / forward delete | Go to parent directory |
 | `⌘↑` | Go to parent directory |
@@ -222,6 +223,21 @@ metaphor:
 
 The window never auto-saves. Nothing takes effect until you click Apply.
 
+## ZIP archives as folders
+
+Activating a `.zip` file enters it in the current panel. Archive folders, `..`, `⌘↑`, and
+back/forward history behave like directory navigation; nested zip members remain ordinary files.
+The path bar shows the archive file followed by its internal path.
+
+Copy, move, drag-and-drop, new folder, rename, and delete work across filesystem directories and
+writable zip locations. Delete inside a zip removes the member permanently rather than using
+Trash, and the confirmation says so. Existing-name conflicts use the same overwrite, skip, and
+rename choices as filesystem operations. Mutating commands are disabled for a read-only zip.
+
+Quick Look, F4, and dragging a member out extract that member to temporary storage first. Session
+restore records only the real directory containing the zip; a new window opened with `⌘N` during
+the same run still clones the current archive location.
+
 ## Not in scope yet
 
 Deliberately absent from the current design, in rough order of appeal:
@@ -231,4 +247,4 @@ Deliberately absent from the current design, in rough order of appeal:
 - **A toolbar** and a **volumes list**, for pointer-driven navigation.
 - **An inline preview pane**, as an alternative to the Quick Look panel.
 - **Search** beyond type-ahead — by name across a tree, or by content.
-- **Archive browsing** — entering a zip or tar as though it were a directory.
+- **Other archive formats** — tar and formats other than zip.

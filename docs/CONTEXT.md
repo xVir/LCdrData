@@ -12,13 +12,45 @@ the language stays consistent.
 
 ## Panel
 
-One side of the dual-pane file manager. A panel browses **one directory at a time**,
+One side of the dual-pane file manager. A panel browses **one location at a time**,
 displays a **listing**, and tracks a **cursor**. The two panels are named **left**
 and **right**. Exactly one is the **active panel** at any moment; keyboard shortcuts
 and file operations target the active panel (or the inactive one as the destination,
 for copy / move).
 
 A panel's mutable surface is `PanelState`; its behaviour lives on `PanelViewModel`.
+
+## Location
+
+Where a panel currently is: either a **directory** or a folder inside an **archive**.
+_Avoid_: calling an archive interior a directory; "current directory" when the panel
+is inside a zip.
+
+## Directory
+
+A real folder on the filesystem.
+_Avoid_: using directory for the interior of a zip.
+
+## Archive
+
+A filesystem **file item** (`.zip` in this slice) whose contents can be browsed as
+**locations**. A `.zip` that lives *inside* an archive is just a file item — copy
+it out to enter it. Copy and Move to or from an archive are still Copy and Move —
+unpack/pack is how they happen, not separate commands. F8 and `⌘⌫` inside an
+archive **delete from the archive** — they do not use Trash. An archive you cannot
+write to is **read-only**, not locked: enter and copy-out still work; copy-in,
+mkdir, rename, and delete do not.
+_Avoid_: zip (when you mean the concept, not the format); virtual directory; container;
+Move to Trash (when the panel is inside an archive); calling an inner zip an archive;
+locked (Finder lock, encryption, and a read-only file are different things — say
+**read-only archive**); Extract (not a command — Copy unpacks).
+
+## Enterable
+
+A **file item** the user can navigate into: a **directory**, a symlink to a
+directory, or an **archive**. Return, `⌘↓`, and double-click enter it.
+_Avoid_: calling an archive a directory so that Return works; using
+`isNavigableDirectory` for archives.
 
 ## Active panel
 
@@ -29,16 +61,16 @@ operations. Tracked on `AppState.activePanel: PanelSide`. The other panel is the
 ## Listing
 
 The ordered array of `FileItem` rows shown in a panel. Always begins with a synthetic
-`..` row when the panel's directory is not the filesystem root. Sort is determined by
+`..` row when the panel's location is not the filesystem root. Sort is determined by
 the panel's `FileSortDescriptor`; directories always sort before files within a sort
 group.
 
 ## File item
 
-A `FileItem` is one row in a listing — either a real filesystem entry or the
-synthetic `..` parent row (`isParentDirectory == true`). Its `id: UUID` is
-deterministic (SHA-256 of the standardized URL path), so the same file produces
-the same identity across reloads.
+A `FileItem` is one row in a listing — a filesystem entry, a row inside an
+**archive**, or the synthetic `..` parent row (`isParentDirectory == true`). It
+is a listing row, not necessarily something `FileManager` can open. Its `id: UUID`
+is deterministic, so the same item produces the same identity across reloads.
 
 ## Cursor
 
@@ -90,14 +122,14 @@ dance).
 
 ## Reload
 
-The single act of "fetch a fresh listing for the panel's current directory and
+The single act of "fetch a fresh listing for the panel's current location and
 reposition the cursor." Triggered through `PanelViewModel.reload(_ intent:
 Cursor.Intent)`. Replaces the prior split between `loadDirectory()` and
 `reloadKeepingSelection()`.
 
 ## DirectorySession
 
-The panel's grip on **one** directory. A short-lived handle that, while it exists:
+The panel's grip on **one** location's filesystem object. A short-lived handle that, while it exists:
 
 - holds security-scoped access to the URL,
 - watches the FD for filesystem changes,
@@ -111,8 +143,11 @@ the URL-scoped lifecycle wrapper.
 
 ## Panel session
 
-The pair of directories one window's panels are showing, carried as a
-`PanelSession` by `WindowGroup(for:)`.
+The pair of **locations** one window's panels are showing, carried as a
+`PanelSession` by `WindowGroup(for:)`. A live `⌘N` clones those locations as they
+are (including inside an **archive**). When persisted across quit, each archive
+location is stored as the **directory** that contains the archive — a relaunch
+never reopens inside an archive.
 
 macOS window restoration round-trips that value, but only when the system elects
 to restore windows — never when "Close windows when quitting an application" is

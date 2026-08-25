@@ -16,6 +16,7 @@ swift_library(
         "//LCdrData/Core/Models",
         "//LCdrData/Services",
         "//LCdrDataTests/TestSupport",
+        "@swiftpkg_zipfoundation//:ZIPFoundation",
     ],
 )
 

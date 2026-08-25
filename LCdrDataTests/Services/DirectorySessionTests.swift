@@ -33,6 +33,29 @@ struct DirectorySessionTests {
         let fired = await signalled.wait(timeout: .seconds(2))
         #expect(fired, "DirectorySession.onChange should fire after a filesystem mutation")
     }
+
+    @Test func firesOnChangeWhenWatchedArchiveFileIsRewritten() async throws {
+        // Arrange
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "DirectorySessionTests-\(UUID().uuidString).zip"
+        )
+        try Data("first".utf8).write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let signalled = DirectorySessionSignal()
+        let session = DirectorySession(
+            url: file,
+            debounceInterval: 0.05,
+            onChange: { signalled.flag() }
+        )
+        defer { session.cancel() }
+
+        // Act
+        try Data("second".utf8).write(to: file)
+
+        // Assert
+        let fired = await signalled.wait(timeout: .seconds(2))
+        #expect(fired, "DirectorySession should observe changes to a zip container file")
+    }
 }
 
 /// A simple "did the callback fire?" signal that can be awaited from a test.

@@ -38,10 +38,12 @@ package struct CommandRunner {
         case .openItem(let item):
             Task { await active.openItem(item) }
         case .edit:
-            active.openSelectedFileWithDefaultApp()
+            Task { await active.openPreparedSelectedFileWithDefaultApp() }
         case .quickLook:
-            if let url = active.previewURLForQuickLook() {
-                appState.quickLook.show(url: url)
+            Task {
+                if let url = await active.preparedSelectedFileURL() {
+                    appState.quickLook.show(url: url)
+                }
             }
 
         case .selectAll:
@@ -80,41 +82,61 @@ package struct CommandRunner {
     /// surfaces use this to enable/disable their items.
     package func isEnabled(_ command: Command) -> Bool {
         switch command {
-        case .copy, .move, .trash, .permanentDelete, .copyPaths, .revealInFinder:
+        case .copy:
+            return hasSelection && inactive.isLocationWritable
+        case .move:
+            return hasSelection && active.isLocationWritable && inactive.isLocationWritable
+        case .trash, .permanentDelete:
+            return hasSelection && active.isLocationWritable
+        case .copyPaths:
             return hasSelection
+        case .revealInFinder:
+            return hasSelection && !active.state.location.isArchive
         case .edit, .quickLook:
             return active.previewURLForQuickLook() != nil
         case .rename(let item):
-            return !item.isParentDirectory
+            return !item.isParentDirectory && active.isLocationWritable
         case .openItem(let item):
             return !item.isParentDirectory
         case .back:
             return active.state.historyIndex > 0
         case .forward:
             return active.state.historyIndex < active.state.history.count - 1
+        case .newFolder:
+            return active.isLocationWritable
         case .open, .goToParent, .goToPath, .refresh,
-             .selectAll, .deselectAll, .toggleHidden, .newFolder:
+             .selectAll, .deselectAll, .toggleHidden:
             return true
         }
     }
 
     // MARK: - Target resolution
 
+    /// What Return runs for the row under the cursor: enterable rows —
+    /// directories and archives alike — are opened, everything else is
+    /// renamed. `nil` when the cursor is on nothing.
+    package var returnCommand: Command? {
+        guard let item = cursorTarget else { return nil }
+        return item.isEnterable ? .openItem(item) : .rename(item)
+    }
+
     /// The item a Rename should target given the current cursor — the single
     /// selected non-parent row, else the focused row. `nil` when nothing
     /// renameable is under the cursor.
     package var renameTarget: FileItem? {
-        let cursor = active.state.cursor
-        let targetID = cursor.selected.count == 1 ? cursor.selected.first : cursor.focused
-        guard let targetID,
-              let item = active.state.items.first(where: { $0.id == targetID }),
-              !item.isParentDirectory else {
-            return nil
-        }
+        guard let item = cursorTarget, !item.isParentDirectory else { return nil }
         return item
     }
 
     // MARK: - Private
+
+    /// The single selected row, else the focused one.
+    private var cursorTarget: FileItem? {
+        let cursor = active.state.cursor
+        let targetID = cursor.selected.count == 1 ? cursor.selected.first : cursor.focused
+        guard let targetID else { return nil }
+        return active.state.items.first { $0.id == targetID }
+    }
 
     private var hasSelection: Bool {
         active.visibleItems.contains { item in
