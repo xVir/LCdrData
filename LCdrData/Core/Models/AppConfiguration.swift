@@ -20,6 +20,7 @@ package struct AppConfiguration: Equatable, Sendable {
     package var appearanceDateFormat: String
     package var bookmarkEntries: [BookmarkEntry]
     package var editorDefaultAppBundleID: String?
+    package var editorOpenFolders: Bool
 
     package static let defaults = AppConfiguration(
         panelShowHiddenFiles: false,
@@ -31,7 +32,8 @@ package struct AppConfiguration: Equatable, Sendable {
             BookmarkEntry(label: "Projects", path: "~/Projects"),
             BookmarkEntry(label: "Downloads", path: "~/Downloads")
         ],
-        editorDefaultAppBundleID: "com.apple.TextEdit"
+        editorDefaultAppBundleID: "com.apple.TextEdit",
+        editorOpenFolders: false
     )
 
     package var sortDescriptor: FileSortDescriptor {

@@ -18,4 +18,5 @@ bookmarks {
 
 editor {
     default-app "com.apple.TextEdit"
+    open-folders #false
 }

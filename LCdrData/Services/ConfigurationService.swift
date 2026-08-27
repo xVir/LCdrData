@@ -181,9 +181,13 @@ package final class ConfigurationService {
             result.bookmarkEntries = []
         }
 
-        if let editor = document["editor"],
-           let bundleID = stringArg(from: editor, childName: "default-app") {
-            result.editorDefaultAppBundleID = bundleID
+        if let editor = document["editor"] {
+            if let bundleID = stringArg(from: editor, childName: "default-app") {
+                result.editorDefaultAppBundleID = bundleID
+            }
+            if let openFolders = boolArg(from: editor, childName: "open-folders") {
+                result.editorOpenFolders = openFolders
+            }
         }
 
         return result

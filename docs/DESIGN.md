@@ -200,6 +200,7 @@ bookmarks {
 
 editor {
     default-app "com.apple.TextEdit"
+    open-folders #false
 }
 ```
 
@@ -210,6 +211,12 @@ Each `bookmarks` entry is a `label|path` pair and becomes an item in the Favorit
 names an application you do not have installed, `F4` falls back to the system default handler
 rather than refusing to open the file. It applies to `F4` alone — `Return` and double-click
 still open a file the way Finder would.
+
+`editor.open-folders` extends `F4` to folders, which is what an editor that opens a project
+directory wants. Off by default, so `F4` over a folder does nothing. Turn it on and `F4` hands
+the folder — including `..`, the parent — to the same application. Folders **inside** a ZIP
+stay excluded either way: the editor would only ever see an extracted copy, and edits to it
+would never reach the archive.
 
 ### The settings window
 

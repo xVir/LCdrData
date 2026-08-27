@@ -29,6 +29,42 @@ struct CommandRunnerTests {
         return appState
     }
 
+    private func directory(_ name: String) -> FileItem {
+        FileItem(url: URL(fileURLWithPath: "/dir/\(name)"), name: name, isDirectory: true)
+    }
+
+    // MARK: - Edit enablement
+
+    @Test func editIsDisabledOnAFolderWhenOpenFoldersIsOff() {
+        // Arrange
+        let folder = directory("reports")
+        let appState = makeAppState(items: [folder], selected: [folder.id])
+        appState.leftPanel.editorOpenFolders = false
+
+        // Assert
+        #expect(appState.commands.isEnabled(.edit) == false)
+    }
+
+    @Test func editIsEnabledOnAFolderWhenOpenFoldersIsOn() {
+        // Arrange
+        let folder = directory("reports")
+        let appState = makeAppState(items: [folder], selected: [folder.id])
+        appState.leftPanel.editorOpenFolders = true
+
+        // Assert
+        #expect(appState.commands.isEnabled(.edit) == true)
+    }
+
+    @Test func quickLookStaysDisabledOnAFolderRegardlessOfOpenFolders() {
+        // Arrange
+        let folder = directory("reports")
+        let appState = makeAppState(items: [folder], selected: [folder.id])
+        appState.leftPanel.editorOpenFolders = true
+
+        // Assert — open-folders is an F4 setting; F3 is unaffected.
+        #expect(appState.commands.isEnabled(.quickLook) == false)
+    }
+
     // MARK: - Execution routes through file operations
 
     @Test func trashRequestsDeleteConfirmation() {

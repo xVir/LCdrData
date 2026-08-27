@@ -58,9 +58,12 @@ struct AppStateTests {
         #expect(state.rightPanel.state.currentDirectory == right)
     }
 
-    // MARK: - editor.default-app
+    // MARK: - editor settings
 
-    private func makeConfiguration(editorBundleID: String) throws -> ConfigurationService {
+    private func makeConfiguration(
+        editorBundleID: String,
+        openFolders: Bool = false
+    ) throws -> ConfigurationService {
         let tmp = FileManager.default.temporaryDirectory
             .appendingPathComponent("LCdrDataAppStateCfg-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
@@ -70,7 +73,8 @@ struct AppStateTests {
             configDirectory: tmp,
             defaultKDLTextOverride: """
             editor {
-                default-app \"\(editorBundleID)\"
+                default-app "\(editorBundleID)"
+                open-folders #\(openFolders)
             }
 
             """
@@ -115,5 +119,36 @@ struct AppStateTests {
         // Assert
         #expect(state.leftPanel.editorDefaultAppBundleID == "com.other.Editor")
         #expect(state.rightPanel.editorDefaultAppBundleID == "com.other.Editor")
+    }
+
+    @Test func bothPanelsAreSeededWithOpenFolders() throws {
+        // Arrange & Act
+        let state = makeAppState(
+            configuration: try makeConfiguration(editorBundleID: "com.foo.Bar", openFolders: true)
+        )
+
+        // Assert
+        #expect(state.leftPanel.editorOpenFolders == true)
+        #expect(state.rightPanel.editorOpenFolders == true)
+    }
+
+    @Test func applyingConfigurationPushesOpenFoldersToBothPanels() async throws {
+        // Arrange — starts off.
+        let configuration = try makeConfiguration(editorBundleID: "com.foo.Bar")
+        let state = makeAppState(configuration: configuration)
+        #expect(state.leftPanel.editorOpenFolders == false)
+
+        // Act
+        try configuration.apply(fromUserKDL: """
+        editor {
+            open-folders #true
+        }
+
+        """)
+        await state.applyEffectiveConfiguration()
+
+        // Assert
+        #expect(state.leftPanel.editorOpenFolders == true)
+        #expect(state.rightPanel.editorOpenFolders == true)
     }
 }

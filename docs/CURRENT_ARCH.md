@@ -217,6 +217,7 @@ bookmarks {
 }
 editor {
     default-app "com.apple.TextEdit"
+    open-folders #false
 }
 ```
 
@@ -224,10 +225,10 @@ Bookmark entries use a `label|path` string inside a dash-list block, and `~` is 
 
 ### 4a. How `editor.default-app` reaches F4
 
-`AppConfiguration.editorDefaultAppBundleID` travels the same path as `sortDescriptor` and
-`panelShowHiddenFiles`: `AppState` pushes it into both panels, at init and again from
-`applyEffectiveConfiguration()` when the settings window applies. No panel reads
-`ConfigurationService` itself.
+`AppConfiguration.editorDefaultAppBundleID` and `editorOpenFolders` travel the same path as
+`sortDescriptor` and `panelShowHiddenFiles`: `AppState` pushes them into both panels, at init
+and again from `applyEffectiveConfiguration()` when the settings window applies. No panel
+reads `ConfigurationService` itself.
 
 `PanelViewModel` then hands it to `FileOpeningService` (layer 2), whose one job is
 resolve-or-fall-back:
@@ -241,6 +242,21 @@ resolve-or-fall-back:
 The fallback is deliberate and silent, so `F4` always opens something even with a typo in the
 KDL. `WorkspaceApplicationOpening` brackets the three `NSWorkspace` calls involved so the
 decision is unit-testable without launching an application.
+
+What `F4` is willing to act on is decided by `PanelViewModel.editTargetItem()`, kept separate
+from `preparedSelectedFileURL()` on purpose — Quick Look (`F3`) shares that one and stays
+files-only:
+
+| Selection | `open-folders` off | on |
+|---|---|---|
+| a file | opened (archive members extracted first) | same |
+| a folder, incl. `..` | nothing | opened |
+| a folder inside a ZIP | nothing | nothing |
+
+Archive folders are excluded in both states: the editor would receive an extracted copy whose
+edits never reach the container, which reads as data loss. `CommandRunner.isEnabled` therefore
+asks `hasEditTarget` for `.edit` rather than sharing `.quickLook`'s check, so the command bar's
+Edit button tracks the setting instead of staying greyed out over a folder.
 
 **This is the `Edit` (`F4`) path only.** `openItem` — Enter and double-click — still calls
 `NSWorkspace.shared.open` directly and keeps the system default handler, so pressing Enter on

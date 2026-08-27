@@ -25,6 +25,7 @@ struct ConfigurationServiceTests {
 
     editor {
         default-app "com.apple.TextEdit"
+        open-folders #false
     }
 
     """
@@ -50,6 +51,27 @@ struct ConfigurationServiceTests {
         #expect(svc.current.panelShowHiddenFiles == false)
         #expect(svc.current.panelSortColumn == .name)
         #expect(svc.current.panelSortAscending == true)
+    }
+
+    @Test func editorOpenFoldersDefaultsToFalseAndParsesFromKDL() throws {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("LCdrDataCfgTest-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        let svc = makeService(tempDir: tmp)
+        try svc.load()
+
+        #expect(svc.current.editorOpenFolders == false)
+
+        try svc.apply(fromUserKDL: """
+        editor {
+            open-folders #true
+        }
+
+        """)
+
+        #expect(svc.current.editorOpenFolders == true)
     }
 
     @Test func applyUserKDLMergesOntoDefaults() throws {

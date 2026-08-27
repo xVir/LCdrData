@@ -80,6 +80,115 @@ struct PanelViewModelEditorTests {
         #expect(opener.requestedBundleIDs == [nil])
     }
 
+    private func folder() -> FileItem {
+        FileItem(
+            url: URL(fileURLWithPath: "/tmp/reports"),
+            name: "reports",
+            isDirectory: true,
+            size: nil,
+            modificationDate: Date(timeIntervalSince1970: 1000)
+        )
+    }
+
+    @Test func editIgnoresAFolderWhenOpenFoldersIsOff() async {
+        // Arrange
+        let directory = folder()
+        let opener = FakeFileOpeningService()
+        let vm = PanelViewModel(
+            side: .left,
+            initialDirectory: URL(fileURLWithPath: "/tmp"),
+            fileSystemService: MockFileSystemService(items: [directory]),
+            fileOpeningService: opener
+        )
+        vm.editorDefaultAppBundleID = "com.apple.TextEdit"
+        await vm.reload(.fresh)
+        vm.state.cursor.selected = [directory.id]
+
+        // Act
+        await vm.openPreparedSelectedFileWithDefaultApp()
+
+        // Assert
+        #expect(opener.openedURLs.isEmpty)
+    }
+
+    @Test func editOpensAFolderWithTheConfiguredEditorWhenOpenFoldersIsOn() async {
+        // Arrange
+        let directory = folder()
+        let opener = FakeFileOpeningService()
+        let vm = PanelViewModel(
+            side: .left,
+            initialDirectory: URL(fileURLWithPath: "/tmp"),
+            fileSystemService: MockFileSystemService(items: [directory]),
+            fileOpeningService: opener
+        )
+        vm.editorDefaultAppBundleID = "com.apple.TextEdit"
+        vm.editorOpenFolders = true
+        await vm.reload(.fresh)
+        vm.state.cursor.selected = [directory.id]
+
+        // Act
+        await vm.openPreparedSelectedFileWithDefaultApp()
+
+        // Assert
+        #expect(opener.openedURLs == [directory.url])
+        #expect(opener.requestedBundleIDs == ["com.apple.TextEdit"])
+    }
+
+    @Test func editOpensTheParentRowWhenOpenFoldersIsOn() async {
+        // Arrange
+        let opener = FakeFileOpeningService()
+        let vm = PanelViewModel(
+            side: .left,
+            initialDirectory: URL(fileURLWithPath: "/tmp/sub", isDirectory: true),
+            fileSystemService: MockFileSystemService(items: []),
+            fileOpeningService: opener
+        )
+        vm.editorDefaultAppBundleID = "com.apple.TextEdit"
+        vm.editorOpenFolders = true
+        await vm.reload(.fresh)
+        let parentRow = vm.visibleItems.first { $0.isParentDirectory }
+        vm.state.cursor.selected = [parentRow?.id ?? UUID()]
+
+        // Act
+        await vm.openPreparedSelectedFileWithDefaultApp()
+
+        // Assert
+        #expect(opener.openedURLs.map(\.path) == ["/tmp"])
+    }
+
+    @Test func editIgnoresAFolderInsideAnArchiveEvenWhenOpenFoldersIsOn() async {
+        // Arrange
+        let container = URL(fileURLWithPath: "/tmp/files.zip")
+        let archiveRow = FileItem(url: container, name: "files.zip", isDirectory: false)
+        let innerFolder = FileItem(
+            archiveContainer: container,
+            internalPath: "folder",
+            name: "folder",
+            isDirectory: true
+        )
+        let opener = FakeFileOpeningService()
+        let vm = PanelViewModel(
+            side: .left,
+            initialDirectory: URL(fileURLWithPath: "/tmp"),
+            fileSystemService: MockFileSystemService(items: [archiveRow]),
+            archiveService: MockArchiveService(itemsByPath: ["": [innerFolder], "folder": []]),
+            fileOpeningService: opener
+        )
+        vm.editorDefaultAppBundleID = "com.apple.TextEdit"
+        vm.editorOpenFolders = true
+        await vm.reload(.fresh)
+        await vm.openItem(archiveRow)
+        let listedFolder = vm.state.items.first { $0.name == "folder" }
+        #expect(listedFolder != nil, "the archive folder must be listed for this test to mean anything")
+        vm.state.cursor.selected = [listedFolder?.id ?? UUID()]
+
+        // Act
+        await vm.openPreparedSelectedFileWithDefaultApp()
+
+        // Assert
+        #expect(opener.openedURLs.isEmpty)
+    }
+
     @Test func editOpensAnExtractedArchiveMemberWithTheConfiguredEditor() async {
         // Arrange
         let container = URL(fileURLWithPath: "/tmp/files.zip")

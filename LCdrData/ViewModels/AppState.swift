@@ -44,6 +44,7 @@ package final class AppState {
             sortDescriptor: cfg.sortDescriptor,
             showHiddenFiles: cfg.panelShowHiddenFiles,
             editorDefaultAppBundleID: cfg.editorDefaultAppBundleID,
+            editorOpenFolders: cfg.editorOpenFolders,
             directoryWatchingEnabled: true,
             archiveService: archiveService,
             sandboxAccessService: sandboxAccess
@@ -54,6 +55,7 @@ package final class AppState {
             sortDescriptor: cfg.sortDescriptor,
             showHiddenFiles: cfg.panelShowHiddenFiles,
             editorDefaultAppBundleID: cfg.editorDefaultAppBundleID,
+            editorOpenFolders: cfg.editorOpenFolders,
             directoryWatchingEnabled: true,
             archiveService: archiveService,
             sandboxAccessService: sandboxAccess
@@ -122,6 +124,8 @@ package final class AppState {
         rightPanel.state.showHiddenFiles = cfg.panelShowHiddenFiles
         leftPanel.editorDefaultAppBundleID = cfg.editorDefaultAppBundleID
         rightPanel.editorDefaultAppBundleID = cfg.editorDefaultAppBundleID
+        leftPanel.editorOpenFolders = cfg.editorOpenFolders
+        rightPanel.editorOpenFolders = cfg.editorOpenFolders
         async let left: Void = leftPanel.reload(.keepSelection)
         async let right: Void = rightPanel.reload(.keepSelection)
         _ = await (left, right)

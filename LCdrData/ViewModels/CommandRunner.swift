@@ -92,7 +92,9 @@ package struct CommandRunner {
             return hasSelection
         case .revealInFinder:
             return hasSelection && !active.state.location.isArchive
-        case .edit, .quickLook:
+        case .edit:
+            return active.hasEditTarget
+        case .quickLook:
             return active.previewURLForQuickLook() != nil
         case .rename(let item):
             return !item.isParentDirectory && active.isLocationWritable
