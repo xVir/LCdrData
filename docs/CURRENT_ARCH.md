@@ -136,6 +136,7 @@ Service protocols are `Sendable, nonisolated` so they can be called from any act
 |---|---|
 | `FileSystemService.swift` | `FileSystemServiceProtocol.listDirectory(at:showHidden:) async throws -> [FileItem]`. Runs in `Task.detached`, pre-fetches resource keys, and resolves symlink targets to mark `isSymlinkToDirectory`. |
 | `FileOperationService.swift` | Copy, move, trash (returns trash URLs), permanent delete, create folder, rename. Long-running calls take `@Sendable` callbacks — `onProgress: (FileOperationProgress) -> Void` and `onConflict: (FileConflict) async -> ConflictResolution`. Per-item cancellation via `Task.checkCancellation()`; a source and destination resolving to the same path is a no-op rather than an error. Typed failures via `FileOperationError`. |
+| `FileOpeningService.swift` | `FileOpeningServiceProtocol.open(_:preferredApplicationBundleID:)`, the `F4` target. Resolves the configured bundle ID through `WorkspaceApplicationOpening` and falls back to the system default handler when it is absent or not installed. See §4a. |
 | `ArchiveService.swift` | `ArchiveServiceProtocol` and its ZIPFoundation-backed actor. Lists explicit and implicit folders, extracts with zip-slip checks, packs files and trees, removes prefixes, creates folders, renames, and rejects mutations when the container is not writable. |
 | `BrowseOperationService.swift` | Routes copy, move, delete, mkdir, and rename across the filesystem/zip location matrix. Cross-archive transfers use scoped temporary extraction, preserve conflict choices, and only remove source members that were actually transferred. |
 | `ConfigurationService.swift` | `@Observable`, `@MainActor`. Reads bundled `DefaultConfig.kdl`, merges user overrides, exposes `current: AppConfiguration` and `lastAppliedUserKDL` for the editor's right pane. Parses with `kdl-swift`. |
@@ -220,6 +221,30 @@ editor {
 ```
 
 Bookmark entries use a `label|path` string inside a dash-list block, and `~` is expanded at parse time.
+
+### 4a. How `editor.default-app` reaches F4
+
+`AppConfiguration.editorDefaultAppBundleID` travels the same path as `sortDescriptor` and
+`panelShowHiddenFiles`: `AppState` pushes it into both panels, at init and again from
+`applyEffectiveConfiguration()` when the settings window applies. No panel reads
+`ConfigurationService` itself.
+
+`PanelViewModel` then hands it to `FileOpeningService` (layer 2), whose one job is
+resolve-or-fall-back:
+
+| Configured bundle ID | Installed? | Result |
+|---|---|---|
+| set | yes | `NSWorkspace.open(_:withApplicationAt:configuration:)` with that app |
+| set | no | system default handler |
+| absent | — | system default handler |
+
+The fallback is deliberate and silent, so `F4` always opens something even with a typo in the
+KDL. `WorkspaceApplicationOpening` brackets the three `NSWorkspace` calls involved so the
+decision is unit-testable without launching an application.
+
+**This is the `Edit` (`F4`) path only.** `openItem` — Enter and double-click — still calls
+`NSWorkspace.shared.open` directly and keeps the system default handler, so pressing Enter on
+a `.png` opens Preview while `F4` opens the configured editor.
 
 ---
 
@@ -318,18 +343,18 @@ System frameworks: SwiftUI, AppKit (`NSOpenPanel`, `NSWorkspace`, `NSPasteboard`
 
 ## 9. Tests
 
-**239 test cases across eight unit test targets**, whose counts **sum** to that total — no single target reports 239. The test tree mirrors the production module layout one directory at a time, so every module's tests are a package of their own.
+**Eight unit test targets.** The test tree mirrors the production module layout one directory at a time, so every module's tests are a package of their own.
 
-| Target | Files | Cases | Covers |
-|---|---|---|---|
-| `//LCdrDataTests/Core/Utilities` | 1 | 7 | `~` expansion against a stubbed account home |
-| `//LCdrDataTests/Core/Models` | 7 | 61 | Browse locations, archive/file identity, cursor resolution, panel history, sorting, operation models, context menus |
-| `//LCdrDataTests/Core/Bindings` | 1 | 8 | Every `Command`'s key and modifiers, and which commands have none |
-| `//LCdrDataTests/Core/Formatting` | 1 | 12 | Size, date and filesystem/archive kind formatting |
-| `//LCdrDataTests/Services` | 9 | 61 | Filesystem and ZIP listing/operations, conflicts, extraction safety, watching, configuration, bookmarks, sessions, sandbox access |
-| `//LCdrDataTests/ViewModels` | 5 | 79 | Panel/archive navigation, selection, history, type-ahead, command guards, Return activation, dialog flows and cancellation |
-| `//LCdrDataTests/AppEnvironment` | 1 | 10 | Startup scope activation, session seeding, archive-location collapse |
-| `//LCdrDataTests/App` | 1 | 1 | `AppDelegate` termination behaviour |
+| Target | Files | Covers |
+|---|---|---|
+| `//LCdrDataTests/Core/Utilities` | 1 | `~` expansion against a stubbed account home |
+| `//LCdrDataTests/Core/Models` | 7 | Browse locations, archive/file identity, cursor resolution, panel history, sorting, operation models, context menus |
+| `//LCdrDataTests/Core/Bindings` | 1 | Every `Command`'s key and modifiers, and which commands have none |
+| `//LCdrDataTests/Core/Formatting` | 1 | Size, date and filesystem/archive kind formatting |
+| `//LCdrDataTests/Services` | 9 | Filesystem and ZIP listing/operations, conflicts, extraction safety, watching, configuration, bookmarks, sessions, sandbox access |
+| `//LCdrDataTests/ViewModels` | 5 | Panel/archive navigation, selection, history, type-ahead, command guards, Return activation, dialog flows and cancellation |
+| `//LCdrDataTests/AppEnvironment` | 1 | Startup scope activation, session seeding, archive-location collapse |
+| `//LCdrDataTests/App` | 1 | `AppDelegate` termination behaviour |
 
 `Views` has no unit test target: the views are covered by the UI tests instead.
 
@@ -337,7 +362,7 @@ System frameworks: SwiftUI, AppKit (`NSOpenPanel`, `NSWorkspace`, `NSPasteboard`
 
 Every target is app-hosted (`test_host = "//LCdrData"`) and tagged `local`, since these do not bootstrap inside Bazel's sandbox, and declares `size = "small"`.
 
-One test is **skipped, not run**: `FileOperationServiceTests.trashFile()` is `@Test(.disabled(...))` because `FileManager.trashItem` needs an application context. It still counts toward the 201.
+One test is **skipped, not run**: `FileOperationServiceTests.trashFile()` is `@Test(.disabled(...))` because `FileManager.trashItem` needs an application context. It still counts toward the suite total.
 
 UI tests under `LCdrDataUITests/` (XCTest) cover launch, panel selection and session restore. Bazel compiles them but cannot run them — `rules_apple`'s runner rejects macOS XCUITEST — so `scripts/run-ui-tests.sh` delegates to Tuist. They are not part of the routine development loop.
 
@@ -350,15 +375,12 @@ remappable shortcuts, a toolbar, a volumes list, an inline preview pane, search 
 type-ahead, and archive browsing. None of those exist in code, and the spec no longer claims
 they do, so they are not divergences.
 
-One genuine divergence remains:
+No divergences remain.
 
-- **`editor.default-app` is parsed but unused.** `ConfigurationService` reads it into
-  `AppConfiguration`, but `F4` calls `NSWorkspace.shared.open`, which uses the system default
-  application rather than the configured bundle ID. The option is therefore inert, while both
-  the settings window and `DefaultConfig.kdl` present it as working.
-
-When closing that gap, or implementing anything from the spec's "not in scope yet" list,
-expect to update both files.
+`editor.default-app` used to be one: it was parsed into `AppConfiguration` and then never
+read, so `F4` fell through to `NSWorkspace.shared.open` and the system default handler.
+It is now wired up — see §4a. When implementing anything from the spec's "not in scope yet"
+list, expect to update both files.
 
 ---
 

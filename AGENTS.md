@@ -193,18 +193,17 @@ bazel test //...
 bazel test //LCdrDataTests/... --nocache_test_results
 ```
 
-The suite is **239 test cases split across eight targets** — Core/Models 61,
-Core/Formatting 12, Core/Bindings 8, Core/Utilities 7, Services 61, ViewModels 79,
-AppEnvironment 10, App 1. They **sum** to 239; no single target reports that number, so a
-target showing 61 is not a sign of lost tests.
+The suite is split across eight targets, one per module. Their case counts **sum** to the
+suite total — no single target reports it, so a target reporting fewer cases than the whole
+suite is not a sign of lost tests.
 
 Take counts from Swift Testing's own summary line in each test log
-(`Test run with 61 tests in ... passed`) rather than counting `✔` marks, which over-counts
+(`Test run with N tests in ... passed`) rather than counting `✔` marks, which over-counts
 by including the summary line itself. Note the line reads "1 test" singular for
 `AppTests`.
 
 > One test is currently **skipped**, not run: `FileOperationServiceTests.trashFile()` is
-> marked `@Test(.disabled(...))`. It still counts toward the 239, so a green run does not
+> marked `@Test(.disabled(...))`, so a green run does not
 > mean every test executed. `FileManager.trashItem` needs an application context, which
 > makes it the only test requiring `test_host` — see
 > [docs/PHASE8_MODULARISATION.md](docs/PHASE8_MODULARISATION.md) section 6.

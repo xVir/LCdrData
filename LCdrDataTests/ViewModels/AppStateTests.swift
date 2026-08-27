@@ -57,4 +57,63 @@ struct AppStateTests {
         #expect(state.leftPanel.state.currentDirectory == left)
         #expect(state.rightPanel.state.currentDirectory == right)
     }
+
+    // MARK: - editor.default-app
+
+    private func makeConfiguration(editorBundleID: String) throws -> ConfigurationService {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("LCdrDataAppStateCfg-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        let service = ConfigurationService(
+            bundle: Bundle.main,
+            fileManager: .default,
+            configDirectory: tmp,
+            defaultKDLTextOverride: """
+            editor {
+                default-app \"\(editorBundleID)\"
+            }
+
+            """
+        )
+        try service.load()
+        return service
+    }
+
+    private func makeAppState(configuration: ConfigurationService) -> AppState {
+        AppState(
+            configuration: configuration,
+            sandboxAccess: SandboxAccessService(
+                presenter: NoopAccessPresenter(),
+                bookmarkStore: BookmarkStore()
+            )
+        )
+    }
+
+    @Test func bothPanelsAreSeededWithTheConfiguredEditor() throws {
+        // Arrange & Act
+        let state = makeAppState(configuration: try makeConfiguration(editorBundleID: "com.foo.Bar"))
+
+        // Assert
+        #expect(state.leftPanel.editorDefaultAppBundleID == "com.foo.Bar")
+        #expect(state.rightPanel.editorDefaultAppBundleID == "com.foo.Bar")
+    }
+
+    @Test func applyingConfigurationPushesTheNewEditorToBothPanels() async throws {
+        // Arrange
+        let configuration = try makeConfiguration(editorBundleID: "com.foo.Bar")
+        let state = makeAppState(configuration: configuration)
+
+        // Act
+        try configuration.apply(fromUserKDL: """
+        editor {
+            default-app "com.other.Editor"
+        }
+
+        """)
+        await state.applyEffectiveConfiguration()
+
+        // Assert
+        #expect(state.leftPanel.editorDefaultAppBundleID == "com.other.Editor")
+        #expect(state.rightPanel.editorDefaultAppBundleID == "com.other.Editor")
+    }
 }

@@ -53,8 +53,8 @@ bazel test //LCdrDataTests/...   # all unit tests
 bazel test //LCdrDataTests/Core/Models   # one module's tests
 ```
 
-201 test cases written with [Swift Testing](https://github.com/swiftlang/swift-testing),
-split across eight targets whose counts sum to that total. `bazel test //...` adds compile
+Unit tests are written with [Swift Testing](https://github.com/swiftlang/swift-testing),
+split across eight targets, one per module. `bazel test //...` adds compile
 coverage for the UI tests.
 
 UI tests need a GUI login session and are driven by Tuist rather than Bazel, since Bazel's

@@ -41,6 +41,11 @@ package final class PanelViewModel {
     /// When true, the path bar shows an editable path field (Cmd+L).
     package var isPathBarEditing: Bool = false
 
+    /// Bundle ID of the application F4 opens files with (`editor.default-app`).
+    /// Pushed in by `AppState` from the effective configuration; `nil` means
+    /// fall back to the system default handler.
+    package var editorDefaultAppBundleID: String?
+
     // MARK: - Type-ahead (incremental search)
 
     private var typeAheadBuffer: String = ""
@@ -52,6 +57,7 @@ package final class PanelViewModel {
     package let side: PanelSide
     private let fileSystemService: FileSystemServiceProtocol
     private let archiveService: ArchiveServiceProtocol
+    private let fileOpeningService: FileOpeningServiceProtocol
     private let sandboxAccessService: SandboxAccessService
     private let directoryWatchingEnabled: Bool
     private var temporaryExtractionDirectories: [URL] = []
@@ -63,15 +69,18 @@ package final class PanelViewModel {
         initialDirectory: URL,
         sortDescriptor: FileSortDescriptor? = nil,
         showHiddenFiles: Bool? = nil,
+        editorDefaultAppBundleID: String? = nil,
         directoryWatchingEnabled: Bool = false,
         fileSystemService: FileSystemServiceProtocol = FileSystemService(),
         archiveService: ArchiveServiceProtocol = ArchiveService(),
+        fileOpeningService: FileOpeningServiceProtocol = FileOpeningService(),
         sandboxAccessService: SandboxAccessService = SandboxAccessService(
             presenter: NoopAccessPresenter(),
             bookmarkStore: BookmarkStore()
         )
     ) {
         self.side = side
+        self.editorDefaultAppBundleID = editorDefaultAppBundleID
         self.directoryWatchingEnabled = directoryWatchingEnabled
         self.state = PanelState(
             currentDirectory: initialDirectory,
@@ -80,6 +89,7 @@ package final class PanelViewModel {
         )
         self.fileSystemService = fileSystemService
         self.archiveService = archiveService
+        self.fileOpeningService = fileOpeningService
         self.sandboxAccessService = sandboxAccessService
     }
 
@@ -580,16 +590,11 @@ package final class PanelViewModel {
         }
     }
 
-    /// Opens the selected file with the default application (F4).
-    package func openSelectedFileWithDefaultApp() {
-        guard let item = singleSelectedNonDirectoryItem() else { return }
-        guard !item.isDirectory else { return }
-        NSWorkspace.shared.open(item.url)
-    }
-
+    /// Opens the selected file (F4) with the configured editor, falling back
+    /// to the system default handler when none is configured or installed.
     package func openPreparedSelectedFileWithDefaultApp() async {
         guard let url = await preparedSelectedFileURL() else { return }
-        NSWorkspace.shared.open(url)
+        await fileOpeningService.open(url, preferredApplicationBundleID: editorDefaultAppBundleID)
     }
 
     private func singleSelectedNonDirectoryItem() -> FileItem? {

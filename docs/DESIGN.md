@@ -103,7 +103,7 @@ Everything acts on the active panel's selection, with the other panel as the des
 | New folder | `F7` | Create a directory in the active panel |
 | Rename | `Return` / `F2` | `Return` is Finder-style and only on non-enterable files, `F2` orthodox |
 | View | `F3` / `Space` | Quick Look preview |
-| Edit | `F4` | Open in the default application |
+| Edit | `F4` | Open in the editor from `editor.default-app` |
 | Refresh | `⌘R` | Reload the active panel |
 
 - Destructive operations ask first.
@@ -140,7 +140,7 @@ filename — the buffer clears after a second of silence.
 | `⌘⌥C` | Copy selected paths to the clipboard |
 | `⌘⌫` | Delete permanently, with confirmation |
 | `Space` / `F3` | Quick Look preview |
-| `F4` | Open in the default application |
+| `F4` | Open in the editor from `editor.default-app` |
 | `F5` / `F6` | Copy / move to the other panel |
 | `F7` | New folder |
 | `F8` | Move to Trash |
@@ -205,6 +205,11 @@ editor {
 
 Each `bookmarks` entry is a `label|path` pair and becomes an item in the Favorites menu;
 `~` expands to your home folder.
+
+`editor.default-app` is the bundle identifier of the application `F4` opens files with. If it
+names an application you do not have installed, `F4` falls back to the system default handler
+rather than refusing to open the file. It applies to `F4` alone — `Return` and double-click
+still open a file the way Finder would.
 
 ### The settings window
 
