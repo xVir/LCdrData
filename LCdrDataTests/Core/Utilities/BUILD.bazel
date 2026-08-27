@@ -2,9 +2,6 @@ load("@build_bazel_rules_apple//apple:macos.bzl", "macos_unit_test")
 load("@build_bazel_rules_swift//swift:swift_library.bzl", "swift_library")
 load("//:defs.bzl", "PACKAGE_NAME", "SWIFT_COPTS")
 
-# Tests for //LCdrData/Core/Utilities. Utilities is a leaf, and so is its test
-# target: //LCdrData/Services deliberately does not make this package visible,
-# so adding an import of it here fails at analysis time.
 swift_library(
     name = "UtilitiesTestsLib",
     testonly = True,

@@ -222,8 +222,9 @@ metaphor:
 2. **Right — your overrides, editable.** Only what you write here is saved. Anything you set
    overrides the corresponding default; anything you leave out keeps it.
 3. **Apply** parses and validates your text, then applies the merged result to the running
-   app immediately — no restart, and every open window updates. If the KDL does not parse,
-   an inline message points at the problem and nothing is applied.
+   app immediately — no restart, and every open window updates — and closes the window. If the
+   KDL does not parse, an inline message points at the problem, nothing is applied, and the
+   window stays open so you can fix it.
 4. **Cancel** discards unsaved edits and closes the window. Nothing you typed since the last
    Apply is kept, so reopening the window shows the last applied version again.
 

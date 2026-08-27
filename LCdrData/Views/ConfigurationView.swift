@@ -5,7 +5,8 @@ import ViewModels
 import AppEnvironment
 
 /// Dual-pane KDL editor: read-only defaults (left) and user overrides (right), with Apply / Cancel.
-/// Apply writes and stays open; Cancel discards the unsaved edits and closes the window.
+/// Apply writes and closes, unless the KDL is rejected — then the window stays open so the
+/// inline error is readable. Cancel discards the unsaved edits and closes.
 package struct ConfigurationView: View {
 
     package let configuration: ConfigurationService
@@ -142,6 +143,7 @@ package struct ConfigurationView: View {
             try configuration.apply(fromUserKDL: userKDL)
             applyError = nil
             NotificationCenter.default.post(name: .lcdrConfigurationApplied, object: nil)
+            dismiss()
         } catch let err as ConfigurationServiceError {
             switch err {
             case .invalidKDL(let message):
