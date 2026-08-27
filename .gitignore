@@ -10,5 +10,8 @@ Tuist/.build/
 # for reproducible dependency resolution.
 /bazel-*
 
+# Machine-local Bazel flags, pulled in by `try-import` from .bazelrc.
+/local.bazelrc
+
 # OS
 **/.DS_Store
