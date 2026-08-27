@@ -219,7 +219,8 @@ metaphor:
 3. **Apply** parses and validates your text, then applies the merged result to the running
    app immediately — no restart, and every open window updates. If the KDL does not parse,
    an inline message points at the problem and nothing is applied.
-4. **Cancel** discards unsaved edits and reverts the right pane to the last applied version.
+4. **Cancel** discards unsaved edits and closes the window. Nothing you typed since the last
+   Apply is kept, so reopening the window shows the last applied version again.
 
 The window never auto-saves. Nothing takes effect until you click Apply.
 

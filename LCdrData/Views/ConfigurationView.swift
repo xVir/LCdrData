@@ -5,6 +5,7 @@ import ViewModels
 import AppEnvironment
 
 /// Dual-pane KDL editor: read-only defaults (left) and user overrides (right), with Apply / Cancel.
+/// Apply writes and stays open; Cancel discards the unsaved edits and closes the window.
 package struct ConfigurationView: View {
 
     package let configuration: ConfigurationService
@@ -12,6 +13,8 @@ package struct ConfigurationView: View {
     package init(configuration: ConfigurationService) {
         self.configuration = configuration
     }
+
+    @Environment(\.dismiss) private var dismiss
 
     @State private var userKDL: String = ""
     @State private var applyError: String?
@@ -50,8 +53,11 @@ package struct ConfigurationView: View {
             HStack {
                 Spacer()
                 Button("Cancel") {
+                    // Discard the unsaved edits *and* close: the pane is reverted
+                    // because the Settings scene keeps this view alive, so a
+                    // reopened window would otherwise show the abandoned text.
                     syncUserFromDisk()
-                    applyError = nil
+                    dismiss()
                 }
                 .keyboardShortcut(.cancelAction)
 

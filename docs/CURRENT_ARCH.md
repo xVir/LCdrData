@@ -186,7 +186,7 @@ Scope activation is fronted by `SecurityScopeActivating` so tests can observe st
 | `FileOperationProgressView.swift` | The copy/move progress overlay with Cancel. Not shown for trash or delete. |
 | `ConflictResolutionView.swift` | Overwrite / Skip / Rename with an apply-to-all toggle; resumes the continuation in `FileOperationViewModel`. |
 | `RenameDialogView.swift` | The rename sheet for a single item. |
-| `ConfigurationView.swift` | The Settings window: a two-pane `HSplitView` with syntax-highlighted bundled defaults on the left and an editable overrides pane on the right. Apply parses, merges and writes; Cancel reverts to the last applied text. |
+| `ConfigurationView.swift` | The Settings window: a two-pane `HSplitView` with syntax-highlighted bundled defaults on the left and an editable overrides pane on the right. Apply parses, merges and writes and leaves the window open; Cancel reverts the pane to the last applied text and closes the window via `@Environment(\.dismiss)` — the revert matters because the `Settings` scene keeps the view alive across closes. |
 
 ### 4.7 App — entry point
 
