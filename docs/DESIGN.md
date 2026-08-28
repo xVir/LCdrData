@@ -79,6 +79,9 @@ launch restores where you left off.
 - Each panel keeps **its own** order and widths, and both are remembered between launches.
   They are UI state, kept outside the configuration file — nothing you drag rewrites your
   `config.kdl`.
+- Rows alternate between two shades of the panel background, so the eye can follow a row
+  across to the columns on the right. The striping follows position on screen, not the file, so
+  it stays regular through sorting and reloads.
 - A `..` row sits at the top of every listing except the filesystem root.
 - Click to select, `⌘`-click to add to the selection, `⇧`-click for a range.
 - `Return` enters a directory or a `.zip`; on any other **file** it starts a rename, the way

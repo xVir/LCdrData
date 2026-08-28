@@ -87,17 +87,27 @@ package struct FileTableView: View {
                         viewModel.cursorDidChangeSelection(to: newSelection)
                     }
                 )) {
-                    ForEach(viewModel.visibleItems) { item in
+                    ForEach(Array(viewModel.visibleItems.enumerated()), id: \.element.id) { index, item in
                         FileRowView(
                             item: item,
                             viewModel: viewModel,
                             columns: layout.columns,
                             widths: layout.resolvedWidths(availableWidth: Double(contentWidth)),
                             dateFormat: panelDateFormat,
-                            fontSize: panelFontSize
+                            fontSize: panelFontSize,
+                            // Striping follows the row's position on screen, not
+                            // the item, so it stays regular as the listing is
+                            // sorted, filtered or reloaded.
+                            isStriped: !index.isMultiple(of: 2)
                         )
                             .tag(item.id)
                             .id(item.id)
+                            // The stripes already tell one row from the next, so
+                            // the separator only adds noise. Hidden rather than
+                            // tinted down: `listRowSeparatorTint` at any value
+                            // faint enough to help is indistinguishable from the
+                            // default line it replaces.
+                            .listRowSeparator(.hidden)
                             .listRowInsets(EdgeInsets(
                                 top: 2,
                                 leading: FileColumnMetrics.horizontalInset,
@@ -300,9 +310,9 @@ package enum FileColumnMetrics {
     /// two drifting apart is exactly how the columns stopped lining up before.
     package static let horizontalInset: CGFloat = 8
     package static let resizeHandleWidth: CGFloat = 10
-    /// Breathing room between a cell's text and the column's edges. Without it
-    /// a trailing-aligned column and the leading-aligned one after it run their
-    /// text together — "SizeDate Modified".
+    /// Breathing room between a cell's text and the column edge it is aligned
+    /// to. Without it a trailing-aligned column and the leading-aligned one
+    /// after it run their text together — "SizeDate Modified".
     package static let cellPadding: CGFloat = 4
 }
 
@@ -327,6 +337,14 @@ extension FileColumn {
 
     var alignment: Alignment {
         self == .size ? .trailing : .leading
+    }
+
+    /// The edge a cell's text is pinned to, and so the only one that needs
+    /// insetting: padding both would cost the column twice the width for the
+    /// same visible gap, which is enough to truncate "263 bytes" in the default
+    /// Size column.
+    var textEdge: Edge.Set {
+        alignment == .trailing ? .trailing : .leading
     }
 }
 
@@ -388,7 +406,7 @@ private struct SortableColumnHeader: View {
             }
         }
         .foregroundStyle(isActive ? .primary : .secondary)
-        .padding(.horizontal, FileColumnMetrics.cellPadding)
+        .padding(column.textEdge, FileColumnMetrics.cellPadding)
         .frame(maxWidth: .infinity, alignment: column.alignment)
         .contentShape(Rectangle())
         // One gesture for both jobs: the drag takes priority but only starts
@@ -423,6 +441,8 @@ private struct FileRowView: View {
     package let widths: [Double]
     package let dateFormat: String
     package let fontSize: CGFloat
+    /// Whether this row draws the alternating shade rather than the plain one.
+    package let isStriped: Bool
 
     @State private var showHighlight: Bool = false
 
@@ -434,7 +454,7 @@ private struct FileRowView: View {
         HStack(spacing: 0) {
             ForEach(Array(columns.enumerated()), id: \.element) { index, column in
                 cell(for: column)
-                    .padding(.horizontal, FileColumnMetrics.cellPadding)
+                    .padding(column.textEdge, FileColumnMetrics.cellPadding)
                     .frame(
                         width: index < widths.count ? CGFloat(widths[index]) : 0,
                         alignment: column.alignment
@@ -446,7 +466,10 @@ private struct FileRowView: View {
         .listRowBackground(
             showHighlight
                 ? Color.green.opacity(0.25)
-                : Color.clear
+                // `primary` rather than a fixed colour: it resolves to white on
+                // a dark appearance and black on a light one, so the stripe is
+                // a shade of the background either way.
+                : (isStriped ? Color.primary.opacity(0.045) : Color.clear)
         )
         .onChange(of: isHighlighted) { _, highlighted in
             if highlighted {
