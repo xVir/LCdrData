@@ -30,6 +30,8 @@ package final class AppEnvironment {
     package let sandboxAccess: SandboxAccessService
     package let scopeActivator: SecurityScopeActivating
     package let sessionStore: PanelSessionStoring
+    /// Shared by every window, so the columns look the same wherever you look.
+    package let columnLayouts: PanelColumnLayoutModel
     package weak var mostRecentAppState: AppState?
 
     package private(set) var activeScopes: [URL] = []
@@ -47,6 +49,7 @@ package final class AppEnvironment {
         )
         self.scopeActivator = SystemSecurityScopeActivator()
         self.sessionStore = PanelSessionStore()
+        self.columnLayouts = PanelColumnLayoutModel()
     }
 
     package init(
@@ -54,7 +57,8 @@ package final class AppEnvironment {
         bookmarkStore: BookmarkStoreProtocol,
         sandboxAccess: SandboxAccessService? = nil,
         scopeActivator: SecurityScopeActivating = SystemSecurityScopeActivator(),
-        sessionStore: PanelSessionStoring = PanelSessionStore()
+        sessionStore: PanelSessionStoring = PanelSessionStore(),
+        columnLayouts: PanelColumnLayoutModel = PanelColumnLayoutModel()
     ) {
         self.configuration = configuration
         self.bookmarkStore = bookmarkStore
@@ -64,6 +68,7 @@ package final class AppEnvironment {
         )
         self.scopeActivator = scopeActivator
         self.sessionStore = sessionStore
+        self.columnLayouts = columnLayouts
     }
 
     /// Acquires security scope on every bookmark currently in the store, then

@@ -115,6 +115,7 @@ One consequence of `MemberImportVisibility` is worth knowing: a file can need `i
 | `FileOperation.swift` | `FileOperationKind` (copy / move / delete / permanentDelete / createFolder / rename), `FileOperationStatus`, `FileOperationProgress` with computed `fractionCompleted`, and the operation struct with its `displayDescription`. |
 | `PanelSession.swift` | Window identity and collapsed left/right paths for `WindowGroup(for:)`. Optional live `BrowseLocation`s let `⌘N` clone archive interiors; custom Codable deliberately omits them so relaunch restores only real containing directories. |
 | `SortDescriptor.swift` | `FileSortDescriptor` with `Column { name, size, dateModified, dateCreated, kind }`; `toggle(column:)` flips direction on the same column and resets to ascending on a new one. |
+| `ColumnLayout.swift` | `FileColumn { name, size, dateModified, kind }` — the columns that have a UI, deliberately narrower than the sort columns, which also include `dateCreated`. `PanelColumnLayout` holds the order and each fixed column's width; `name` stores none, being the slack column derived as `available − Σ(others)`, which is what keeps a row's widths summing to the panel's. `resizing(dividerAfter:by:availableWidth:)` trades width between the two columns the dragged divider separates, so that divider lands under the pointer and the others hold still; it, `moving(from:to:)` and `targetIndex(draggedIndex:translationX:widths:)` are pure, so the whole drag calculus is unit-tested without a view. `init(sanitizing:)` is the only public initialiser: it drops unknown or duplicate columns, appends missing ones and clamps widths, so no stored data can yield a layout the table cannot draw. |
 | `AppConfiguration.swift` | Effective settings with defaults (hidden off, sort by name ascending, font 13, date `yyyy-MM-dd HH:mm`, editor `com.apple.TextEdit`); nested `BookmarkEntry { label, path }`; computed `sortDescriptor`. |
 
 ### 4.2 Core/Utilities
@@ -147,6 +148,7 @@ Service protocols are `Sendable, nonisolated` so they can be called from any act
 | `AccessRequestContext.swift` | Why access is being asked for: `.startup`, `.reactive(displayURL:resolvedTarget:)`, `.manualGrant(suggestedURL:)`. Supplies the dedup key. |
 | `DirectorySession.swift` | Watches a directory or the current zip container over an `O_EVTONLY` file descriptor with `DispatchSource.makeFileSystemObjectSource` (write/delete/rename/attrib/extend/revoke), debouncing to `onChange` after **0.28 s**. Short-lived and replaced on navigation. |
 | `PanelSessionStore.swift` | `PanelSessionStoring` over `UserDefaults`: the last left/right directory paths, so a relaunch resumes even when macOS window restoration does not run. |
+| `PanelColumnLayoutStore.swift` | `PanelColumnLayoutStoring` over `UserDefaults`: both panels' column order and widths in one JSON payload under a single key, so the two sides cannot be written out of step. Columns are persisted as raw strings rather than as the enum, so a name this version does not know is skipped on its own instead of taking the layout down with it. Kept out of the KDL file on purpose — that file is hand-edited, and dragging a divider must not rewrite it. |
 | `QuickLookPreviewController.swift` | `@MainActor` `QLPreviewPanelDataSource` adapter for the system Quick Look panel. |
 
 ### 4.4 ViewModels — `@Observable` coordinators
@@ -161,7 +163,7 @@ Service protocols are `Sendable, nonisolated` so they can be called from any act
 
 ### 4.5 App/AppEnvironment — shared services
 
-`AppEnvironment` is the one thing every window shares: `ConfigurationService`, `BookmarkStore`, `SandboxAccessService`, `PanelSessionStore`, the security-scope activator, and a weak `mostRecentAppState`.
+`AppEnvironment` is the one thing every window shares: `ConfigurationService`, `BookmarkStore`, `SandboxAccessService`, `PanelSessionStore`, `PanelColumnLayoutModel`, the security-scope activator, and a weak `mostRecentAppState`. `PanelColumnLayoutModel` lives in `ViewModels` rather than beside the views because `Views` has no test target: keeping it a layer down is what makes the layout logic testable. It splits `setLayout` (memory only, called on every frame of a drag) from `commit` (the single write to `UserDefaults`, called when the drag ends).
 
 | Method | Purpose |
 |---|---|
@@ -179,7 +181,7 @@ Scope activation is fronted by `SecurityScopeActivating` so tests can observe st
 | `WindowRootView.swift` | The per-window shell, and not where the UI lives. It builds the window's `AppState` from its `PanelSession`, publishes it as a focused scene value, awaits `env.start()`, saves a bookmark and updates the session binding on every directory change, and applies configuration when `lcdrConfigurationApplied` arrives. |
 | `MainWindowView.swift` | The dual-panel layout: `HSplitView` of two `PanelView`s (min 300 pt each) over `CommandBarView`. Hosts the confirmation, conflict, new-folder, rename and error dialogs plus the progress overlay, and contains the private `KeyShortcutModifier` that routes window-level keys. |
 | `PanelView.swift` | One panel: `PathBarView` → `FileTableView` (or an error state) → `StatusBarView`, with the active panel tinted and bordered. Tapping activates it. |
-| `FileTableView.swift` | The list itself, with sortable column headers, selection bound to the cursor, scroll-to-focused, context menus, drag out and `.fileURL` drop in. Intercepts `.onDeleteCommand` to navigate to the parent, because the table consumes Delete before window-level routing sees it. |
+| `FileTableView.swift` | The list itself, with sortable column headers, selection bound to the cursor, scroll-to-focused, context menus, drag out and `.fileURL` drop in. Intercepts `.onDeleteCommand` to navigate to the parent, because the table consumes Delete before window-level routing sees it. Headers and rows are both driven from one `PanelColumnLayout` and one measured `contentWidth`, so they cannot drift; column resize and reorder are plain `DragGesture`s, deliberately **not** `onDrag`/`onDrop`, which the list already uses for files. |
 | `PathBarView.swift` | Breadcrumb components, the Cmd+L editable field, and a copy-path button. |
 | `CommandBarView.swift` | The bottom F3–F8 strip; each button asks `CommandRunner.isEnabled` and calls `perform`. |
 | `StatusBarView.swift` | Item counts and selected-size summary. |

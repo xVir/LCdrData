@@ -68,6 +68,17 @@ launch restores where you left off.
 
 - Columns: Name, Size, Date Modified, Kind. Click a header to sort; click again to reverse.
   Directories group before files.
+- Drag the divider between two headers to **resize** a column, or drag a header itself to
+  **reorder** the columns. A header only starts moving after a few points of travel, so a plain
+  click still sorts. The divider you grab follows the pointer: the column on its left takes the
+  movement and the column on its right gives the same amount back, so no other divider shifts,
+  and the drag stops once either of the two reaches its minimum width. Name is the column that
+  stretches: it always takes whatever width the others leave over, wherever it sits in the
+  order, so the row always fills the panel exactly. Dragging Name's own divider therefore
+  resizes the column to its right.
+- Each panel keeps **its own** order and widths, and both are remembered between launches.
+  They are UI state, kept outside the configuration file — nothing you drag rewrites your
+  `config.kdl`.
 - A `..` row sits at the top of every listing except the filesystem root.
 - Click to select, `⌘`-click to add to the selection, `⇧`-click for a range.
 - `Return` enters a directory or a `.zip`; on any other **file** it starts a rename, the way

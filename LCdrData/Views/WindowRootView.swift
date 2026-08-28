@@ -40,6 +40,7 @@ package struct WindowRootView: View {
     package var body: some View {
         MainWindowView()
             .environment(appState)
+            .environment(env.columnLayouts)
             .focusedSceneValue(\.appState, appState)
             .task { await env.start() }
             .onChange(of: controlActiveState) { _, newValue in
