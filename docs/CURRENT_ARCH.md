@@ -243,14 +243,15 @@ The fallback is deliberate and silent, so `F4` always opens something even with 
 KDL. `WorkspaceApplicationOpening` brackets the three `NSWorkspace` calls involved so the
 decision is unit-testable without launching an application.
 
-What `F4` is willing to act on is decided by `PanelViewModel.editTargetItem()`, kept separate
+What `F4` is willing to act on is decided by `PanelViewModel.editTarget()`, kept separate
 from `preparedSelectedFileURL()` on purpose — Quick Look (`F3`) shares that one and stays
 files-only:
 
 | Selection | `open-folders` off | on |
 |---|---|---|
 | a file | opened (archive members extracted first) | same |
-| a folder, incl. `..` | nothing | opened |
+| a folder | nothing | opened |
+| the `..` row | nothing | the panel's current folder is opened, not the parent |
 | a folder inside a ZIP | nothing | nothing |
 
 Archive folders are excluded in both states: the editor would receive an extracted copy whose

@@ -134,7 +134,7 @@ struct PanelViewModelEditorTests {
         #expect(opener.requestedBundleIDs == ["com.apple.TextEdit"])
     }
 
-    @Test func editOpensTheParentRowWhenOpenFoldersIsOn() async {
+    @Test func editOnTheParentRowOpensTheCurrentFolderWhenOpenFoldersIsOn() async {
         // Arrange
         let opener = FakeFileOpeningService()
         let vm = PanelViewModel(
@@ -153,7 +153,29 @@ struct PanelViewModelEditorTests {
         await vm.openPreparedSelectedFileWithDefaultApp()
 
         // Assert
-        #expect(opener.openedURLs.map(\.path) == ["/tmp"])
+        #expect(opener.openedURLs.map(\.path) == ["/tmp/sub"])
+        #expect(opener.requestedBundleIDs == ["com.apple.TextEdit"])
+    }
+
+    @Test func editOnTheParentRowIsIgnoredWhenOpenFoldersIsOff() async {
+        // Arrange
+        let opener = FakeFileOpeningService()
+        let vm = PanelViewModel(
+            side: .left,
+            initialDirectory: URL(fileURLWithPath: "/tmp/sub", isDirectory: true),
+            fileSystemService: MockFileSystemService(items: []),
+            fileOpeningService: opener
+        )
+        vm.editorDefaultAppBundleID = "com.apple.TextEdit"
+        await vm.reload(.fresh)
+        let parentRow = vm.visibleItems.first { $0.isParentDirectory }
+        vm.state.cursor.selected = [parentRow?.id ?? UUID()]
+
+        // Act
+        await vm.openPreparedSelectedFileWithDefaultApp()
+
+        // Assert
+        #expect(opener.openedURLs.isEmpty)
     }
 
     @Test func editIgnoresAFolderInsideAnArchiveEvenWhenOpenFoldersIsOn() async {

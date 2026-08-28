@@ -598,31 +598,50 @@ package final class PanelViewModel {
     /// Opens the selected item (F4) with the configured editor, falling back
     /// to the system default handler when none is configured or installed.
     package func openPreparedSelectedFileWithDefaultApp() async {
-        guard let item = editTargetItem() else { return }
+        guard let target = editTarget() else { return }
         // A folder is handed over as-is; only archive members need extracting.
-        let url = item.isNavigableDirectory ? item.url : await preparedFileURL(for: item)
+        let url: URL?
+        switch target {
+        case .directory(let directoryURL):
+            url = directoryURL
+        case .item(let item):
+            url = await preparedFileURL(for: item)
+        }
         guard let url else { return }
         await fileOpeningService.open(url, preferredApplicationBundleID: editorDefaultAppBundleID)
     }
 
     /// Whether F4 currently has something to act on. Drives the command bar's
     /// Edit button, which would otherwise stay greyed out over a folder.
-    package var hasEditTarget: Bool { editTargetItem() != nil }
+    package var hasEditTarget: Bool { editTarget() != nil }
 
-    /// The item F4 acts on, or `nil` when F4 has nothing to do. Folders qualify
+    /// What F4 acts on: a folder handed straight to the editor, or a file that
+    /// may still need extracting from an archive.
+    private enum EditTarget {
+        case directory(URL)
+        case item(FileItem)
+    }
+
+    /// The target F4 acts on, or `nil` when F4 has nothing to do. Folders qualify
     /// only when `editorOpenFolders` is set, and never inside an archive: the
     /// editor would be handed an extracted copy whose edits never reach the
-    /// container. Kept separate from `preparedSelectedFileURL()`, which Quick
-    /// Look shares and which stays files-only.
-    private func editTargetItem() -> FileItem? {
+    /// container. On `..` the folder opened is the one the panel is showing, not
+    /// its parent — that row is where the eye lands, and the parent is one
+    /// keypress away anyway. Kept separate from `preparedSelectedFileURL()`,
+    /// which Quick Look shares and which stays files-only.
+    private func editTarget() -> EditTarget? {
         let ids = state.cursor.selected
         guard ids.count == 1, let id = ids.first else { return nil }
         guard let item = visibleItems.first(where: { $0.id == id }) else { return nil }
+        if item.isParentDirectory {
+            guard editorOpenFolders, !state.location.isArchive else { return nil }
+            return .directory(state.currentDirectory)
+        }
         if item.isNavigableDirectory {
             guard editorOpenFolders, item.archiveContainer == nil else { return nil }
-            return item
+            return .directory(item.url)
         }
-        return item.isParentDirectory ? nil : item
+        return .item(item)
     }
 
     private func singleSelectedNonDirectoryItem() -> FileItem? {
