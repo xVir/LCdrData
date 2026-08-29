@@ -9,6 +9,8 @@ Generation*.
 
 Written in SwiftUI, sandboxed, and built with Bazel.
 
+![main window](./docs/images/main.png)
+
 ## Requirements
 
 | | |
