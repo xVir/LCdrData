@@ -83,6 +83,9 @@ package struct MainWindowView: View {
                 pathEditingBlocksDelete: {
                     appState.activePanelViewModel.isPathBarEditing
                 },
+                pathEditingBlocksReturn: {
+                    appState.activePanelViewModel.isPathBarEditing
+                },
                 typeAhead: { handleTypeAheadKeyPress($0) }
             ))
             // MARK: - Confirmation Dialog
@@ -300,6 +303,7 @@ private struct KeyShortcutModifier: ViewModifier {
     package let onDeleteKeyNavigateParent: () -> Void
     package let onPermanentDelete: () -> Void
     package let pathEditingBlocksDelete: () -> Bool
+    package let pathEditingBlocksReturn: () -> Bool
     package let typeAhead: (KeyPress) -> KeyPress.Result
 
     package func body(content: Content) -> some View {
@@ -314,6 +318,10 @@ private struct KeyShortcutModifier: ViewModifier {
                 // up, let Return fall through to the dialog's default button
                 // instead of swallowing it for panel navigation.
                 guard keyboardRoutingActive else { return .ignored }
+                // Likewise while the path bar is being edited: Return there
+                // submits the typed path, and running the panel's own Return
+                // command as well would navigate somewhere else on top of it.
+                guard !pathEditingBlocksReturn() else { return .ignored }
                 onReturn()
                 return .handled
             }

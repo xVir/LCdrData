@@ -35,11 +35,22 @@ package struct PathBarView: View {
         .onChange(of: viewModel.isPathBarEditing) { _, editing in
             if editing {
                 editedPath = viewModel.state.location.displayPath
-                pathFieldFocused = true
+                // The text field is only installed once this update commits, so
+                // a focus request made here lands on a view that does not exist
+                // yet and is dropped. Ask again on the next run loop turn, once
+                // the field is in the hierarchy — the same reason
+                // `FileTableView` defers its own focus.
+                DispatchQueue.main.async {
+                    pathFieldFocused = true
+                }
+            } else {
+                pathFieldFocused = false
             }
         }
-        .onChange(of: pathFieldFocused) { _, focused in
-            if !focused {
+        .onChange(of: pathFieldFocused) { wasFocused, focused in
+            // Only a genuine loss of focus ends editing. The initial false is
+            // not a loss, and would otherwise cancel the mode we just entered.
+            if wasFocused && !focused {
                 viewModel.isPathBarEditing = false
             }
         }
