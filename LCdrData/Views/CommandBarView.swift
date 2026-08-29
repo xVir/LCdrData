@@ -55,6 +55,8 @@ package struct CommandBarView: View {
         let isEnabled: Bool
         let action: () -> Void
 
+        @State private var isHovering = false
+
         var body: some View {
             Button(action: action) {
                 HStack(spacing: 3) {
@@ -67,10 +69,28 @@ package struct CommandBarView: View {
                 .font(.caption)
                 .frame(maxWidth: .infinity)
                 .frame(height: 28)
+                .background(highlight)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(!isEnabled)
+            // A disabled command is not clickable, so it must not look
+            // clickable either — the hover tracking only applies when enabled.
+            .onHover { hovering in
+                isHovering = hovering && isEnabled
+            }
+            .onChange(of: isEnabled) { _, enabled in
+                if !enabled { isHovering = false }
+            }
+        }
+
+        @ViewBuilder
+        private var highlight: some View {
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color.primary.opacity(isHovering ? 0.08 : 0))
+                .padding(.horizontal, 2)
+                .padding(.vertical, 2)
+                .animation(.easeOut(duration: 0.12), value: isHovering)
         }
     }
 }
