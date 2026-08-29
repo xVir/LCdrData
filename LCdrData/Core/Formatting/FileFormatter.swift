@@ -6,17 +6,29 @@ package enum FileFormatter {
 
     // MARK: - Size Formatting
 
-    private static let byteCountFormatter: ByteCountFormatter = {
-        let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useAll]
-        formatter.countStyle = .file
-        return formatter
-    }()
+    private static let sizeUnits = ["b", "Kb", "Mb", "Gb", "Tb", "Pb", "Eb"]
 
-    /// Formats a byte count into a human-readable string (e.g. "4.2 MB").
+    /// Formats a byte count into a compact, space-free string (e.g. "4.2Mb", "512b").
     package static func formatSize(_ bytes: Int64?) -> String {
         guard let bytes else { return "--" }
-        return byteCountFormatter.string(fromByteCount: bytes)
+        if bytes < 1000 { return "\(bytes)b" }
+
+        var value = Double(bytes)
+        var unitIndex = 0
+        while value >= 1000 && unitIndex < sizeUnits.count - 1 {
+            value /= 1000
+            unitIndex += 1
+        }
+
+        var rounded = (value * 10).rounded() / 10
+        if rounded >= 1000 && unitIndex < sizeUnits.count - 1 {
+            rounded = (rounded / 1000 * 10).rounded() / 10
+            unitIndex += 1
+        }
+        let text = rounded == rounded.rounded()
+            ? String(format: "%.0f", rounded)
+            : String(format: "%.1f", rounded)
+        return text + sizeUnits[unitIndex]
     }
 
     // MARK: - Date Formatting

@@ -13,20 +13,30 @@ struct FileFormatterTests {
     }
 
     @Test func formatSizeZero() {
-        let result = FileFormatter.formatSize(0)
-        #expect(result == "Zero KB")
+        #expect(FileFormatter.formatSize(0) == "0b")
     }
 
     @Test func formatSizeBytes() {
-        let result = FileFormatter.formatSize(500)
-        // ByteCountFormatter may return "500 bytes" or similar
-        #expect(!result.isEmpty)
-        #expect(result != "--")
+        #expect(FileFormatter.formatSize(500) == "500b")
+    }
+
+    @Test func formatSizeKilobytes() {
+        #expect(FileFormatter.formatSize(1_000) == "1Kb")
+        #expect(FileFormatter.formatSize(1_500) == "1.5Kb")
     }
 
     @Test func formatSizeMegabytes() {
-        let result = FileFormatter.formatSize(5_000_000)
-        #expect(result.contains("MB") || result.contains("5"))
+        #expect(FileFormatter.formatSize(5_000_000) == "5Mb")
+        #expect(FileFormatter.formatSize(4_200_000) == "4.2Mb")
+    }
+
+    @Test func formatSizeLargerUnits() {
+        #expect(FileFormatter.formatSize(2_000_000_000) == "2Gb")
+        #expect(FileFormatter.formatSize(3_500_000_000_000) == "3.5Tb")
+    }
+
+    @Test func formatSizeRoundsUpToNextUnit() {
+        #expect(FileFormatter.formatSize(999_999) == "1Mb")
     }
 
     // MARK: - Date Formatting
