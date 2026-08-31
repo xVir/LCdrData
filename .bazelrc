@@ -12,6 +12,11 @@ test --test_output=errors
 
 build:release --compilation_mode=opt
 
+# CI caches. Bazel expands the leading `~` itself, so these paths can be checked
+# in; gating them behind a config keeps them out of local builds.
+common:ci --repository_cache=~/.cache/bazel-repo
+build:ci --disk_cache=~/.cache/bazel-disk
+
 # Per-machine overrides — a remote cache, a different Xcode, extra flags. Optional:
 # `try-import` is silent when the file is absent, and local.bazelrc is gitignored, so
 # a clone without it builds normally. A `--remote_cache` that cannot be reached is a

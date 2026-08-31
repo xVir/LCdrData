@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [main, develop]
 
-# Cancels redundant in-progress runs to save macOS runner minutes
+# Cancel redundant runs to save macOS runner minutes
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -27,9 +27,49 @@ jobs:
         run: |
           sudo xcode-select -switch /Applications/Xcode.app/Contents/Developer
           xcodebuild -version
+          # Every rules_apple action key embeds the SDK, so an image bump must
+          # rotate the cache key too.
+          echo "XCODE_BUILD=$(xcodebuild -version | tr '\n' ' ' | tr -s ' ' '-')" >> "$GITHUB_ENV"
+
+      # External archives plus the Bazel binary bazelisk fetches. Keyed on the
+      # manifests that decide what gets downloaded.
+      - name: Cache Bazel downloads
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/bazel-repo
+            ~/Library/Caches/bazelisk
+          key: bazel-downloads-${{ runner.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'MODULE.bazel.lock', 'Tuist/Package.swift', 'Tuist/Package.resolved') }}
+          restore-keys: |
+            bazel-downloads-${{ runner.os }}-
+
+      # Build outputs and test results. Cache entries are immutable, so the run id
+      # forces a fresh save and restore-keys picks up the previous entry.
+      - name: Cache Bazel disk cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/bazel-disk
+          key: bazel-disk-${{ runner.os }}-${{ env.XCODE_BUILD }}-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            bazel-disk-${{ runner.os }}-${{ env.XCODE_BUILD }}-${{ github.ref_name }}-
+            bazel-disk-${{ runner.os }}-${{ env.XCODE_BUILD }}-
 
       - name: Bazel version
         run: bazel --version
 
       - name: Run unit tests
-        run: bazel test //LCdrDataTests/... --test_output=errors --keep_going
+        run: bazel test --config=ci //LCdrDataTests/... --test_output=errors --keep_going
+
+      # The disk cache is append-only; without this it grows past the 10 GB
+      # per-repo limit.
+      - name: Prune disk cache
+        if: always()
+        run: |
+          [ -d "$HOME/.cache/bazel-disk" ] || exit 0
+          find "$HOME/.cache/bazel-disk" -type f -atime +7 -delete 2>/dev/null || true
+          echo "disk cache size: $(du -sh "$HOME/.cache/bazel-disk" | cut -f1)"
+
+      # Release the output base before actions/cache packs it in its post step.
+      - name: Shut down Bazel
+        if: always()
+        run: bazel shutdown || true
