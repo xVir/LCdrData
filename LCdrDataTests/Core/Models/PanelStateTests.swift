@@ -103,4 +103,20 @@ struct PanelStateTests {
         #expect(state.activeTabIndex == 1)
         #expect(state.activeTab?.location == .directory(URL(fileURLWithPath: "/tmp/second")))
     }
+
+    @Test func movingTabsReordersTheCollectionAndKeepsTheActiveTabInSync() {
+        // Arrange
+        var state = PanelState(currentDirectory: URL(fileURLWithPath: "/tmp/first"))
+        state.appendTab(at: 1, location: .directory(URL(fileURLWithPath: "/tmp/second")))
+        state.appendTab(at: 2, location: .directory(URL(fileURLWithPath: "/tmp/third")))
+        state.activateTab(at: 0)
+
+        // Act
+        state.moveTab(from: 0, to: 2)
+
+        // Assert
+        #expect(state.tabs.map(\ .location.persistentDirectory.lastPathComponent) == ["second", "third", "first"])
+        #expect(state.activeTabIndex == 2)
+        #expect(state.activeTab?.location == .directory(URL(fileURLWithPath: "/tmp/first")))
+    }
 }

@@ -191,6 +191,9 @@ package final class PanelViewModel {
             state.showHiddenFiles = active.showHiddenFiles
             state.items = active.items ?? state.items
         }
+        Task { [weak self] in
+            await self?.reload(.keepSelection)
+        }
     }
 
     /// Closes every tab except the selected one.

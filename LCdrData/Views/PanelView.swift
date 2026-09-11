@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 import Services
@@ -134,6 +135,9 @@ package struct PanelView: View {
                         : Color.clear
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .background(MiddleClickCloseCapture {
+                    Task { await viewModel.closeTab(at: index) }
+                })
                 .onDrag {
                     let provider = NSItemProvider(object: "\(viewModel.side.identifier):\(index)" as NSString)
                     provider.suggestedName = tab.title
@@ -165,13 +169,26 @@ package struct PanelView: View {
                                 sourcePanel.state.tabs = [PanelTab(location: sourcePanel.state.location)]
                                 sourcePanel.state.activeTabIndex = 0
                             }
-                            viewModel.state.tabs.insert(movedTab, at: min(index, viewModel.state.tabs.count))
-                            viewModel.state.activeTabIndex = min(index, viewModel.state.tabs.count - 1)
+                            if let active = sourcePanel.state.activeTab {
+                                sourcePanel.state.location = active.location
+                                sourcePanel.state.cursor = active.cursor
+                                sourcePanel.state.sortDescriptor = active.sortDescriptor
+                                sourcePanel.state.showHiddenFiles = active.showHiddenFiles
+                                sourcePanel.state.items = active.items ?? sourcePanel.state.items
+                            }
+
+                            let destinationIndex = min(index, viewModel.state.tabs.count)
+                            viewModel.state.tabs.insert(movedTab, at: destinationIndex)
+                            viewModel.state.activeTabIndex = destinationIndex
                             if let active = viewModel.state.activeTab {
                                 viewModel.state.location = active.location
                                 viewModel.state.cursor = active.cursor
                                 viewModel.state.sortDescriptor = active.sortDescriptor
                                 viewModel.state.showHiddenFiles = active.showHiddenFiles
+                                viewModel.state.items = active.items ?? viewModel.state.items
+                            }
+                            Task { @MainActor in
+                                await viewModel.activateTab(at: destinationIndex)
                             }
                         }
                     }
@@ -200,6 +217,42 @@ package struct PanelView: View {
             }
             .padding(2)
             .frame(height: 26)
+        }
+    }
+
+    private struct MiddleClickCloseCapture: NSViewRepresentable {
+        let onMiddleClick: () -> Void
+
+        func makeNSView(context: Context) -> NSView {
+            let view = MiddleClickTrackingView(onMiddleClick: onMiddleClick)
+            view.isHidden = false
+            return view
+        }
+
+        func updateNSView(_ nsView: NSView, context: Context) {
+            guard let trackingView = nsView as? MiddleClickTrackingView else { return }
+            trackingView.onMiddleClick = onMiddleClick
+        }
+    }
+
+    private final class MiddleClickTrackingView: NSView {
+        var onMiddleClick: () -> Void
+
+        init(onMiddleClick: @escaping () -> Void) {
+            self.onMiddleClick = onMiddleClick
+            super.init(frame: .zero)
+        }
+
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        override func mouseDown(with event: NSEvent) {
+            if event.buttonNumber == 2 {
+                onMiddleClick()
+                return
+            }
+            super.mouseDown(with: event)
         }
     }
 
