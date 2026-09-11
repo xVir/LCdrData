@@ -59,4 +59,48 @@ struct PanelStateTests {
         #expect(state.location == .directory(url))
         #expect(state.locationHistory == [.directory(url)])
     }
+
+    @Test func defaultStateCreatesSingleActiveTab() {
+        // Arrange
+        let url = URL(fileURLWithPath: "/tmp")
+
+        // Act
+        let state = PanelState(currentDirectory: url)
+
+        // Assert
+        #expect(state.tabs.count == 1)
+        #expect(state.activeTabIndex == 0)
+        #expect(state.activeTab?.location == .directory(url))
+        #expect(state.isTabBarVisible == false)
+    }
+
+    @Test func appendingTabsKeepsActiveTabAndTabBarVisible() {
+        // Arrange
+        var state = PanelState(currentDirectory: URL(fileURLWithPath: "/tmp/left"))
+
+        // Act
+        state.appendTab(at: 1, location: .directory(URL(fileURLWithPath: "/tmp/right")))
+
+        // Assert
+        #expect(state.tabs.count == 2)
+        #expect(state.activeTabIndex == 1)
+        #expect(state.activeTab?.location == .directory(URL(fileURLWithPath: "/tmp/right")))
+        #expect(state.isTabBarVisible == true)
+    }
+
+    @Test func closingActiveTabChoosesNearestSurvivingTab() {
+        // Arrange
+        var state = PanelState(currentDirectory: URL(fileURLWithPath: "/tmp/first"))
+        state.appendTab(at: 1, location: .directory(URL(fileURLWithPath: "/tmp/second")))
+        state.appendTab(at: 2, location: .directory(URL(fileURLWithPath: "/tmp/third")))
+        state.activateTab(at: 2)
+
+        // Act
+        state.closeTab(at: 2)
+
+        // Assert
+        #expect(state.tabs.count == 2)
+        #expect(state.activeTabIndex == 1)
+        #expect(state.activeTab?.location == .directory(URL(fileURLWithPath: "/tmp/second")))
+    }
 }

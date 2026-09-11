@@ -7,7 +7,7 @@ import Foundation
 ///
 /// All cursor mechanics — both user-event mutations (clicks, arrow keys, type-ahead)
 /// and reload-time resolution — live on this value type.
-package struct Cursor: Sendable, Equatable {
+package struct Cursor: Sendable, Equatable, Hashable {
     package var focused: UUID?
     package var selected: Set<UUID>
 
