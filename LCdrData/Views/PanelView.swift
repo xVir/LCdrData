@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import Services
 import ViewModels
 import AppEnvironment
@@ -73,48 +74,132 @@ package struct PanelView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 4) {
                 ForEach(Array(viewModel.state.tabs.enumerated()), id: \.element.id) { index, tab in
-                    HStack(spacing: 6) {
-                        Button {
-                            Task { await viewModel.activateTab(at: index) }
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "folder.fill")
-                                    .font(.system(size: 11))
-                                Text(tab.title)
-                                    .font(.system(size: 12, weight: index == viewModel.state.activeTabIndex ? .semibold : .regular))
-                                    .lineLimit(1)
-                                    .frame(maxWidth: 150)
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(index == viewModel.state.activeTabIndex ? .primary : .secondary)
-                        .frame(height: 24)
-                        .background(
-                            index == viewModel.state.activeTabIndex
-                                ? Color.accentColor.opacity(0.18)
-                                : Color.clear
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-
-                        if viewModel.state.tabs.count > 1 {
-                            Button {
-                                Task { await viewModel.closeTab(at: index) }
-                            } label: {
-                                Image(systemName: "xmark")
-                                    .font(.system(size: 10, weight: .bold))
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(.secondary)
-                            .padding(.trailing, 8)
-                        }
-                    }
-                    .padding(2)
-                    .frame(height: 26)
+                    TabBarItemView(
+                        viewModel: viewModel,
+                        appState: appState,
+                        index: index,
+                        tab: tab
+                    )
                 }
             }
             .frame(maxHeight: .infinity, alignment: .center)
+        }
+    }
+
+    private struct TabBarItemView: View {
+        let viewModel: PanelViewModel
+        let appState: AppState
+        let index: Int
+        let tab: PanelTab
+
+        @State private var isHovered = false
+
+        var body: some View {
+            HStack(spacing: 6) {
+                if viewModel.state.tabs.count > 1 {
+                    Button {
+                        Task { await viewModel.closeTab(at: index) }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .bold))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 8)
+                    .opacity(isHovered ? 1 : 0)
+                    .frame(width: isHovered ? 14 : 0)
+                    .animation(.easeInOut(duration: 0.12), value: isHovered)
+                }
+
+                Button {
+                    Task { await viewModel.activateTab(at: index) }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "folder.fill")
+                            .font(.system(size: 11))
+                        Text(tab.title)
+                            .font(.system(size: 12, weight: index == viewModel.state.activeTabIndex ? .semibold : .regular))
+                            .lineLimit(1)
+                            .frame(maxWidth: 150)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(index == viewModel.state.activeTabIndex ? .primary : .secondary)
+                .frame(height: 24)
+                .background(
+                    index == viewModel.state.activeTabIndex
+                        ? Color.accentColor.opacity(0.18)
+                        : Color.clear
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .onDrag {
+                    let provider = NSItemProvider(object: "\(viewModel.side.identifier):\(index)" as NSString)
+                    provider.suggestedName = tab.title
+                    return provider
+                }
+                .onDrop(of: [UTType.text], isTargeted: nil) { providers in
+                    guard let provider = providers.first else { return false }
+                    provider.loadObject(ofClass: NSString.self) { item, _ in
+                        guard let value = item as? String else { return }
+                        let payload = value.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
+                        guard payload.count == 2,
+                              let sourceSide = payload.first,
+                              let sourceIndex = Int(payload[1]) else { return }
+
+                        let sourceSideID = String(sourceSide)
+                        let fromSide: PanelSide = sourceSideID == PanelSide.left.identifier ? .left : .right
+                        if fromSide.identifier == viewModel.side.identifier {
+                            Task { @MainActor in
+                                viewModel.moveTab(from: sourceIndex, to: index)
+                            }
+                        } else {
+                            let sourcePanel = fromSide.identifier == PanelSide.left.identifier ? appState.leftPanel : appState.rightPanel
+                            let movedTab = sourcePanel.state.tabs[sourceIndex]
+                            sourcePanel.state.tabs.remove(at: sourceIndex)
+                            if sourcePanel.state.activeTabIndex >= sourceIndex {
+                                sourcePanel.state.activeTabIndex = max(0, sourcePanel.state.activeTabIndex - 1)
+                            }
+                            if sourcePanel.state.tabs.isEmpty {
+                                sourcePanel.state.tabs = [PanelTab(location: sourcePanel.state.location)]
+                                sourcePanel.state.activeTabIndex = 0
+                            }
+                            viewModel.state.tabs.insert(movedTab, at: min(index, viewModel.state.tabs.count))
+                            viewModel.state.activeTabIndex = min(index, viewModel.state.tabs.count - 1)
+                            if let active = viewModel.state.activeTab {
+                                viewModel.state.location = active.location
+                                viewModel.state.cursor = active.cursor
+                                viewModel.state.sortDescriptor = active.sortDescriptor
+                                viewModel.state.showHiddenFiles = active.showHiddenFiles
+                            }
+                        }
+                    }
+                    return true
+                }
+                .contextMenu {
+                    Button("New Tab") {
+                        Task { await viewModel.createTab(from: index) }
+                    }
+                    Button("Close Tab") {
+                        Task { await viewModel.closeTab(at: index) }
+                    }
+                    Button("Close Other Tabs") {
+                        Task { await viewModel.closeOtherTabs(excluding: index) }
+                    }
+                    Button("Close Tabs to the Right") {
+                        Task { await viewModel.closeTabsToRight(from: index) }
+                    }
+                    Button("Copy Path") {
+                        viewModel.copyTabPath(at: index)
+                    }
+                }
+                .onHover { hovering in
+                    isHovered = hovering
+                }
+            }
+            .padding(2)
+            .frame(height: 26)
         }
     }
 

@@ -179,6 +179,77 @@ package final class PanelViewModel {
         currentSession = nil
     }
 
+    /// Moves a tab within this panel's collection, updating the active index if needed.
+    package func moveTab(from sourceIndex: Int, to destinationIndex: Int) {
+        guard state.tabs.indices.contains(sourceIndex) else { return }
+        let clampedDestination = max(0, min(destinationIndex, state.tabs.count - 1))
+        state.moveTab(from: sourceIndex, to: clampedDestination)
+        if let active = state.activeTab {
+            state.location = active.location
+            state.cursor = active.cursor
+            state.sortDescriptor = active.sortDescriptor
+            state.showHiddenFiles = active.showHiddenFiles
+            state.items = active.items ?? state.items
+        }
+    }
+
+    /// Closes every tab except the selected one.
+    package func closeOtherTabs(excluding index: Int) async {
+        guard state.tabs.count > 1 else { return }
+        let validIndex = max(0, min(index, state.tabs.count - 1))
+        let keep = state.tabs[validIndex]
+        state.tabs = [keep]
+        state.activeTabIndex = 0
+        state.location = keep.location
+        state.cursor = keep.cursor
+        state.sortDescriptor = keep.sortDescriptor
+        state.showHiddenFiles = keep.showHiddenFiles
+        state.items = keep.items ?? state.items
+        await reload(.keepSelection)
+    }
+
+    /// Closes all tabs to the right of the given index.
+    package func closeTabsToRight(from index: Int) async {
+        guard state.tabs.count > 1 else { return }
+        let validIndex = max(0, min(index, state.tabs.count - 1))
+        let keepCount = validIndex + 1
+        let remaining = Array(state.tabs.prefix(keepCount))
+        state.tabs = remaining
+        if state.activeTabIndex >= state.tabs.count {
+            state.activeTabIndex = max(0, state.tabs.count - 1)
+        }
+        if let active = state.activeTab {
+            state.location = active.location
+            state.cursor = active.cursor
+            state.sortDescriptor = active.sortDescriptor
+            state.showHiddenFiles = active.showHiddenFiles
+            state.items = active.items ?? state.items
+        }
+        await reload(.keepSelection)
+    }
+
+    /// Returns the path for the tab at the given index, if present.
+    package func tabPath(at index: Int) -> String? {
+        guard state.tabs.indices.contains(index) else { return nil }
+        return state.tabs[index].location.persistentDirectory.path
+    }
+
+    /// Copies the current tab's path to the clipboard.
+    package func copyCurrentTabPath() {
+        guard let path = tabPath(at: state.activeTabIndex) else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(path, forType: .string)
+    }
+
+    /// Copies the requested tab's path to the clipboard.
+    package func copyTabPath(at index: Int) {
+        guard let path = tabPath(at: index) else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(path, forType: .string)
+    }
+
     /// Replaces the panel's tab list with a saved snapshot and activates the requested index.
     package func restoreTabs(from paths: [String], fallbackDirectory: URL, activeIndex: Int = 0) {
         let resolved = paths.compactMap { path -> URL? in
@@ -254,26 +325,40 @@ package final class PanelViewModel {
         state.tabs[state.activeTabIndex] = tab
     }
 
-    /// Creates a new tab cloned from the active view state and switches to it.
-    package func createTab() async {
+    /// Creates a new tab cloned from the target tab's view state and switches to it.
+    /// If no index is supplied, the active tab is used.
+    package func createTab(from index: Int? = nil) async {
         snapshotActiveTab()
-        let currentTab = state.activeTab ?? PanelTab(location: state.location)
+
+        let sourceIndex = index ?? state.activeTabIndex
+        let safeIndex = state.tabs.indices.contains(sourceIndex)
+            ? sourceIndex
+            : max(0, min(state.activeTabIndex, state.tabs.count - 1))
+        let sourceTab = state.tabs[safeIndex]
         let newTab = PanelTab(
             id: UUID(),
-            location: currentTab.location,
-            title: currentTab.title,
-            viewMode: currentTab.viewMode,
-            cursor: currentTab.cursor,
-            sortDescriptor: currentTab.sortDescriptor,
-            showHiddenFiles: currentTab.showHiddenFiles,
-            scrollOffset: currentTab.scrollOffset,
-            columns: currentTab.columns,
-            items: currentTab.items
+            location: sourceTab.location,
+            title: sourceTab.title,
+            viewMode: sourceTab.viewMode,
+            cursor: sourceTab.cursor,
+            sortDescriptor: sourceTab.sortDescriptor,
+            showHiddenFiles: sourceTab.showHiddenFiles,
+            scrollOffset: sourceTab.scrollOffset,
+            columns: sourceTab.columns,
+            items: sourceTab.items
         )
 
-        let insertionIndex = min(state.activeTabIndex + 1, state.tabs.count)
+        let insertionIndex = min(safeIndex + 1, state.tabs.count)
         state.tabs.insert(newTab, at: insertionIndex)
         state.activeTabIndex = insertionIndex
+
+        let active = state.activeTab ?? newTab
+        state.location = active.location
+        state.cursor = active.cursor
+        state.sortDescriptor = active.sortDescriptor
+        state.showHiddenFiles = active.showHiddenFiles
+        state.items = active.items ?? state.items
+
         await reload(.fresh)
     }
 
