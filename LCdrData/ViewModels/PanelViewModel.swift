@@ -179,6 +179,41 @@ package final class PanelViewModel {
         currentSession = nil
     }
 
+    /// Replaces the panel's tab list with a saved snapshot and activates the requested index.
+    package func restoreTabs(from paths: [String], fallbackDirectory: URL, activeIndex: Int = 0) {
+        let resolved = paths.compactMap { path -> URL? in
+            let candidate = URL(fileURLWithPath: path, isDirectory: true)
+            guard FileManager.default.fileExists(atPath: candidate.path) else { return nil }
+            return candidate
+        }
+
+        let tabs = (resolved.isEmpty ? [fallbackDirectory] : resolved).enumerated().map { index, url in
+            PanelTab(
+                id: UUID(),
+                location: .directory(url),
+                title: url.lastPathComponent.isEmpty ? "Home" : url.lastPathComponent,
+                cursor: index == 0 ? state.cursor : Cursor(),
+                sortDescriptor: state.sortDescriptor,
+                showHiddenFiles: state.showHiddenFiles,
+                items: nil
+            )
+        }
+
+        guard !tabs.isEmpty else { return }
+        state.tabs = tabs
+        state.activeTabIndex = min(max(activeIndex, 0), state.tabs.count - 1)
+        let active = state.activeTab ?? tabs[0]
+        state.location = active.location
+        state.cursor = active.cursor
+        state.sortDescriptor = active.sortDescriptor
+        state.showHiddenFiles = active.showHiddenFiles
+    }
+
+    /// Returns the currently persisted tab snapshot for this panel.
+    package func tabPathsForSession() -> [String] {
+        state.tabs.map { $0.location.persistentDirectory.path }
+    }
+
     /// Replaces `currentSession` with a fresh one for the panel's directory.
     /// The old session's `deinit` releases scope and cancels the watcher.
     /// Background fs changes trigger a reload through the same path used after
@@ -204,6 +239,86 @@ package final class PanelViewModel {
 
     /// Items shown in the file list (same as `state.items`; kept for call sites).
     package var visibleItems: [FileItem] { state.items }
+
+    /// Saves the currently live panel view into the active tab before the panel
+    /// changes context or closes.
+    private func snapshotActiveTab() {
+        guard state.tabs.indices.contains(state.activeTabIndex) else { return }
+        var tab = state.tabs[state.activeTabIndex]
+        tab.location = state.location
+        tab.title = state.location.persistentDirectory.lastPathComponent
+        tab.cursor = state.cursor
+        tab.sortDescriptor = state.sortDescriptor
+        tab.showHiddenFiles = state.showHiddenFiles
+        tab.items = state.items
+        state.tabs[state.activeTabIndex] = tab
+    }
+
+    /// Creates a new tab cloned from the active view state and switches to it.
+    package func createTab() async {
+        snapshotActiveTab()
+        let currentTab = state.activeTab ?? PanelTab(location: state.location)
+        let newTab = PanelTab(
+            id: UUID(),
+            location: currentTab.location,
+            title: currentTab.title,
+            viewMode: currentTab.viewMode,
+            cursor: currentTab.cursor,
+            sortDescriptor: currentTab.sortDescriptor,
+            showHiddenFiles: currentTab.showHiddenFiles,
+            scrollOffset: currentTab.scrollOffset,
+            columns: currentTab.columns,
+            items: currentTab.items
+        )
+
+        let insertionIndex = min(state.activeTabIndex + 1, state.tabs.count)
+        state.tabs.insert(newTab, at: insertionIndex)
+        state.activeTabIndex = insertionIndex
+        await reload(.fresh)
+    }
+
+    /// Closes a specific tab, selecting the nearest surviving tab if needed.
+    package func closeTab(at index: Int) async {
+        guard state.tabs.count > 1 else { return }
+        snapshotActiveTab()
+        let currentIndex = state.activeTabIndex
+        state.closeTab(at: index)
+        if state.tabs.isEmpty {
+            let fallback = PanelTab(location: state.location)
+            state.tabs = [fallback]
+            state.activeTabIndex = 0
+        } else if currentIndex == index {
+            state.activeTabIndex = min(max(0, state.activeTabIndex), state.tabs.count - 1)
+        }
+        await reload(.keepSelection)
+    }
+
+    /// Closes the active tab, replacing it with the nearest surviving tab.
+    package func closeActiveTab() async {
+        await closeTab(at: state.activeTabIndex)
+    }
+
+    /// Switches to the next tab in the panel, wrapping around the collection.
+    package func activateNextTab() {
+        guard !state.tabs.isEmpty else { return }
+        let nextIndex = (state.activeTabIndex + 1) % state.tabs.count
+        Task { await activateTab(at: nextIndex) }
+    }
+
+    /// Switches to the previous tab in the panel, wrapping around the collection.
+    package func activatePreviousTab() {
+        guard !state.tabs.isEmpty else { return }
+        let previousIndex = (state.activeTabIndex - 1 + state.tabs.count) % state.tabs.count
+        Task { await activateTab(at: previousIndex) }
+    }
+
+    /// Switches the panel to a specific tab and reloads its listing.
+    package func activateTab(at index: Int) async {
+        guard state.tabs.indices.contains(index) else { return }
+        snapshotActiveTab()
+        state.activateTab(at: index)
+        await reload(.keepSelection)
+    }
 
     /// Navigates into a directory, pushing to history. On permission error
     /// the panel offers the user the reactive grant prompt; if access isn't

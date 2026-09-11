@@ -17,6 +17,12 @@ package enum Command: Equatable {
     case goToPath
     case refresh
 
+    // Tabs
+    case newTab
+    case closeTab
+    case nextTab
+    case previousTab
+
     // Open / view
     case open
     case openItem(FileItem)

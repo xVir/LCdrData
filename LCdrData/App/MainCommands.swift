@@ -60,6 +60,13 @@ struct MainCommands: Commands {
 
             Divider()
 
+            commandButton("New Tab", .newTab)
+            commandButton("Close Tab", .closeTab)
+            commandButton("Next Tab", .nextTab)
+            commandButton("Previous Tab", .previousTab)
+
+            Divider()
+
             commandButton("Back", .back)
             commandButton("Forward", .forward)
 
