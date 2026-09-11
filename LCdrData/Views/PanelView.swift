@@ -68,9 +68,13 @@ package struct PanelView: View {
     // MARK: - Tab bar
 
     private var tabBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        GeometryReader { geometry in
+            let tabs = viewModel.state.tabs
+            let separatorWidth = CGFloat(max(0, tabs.count - 1))
+            let tabWidth = max(1, (geometry.size.width - separatorWidth) / CGFloat(tabs.count))
+
             HStack(spacing: 1) {
-                ForEach(Array(viewModel.state.tabs.enumerated()), id: \.element.id) { index, tab in
+                ForEach(Array(tabs.enumerated()), id: \.element.id) { index, tab in
                     if index > 0 {
                         Rectangle()
                             .fill(Color.secondary.opacity(0.35))
@@ -81,11 +85,12 @@ package struct PanelView: View {
                         viewModel: viewModel,
                         appState: appState,
                         index: index,
-                        tab: tab
+                        tab: tab,
+                        width: tabWidth
                     )
                 }
             }
-            .frame(maxHeight: .infinity, alignment: .center)
+            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .center)
         }
     }
 
@@ -94,8 +99,10 @@ package struct PanelView: View {
         let appState: AppState
         let index: Int
         let tab: PanelTab
+        let width: CGFloat
 
         @State private var isHovered = false
+        @State private var isDropTargeted = false
 
         var body: some View {
             ZStack(alignment: .leading) {
@@ -105,7 +112,7 @@ package struct PanelView: View {
                     Text(tab.title)
                         .font(.system(size: 12, weight: index == viewModel.state.activeTabIndex ? .semibold : .regular))
                         .lineLimit(1)
-                        .frame(minWidth: 110, maxWidth: 160)
+                        .frame(maxWidth: .infinity)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
                 }
@@ -121,12 +128,21 @@ package struct PanelView: View {
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
                 .contentShape(Rectangle())
+                .overlay(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.accentColor)
+                        .frame(width: 3, height: 22)
+                        .opacity(isDropTargeted ? 1 : 0)
+                        .scaleEffect(x: isDropTargeted ? 1 : 0.5)
+                }
+                .animation(.easeOut(duration: 0.15), value: isDropTargeted)
+                .frame(width: width, height: 24)
                 .onDrag {
                     let provider = NSItemProvider(object: "\(viewModel.side.identifier):\(index)" as NSString)
                     provider.suggestedName = tab.title
                     return provider
                 }
-                .onDrop(of: [UTType.text], isTargeted: nil) { providers in
+                .onDrop(of: [UTType.text], isTargeted: $isDropTargeted) { providers in
                     guard let provider = providers.first else { return false }
                     provider.loadObject(ofClass: NSString.self) { item, _ in
                         guard let value = item as? String else { return }

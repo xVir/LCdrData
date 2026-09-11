@@ -37,7 +37,7 @@ struct MainCommands: Commands {
             }
         }
 
-        CommandGroup(replacing: .windowArrangement) {
+        CommandGroup(replacing: .windowList) {
             Button("Close Tab") {
                 focused?.commands.perform(.closeTab)
             }
