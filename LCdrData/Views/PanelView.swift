@@ -75,6 +75,12 @@ package struct PanelView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 4) {
                 ForEach(Array(viewModel.state.tabs.enumerated()), id: \.element.id) { index, tab in
+                    if index > 0 {
+                        Rectangle()
+                            .fill(Color.secondary.opacity(0.35))
+                            .frame(width: 1, height: 18)
+                    }
+
                     TabBarItemView(
                         viewModel: viewModel,
                         appState: appState,
@@ -113,9 +119,11 @@ package struct PanelView: View {
                 .background(
                     index == viewModel.state.activeTabIndex
                         ? Color.accentColor.opacity(0.18)
+                        : isHovered
+                            ? Color.primary.opacity(0.08)
                         : Color.clear
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
                 .contentShape(Rectangle())
                 .onDrag {
                     let provider = NSItemProvider(object: "\(viewModel.side.identifier):\(index)" as NSString)
