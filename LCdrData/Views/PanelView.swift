@@ -96,35 +96,16 @@ package struct PanelView: View {
         @State private var isHovered = false
 
         var body: some View {
-            HStack(spacing: 6) {
-                if viewModel.state.tabs.count > 1 {
-                    Button {
-                        Task { await viewModel.closeTab(at: index) }
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 10, weight: .bold))
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                    .padding(.leading, 8)
-                    .opacity(isHovered ? 1 : 0)
-                    .frame(width: isHovered ? 14 : 0)
-                    .animation(.easeInOut(duration: 0.12), value: isHovered)
-                }
-
+            ZStack(alignment: .leading) {
                 Button {
                     Task { await viewModel.activateTab(at: index) }
                 } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "folder.fill")
-                            .font(.system(size: 11))
-                        Text(tab.title)
-                            .font(.system(size: 12, weight: index == viewModel.state.activeTabIndex ? .semibold : .regular))
-                            .lineLimit(1)
-                            .frame(maxWidth: 150)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
+                    Text(tab.title)
+                        .font(.system(size: 12, weight: index == viewModel.state.activeTabIndex ? .semibold : .regular))
+                        .lineLimit(1)
+                        .frame(minWidth: 110, maxWidth: 160)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(index == viewModel.state.activeTabIndex ? .primary : .secondary)
@@ -135,9 +116,7 @@ package struct PanelView: View {
                         : Color.clear
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .background(MiddleClickCloseCapture {
-                    Task { await viewModel.closeTab(at: index) }
-                })
+                .contentShape(Rectangle())
                 .onDrag {
                     let provider = NSItemProvider(object: "\(viewModel.side.identifier):\(index)" as NSString)
                     provider.suggestedName = tab.title
@@ -211,48 +190,33 @@ package struct PanelView: View {
                         viewModel.copyTabPath(at: index)
                     }
                 }
-                .onHover { hovering in
-                    isHovered = hovering
+
+                if viewModel.state.tabs.count > 1 {
+                    Button {
+                        Task { await viewModel.closeTab(at: index) }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .bold))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .frame(width: isHovered ? 14 : 0, height: 14)
+                    .padding(.leading, 8)
+                    .padding(.trailing, 6)
+                    .opacity(isHovered ? 1 : 0)
+                    .allowsHitTesting(isHovered)
+                    .zIndex(2)
                 }
             }
-            .padding(2)
             .frame(height: 26)
-        }
-    }
-
-    private struct MiddleClickCloseCapture: NSViewRepresentable {
-        let onMiddleClick: () -> Void
-
-        func makeNSView(context: Context) -> NSView {
-            let view = MiddleClickTrackingView(onMiddleClick: onMiddleClick)
-            view.isHidden = false
-            return view
-        }
-
-        func updateNSView(_ nsView: NSView, context: Context) {
-            guard let trackingView = nsView as? MiddleClickTrackingView else { return }
-            trackingView.onMiddleClick = onMiddleClick
-        }
-    }
-
-    private final class MiddleClickTrackingView: NSView {
-        var onMiddleClick: () -> Void
-
-        init(onMiddleClick: @escaping () -> Void) {
-            self.onMiddleClick = onMiddleClick
-            super.init(frame: .zero)
-        }
-
-        required init?(coder: NSCoder) {
-            fatalError("init(coder:) has not been implemented")
-        }
-
-        override func mouseDown(with event: NSEvent) {
-            if event.buttonNumber == 2 {
-                onMiddleClick()
-                return
+            .padding(2)
+            .contentShape(Rectangle())
+            .onHover { hovering in
+                isHovered = hovering
             }
-            super.mouseDown(with: event)
+            .onTapGesture {
+                Task { await viewModel.activateTab(at: index) }
+            }
         }
     }
 

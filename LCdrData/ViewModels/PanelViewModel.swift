@@ -149,6 +149,7 @@ package final class PanelViewModel {
                 previousListing: previousListing,
                 previousCursor: previousCursor
             )
+            updateActiveTabMetadata()
             adoptDirectorySession()
         } catch {
             if state.location.isArchive {
@@ -320,12 +321,29 @@ package final class PanelViewModel {
         guard state.tabs.indices.contains(state.activeTabIndex) else { return }
         var tab = state.tabs[state.activeTabIndex]
         tab.location = state.location
-        tab.title = state.location.persistentDirectory.lastPathComponent
+        tab.title = title(for: state.location)
         tab.cursor = state.cursor
         tab.sortDescriptor = state.sortDescriptor
         tab.showHiddenFiles = state.showHiddenFiles
         tab.items = state.items
         state.tabs[state.activeTabIndex] = tab
+    }
+
+    private func updateActiveTabMetadata() {
+        guard state.tabs.indices.contains(state.activeTabIndex) else { return }
+        var tab = state.tabs[state.activeTabIndex]
+        tab.location = state.location
+        tab.title = title(for: state.location)
+        tab.cursor = state.cursor
+        tab.sortDescriptor = state.sortDescriptor
+        tab.showHiddenFiles = state.showHiddenFiles
+        tab.items = state.items
+        state.tabs[state.activeTabIndex] = tab
+    }
+
+    private func title(for location: BrowseLocation) -> String {
+        let name = location.persistentDirectory.lastPathComponent
+        return name.isEmpty ? location.persistentDirectory.path : name
     }
 
     /// Creates a new tab cloned from the target tab's view state and switches to it.
