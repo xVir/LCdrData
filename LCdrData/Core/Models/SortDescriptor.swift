@@ -1,7 +1,7 @@
 import Foundation
 
 /// Describes how a file panel's items are sorted.
-package struct FileSortDescriptor: Equatable, Sendable {
+package struct FileSortDescriptor: Equatable, Hashable, Sendable {
     package enum Column: String, CaseIterable {
         case name
         case size

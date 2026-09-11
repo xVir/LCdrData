@@ -32,6 +32,14 @@ package struct CommandRunner {
             active.isPathBarEditing = true
         case .refresh:
             Task { await active.reload(.fresh) }
+        case .newTab:
+            Task { await active.createTab() }
+        case .closeTab:
+            Task { await active.closeActiveTab() }
+        case .nextTab:
+            active.activateNextTab()
+        case .previousTab:
+            active.activatePreviousTab()
 
         case .open:
             Task { await active.openSelectedItem() }
@@ -107,7 +115,8 @@ package struct CommandRunner {
         case .newFolder:
             return active.isLocationWritable
         case .open, .goToParent, .goToPath, .refresh,
-             .selectAll, .deselectAll, .toggleHidden:
+             .selectAll, .deselectAll, .toggleHidden,
+             .newTab, .closeTab, .nextTab, .previousTab:
             return true
         }
     }

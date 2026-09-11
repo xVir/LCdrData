@@ -37,6 +37,14 @@ struct MainCommands: Commands {
             }
         }
 
+        CommandGroup(replacing: .windowList) {
+            Button("Close Tab") {
+                focused?.commands.perform(.closeTab)
+            }
+            .keyboardShortcut("w", modifiers: .command)
+            .disabled(focused == nil)
+        }
+
         CommandMenu("Favorites") {
             let entries = env.configuration.current.bookmarkEntries
             if entries.isEmpty {
@@ -57,6 +65,12 @@ struct MainCommands: Commands {
             commandButton("Go to Parent Directory", .goToParent)
             commandButton("Refresh", .refresh)
             commandButton("Toggle Hidden Files", .toggleHidden)
+
+            Divider()
+
+            commandButton("New Tab", .newTab)
+            commandButton("Next Tab", .nextTab)
+            commandButton("Previous Tab", .previousTab)
 
             Divider()
 

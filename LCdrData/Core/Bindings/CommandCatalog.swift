@@ -19,6 +19,10 @@ package enum CommandCatalog {
         case .forward: return ("]", .command)
         case .goToPath: return ("l", .command)
         case .refresh: return ("r", .command)
+        case .newTab: return ("t", .command)
+        case .closeTab: return ("w", .command)
+        case .nextTab: return ("\t", .control)
+        case .previousTab: return ("\t", [.control, .shift])
 
         case .open: return (.downArrow, .command)
         case .openItem: return nil

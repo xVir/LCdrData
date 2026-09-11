@@ -31,6 +31,16 @@ package struct WindowRootView: View {
             configuration: env.configuration,
             sandboxAccess: env.sandboxAccess
         )
+        state.leftPanel.restoreTabs(
+            from: session.wrappedValue.leftTabPaths,
+            fallbackDirectory: leftURL,
+            activeIndex: session.wrappedValue.leftActiveTabIndex
+        )
+        state.rightPanel.restoreTabs(
+            from: session.wrappedValue.rightTabPaths,
+            fallbackDirectory: rightURL,
+            activeIndex: session.wrappedValue.rightActiveTabIndex
+        )
         state.leftPanel.state.location = session.wrappedValue.leftLocation ?? .directory(leftURL)
         state.rightPanel.state.location = session.wrappedValue.rightLocation ?? .directory(rightURL)
         _appState = State(initialValue: state)
@@ -55,6 +65,10 @@ package struct WindowRootView: View {
                     id: session.id,
                     leftPath: persistentDirectory.path,
                     rightPath: session.rightPath,
+                    leftTabPaths: appState.leftPanel.tabPathsForSession(),
+                    rightTabPaths: session.rightTabPaths.isEmpty ? [session.rightPath] : session.rightTabPaths,
+                    leftActiveTabIndex: appState.leftPanel.state.activeTabIndex,
+                    rightActiveTabIndex: session.rightActiveTabIndex,
                     leftLocation: newLocation,
                     rightLocation: session.rightLocation
                 )
@@ -66,6 +80,10 @@ package struct WindowRootView: View {
                     id: session.id,
                     leftPath: session.leftPath,
                     rightPath: persistentDirectory.path,
+                    leftTabPaths: session.leftTabPaths.isEmpty ? [session.leftPath] : session.leftTabPaths,
+                    rightTabPaths: appState.rightPanel.tabPathsForSession(),
+                    leftActiveTabIndex: session.leftActiveTabIndex,
+                    rightActiveTabIndex: appState.rightPanel.state.activeTabIndex,
                     leftLocation: session.leftLocation,
                     rightLocation: newLocation
                 )

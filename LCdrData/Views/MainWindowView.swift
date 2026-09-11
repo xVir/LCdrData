@@ -59,6 +59,7 @@ package struct MainWindowView: View {
                 onCmdL: { runner.perform(.goToPath) },
                 onCmdDown: { runner.perform(.open) },
                 onCmdShiftA: { runner.perform(.deselectAll) },
+                onCmdW: { runner.perform(.closeTab) },
                 onEscape: {
                     false
                 },
@@ -286,6 +287,7 @@ private struct KeyShortcutModifier: ViewModifier {
     package let onCmdL: () -> Void
     package let onCmdDown: () -> Void
     package let onCmdShiftA: () -> Void
+    package let onCmdW: () -> Void
     /// Returns true if handled
     package let onEscape: () -> Bool
     /// Returns true if key was consumed
@@ -401,6 +403,13 @@ private struct KeyShortcutModifier: ViewModifier {
                 return .handled
             }
             .onKeyPress(phases: .down) { press in
+                if press.key == KeyEquivalent("w"),
+                    press.modifiers.contains(.command) {
+                    guard keyboardRoutingActive else { return .ignored }
+                    onCmdW()
+                    return .handled
+                }
+
                 let r = Self.handleCommandArrowsAndLetters(
                     press: press,
                     keyboardRoutingActive: keyboardRoutingActive,
