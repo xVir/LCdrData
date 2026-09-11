@@ -37,6 +37,14 @@ struct MainCommands: Commands {
             }
         }
 
+        CommandGroup(replacing: .windowArrangement) {
+            Button("Close Tab") {
+                focused?.commands.perform(.closeTab)
+            }
+            .keyboardShortcut("w", modifiers: .command)
+            .disabled(focused == nil)
+        }
+
         CommandMenu("Favorites") {
             let entries = env.configuration.current.bookmarkEntries
             if entries.isEmpty {
@@ -61,7 +69,6 @@ struct MainCommands: Commands {
             Divider()
 
             commandButton("New Tab", .newTab)
-            commandButton("Close Tab", .closeTab)
             commandButton("Next Tab", .nextTab)
             commandButton("Previous Tab", .previousTab)
 

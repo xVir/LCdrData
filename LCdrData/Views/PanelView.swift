@@ -55,10 +55,6 @@ package struct PanelView: View {
             StatusBarView(viewModel: viewModel)
         }
         .background(isActive ? Color.accentColor.opacity(0.03) : Color.clear)
-        .overlay(
-            RoundedRectangle(cornerRadius: 0)
-                .stroke(isActive ? Color.accentColor.opacity(0.4) : Color.clear, lineWidth: 2)
-        )
         .contentShape(Rectangle())
         .simultaneousGesture(
             TapGesture().onEnded {
@@ -73,7 +69,7 @@ package struct PanelView: View {
 
     private var tabBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 4) {
+            HStack(spacing: 1) {
                 ForEach(Array(viewModel.state.tabs.enumerated()), id: \.element.id) { index, tab in
                     if index > 0 {
                         Rectangle()
@@ -217,7 +213,6 @@ package struct PanelView: View {
                 }
             }
             .frame(height: 26)
-            .padding(2)
             .contentShape(Rectangle())
             .onHover { hovering in
                 isHovered = hovering
