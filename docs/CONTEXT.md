@@ -152,11 +152,13 @@ never reopens inside an archive.
 macOS window restoration round-trips that value, but only when the system elects
 to restore windows — never when "Close windows when quitting an application" is
 enabled, and never when the app is killed rather than quit (as `tuist run` does).
-Resuming therefore cannot rely on it. `PanelSessionStore` records the directories
-in `UserDefaults` on every navigation, and `AppEnvironment.makeFreshSession()`
-seeds a new window from, in order: the frontmost window (so Cmd+N opens beside
-what the user is looking at), the directories recorded on the previous run, then
-Home on a genuine first launch.
+Resuming therefore cannot rely on it. `PanelSessionStore` records a
+`PanelSessionSnapshot` — both directories, both panels' tab paths and which tab
+was in front — in `UserDefaults` whenever a panel navigates or its tabs change,
+and `AppEnvironment.makeFreshSession()` seeds a new window from, in order: the
+frontmost window (so Cmd+N opens beside what the user is looking at, with a
+single tab per panel), the snapshot recorded on the previous run, then Home on a
+genuine first launch.
 
 Resuming a directory outside the container also needs its security scope back,
 which works because the same navigation that records the paths also stores a

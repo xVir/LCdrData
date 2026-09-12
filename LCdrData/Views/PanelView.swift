@@ -21,10 +21,11 @@ package struct PanelView: View {
         VStack(spacing: 0) {
             if viewModel.state.isTabBarVisible {
                 tabBar
-                    .frame(height: 30)
-                    .padding(.horizontal, 8)
-                    .background(.bar)
-                    .overlay(alignment: .bottom) { Divider() }
+                    .frame(height: PanelView.tabStripHeight)
+                    // The strip itself is the window colour, so the sliver
+                    // above an inactive tab matches the rest of the chrome;
+                    // the recess is painted into the inactive tabs alone.
+                    .background(Color(nsColor: .windowBackgroundColor))
             }
 
             PathBarView(viewModel: viewModel)
@@ -67,20 +68,24 @@ package struct PanelView: View {
 
     // MARK: - Tab bar
 
+    /// Full height of the tab strip; the active tab fills it edge to edge.
+    fileprivate static let tabStripHeight: CGFloat = 30
+    /// How far an inactive tab is pushed back from the strip's top edge.
+    fileprivate static let inactiveTabInset: CGFloat = 4
+    /// Darkens an unselected tab so it reads as set back from the window.
+    fileprivate static let tabStripRecess = Color.black.opacity(0.14)
+    /// Outline drawn round every tab; adjacent tabs share it as one hairline.
+    fileprivate static let tabBorder = Color.primary.opacity(0.22)
+
     private var tabBar: some View {
         GeometryReader { geometry in
             let tabs = viewModel.state.tabs
-            let separatorWidth = CGFloat(max(0, tabs.count - 1))
-            let tabWidth = max(1, (geometry.size.width - separatorWidth) / CGFloat(tabs.count))
+            // Tabs butt up against each other — their own borders separate them,
+            // and overlapping by a point keeps that seam a single hairline.
+            let tabWidth = max(1, geometry.size.width / CGFloat(tabs.count))
 
-            HStack(spacing: 1) {
+            HStack(spacing: -1) {
                 ForEach(Array(tabs.enumerated()), id: \.element.id) { index, tab in
-                    if index > 0 {
-                        Rectangle()
-                            .fill(Color.secondary.opacity(0.35))
-                            .frame(width: 1, height: 18)
-                    }
-
                     TabBarItemView(
                         viewModel: viewModel,
                         appState: appState,
@@ -88,9 +93,11 @@ package struct PanelView: View {
                         tab: tab,
                         width: tabWidth
                     )
+                    // The active tab's border must win over its neighbours'.
+                    .zIndex(index == viewModel.state.activeTabIndex ? 1 : 0)
                 }
             }
-            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .center)
+            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .bottom)
         }
     }
 
@@ -104,39 +111,70 @@ package struct PanelView: View {
         @State private var isHovered = false
         @State private var isDropTargeted = false
 
+        private var isSelected: Bool { index == viewModel.state.activeTabIndex }
+
+        private var hasCloseButton: Bool { viewModel.state.tabs.count > 1 }
+
+        /// Space kept clear on the left for the close button. It is reserved
+        /// whether or not the button is currently shown, so the title neither
+        /// slides on hover nor runs underneath the button.
+        private var closeButtonZone: CGFloat { 5 + 14 + 4 }
+
+        /// The active tab runs the full strip height and is painted in the
+        /// window colour, so it merges with the path bar below it. Inactive
+        /// tabs stop short of the top edge and let the recess show through.
+        private var height: CGFloat {
+            isSelected ? PanelView.tabStripHeight : PanelView.tabStripHeight - PanelView.inactiveTabInset
+        }
+
+        private var shape: UnevenRoundedRectangle {
+            UnevenRoundedRectangle(topLeadingRadius: 2, topTrailingRadius: 2, style: .continuous)
+        }
+
         var body: some View {
             ZStack(alignment: .leading) {
                 Button {
                     Task { await viewModel.activateTab(at: index) }
                 } label: {
                     Text(tab.title)
-                        .font(.system(size: 12, weight: index == viewModel.state.activeTabIndex ? .semibold : .regular))
+                        .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
                         .lineLimit(1)
+                        .truncationMode(.middle)
                         .frame(maxWidth: .infinity)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
+                        .padding(.leading, hasCloseButton ? closeButtonZone : 10)
+                        .padding(.trailing, 10)
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(index == viewModel.state.activeTabIndex ? .primary : .secondary)
-                .frame(height: 24)
-                .background(
-                    index == viewModel.state.activeTabIndex
-                        ? Color.accentColor.opacity(0.18)
-                        : isHovered
-                            ? Color.primary.opacity(0.08)
-                        : Color.clear
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
+                .foregroundStyle(isSelected ? .primary : .secondary)
+                .frame(height: height)
+                .background {
+                    ZStack {
+                        if isSelected {
+                            shape.fill(Color(nsColor: .windowBackgroundColor))
+                        } else {
+                            // Hovering lifts the tab part way towards the front.
+                            shape.fill(isHovered ? Color.black.opacity(0.07) : PanelView.tabStripRecess)
+                        }
+                        shape.strokeBorder(PanelView.tabBorder, lineWidth: 1)
+                        // The active tab has no bottom edge: it runs into the
+                        // path bar below, which is what puts it in front.
+                        if isSelected {
+                            Color(nsColor: .windowBackgroundColor)
+                                .frame(height: 1)
+                                .frame(maxHeight: .infinity, alignment: .bottom)
+                        }
+                    }
+                }
                 .contentShape(Rectangle())
                 .overlay(alignment: .leading) {
                     Capsule()
                         .fill(Color.accentColor)
-                        .frame(width: 3, height: 22)
+                        .frame(width: 3, height: height - 6)
                         .opacity(isDropTargeted ? 1 : 0)
                         .scaleEffect(x: isDropTargeted ? 1 : 0.5)
                 }
                 .animation(.easeOut(duration: 0.15), value: isDropTargeted)
-                .frame(width: width, height: 24)
+                .frame(width: width, height: height, alignment: .bottom)
                 .onDrag {
                     let provider = NSItemProvider(object: "\(viewModel.side.identifier):\(index)" as NSString)
                     provider.suggestedName = tab.title
@@ -211,7 +249,7 @@ package struct PanelView: View {
                     }
                 }
 
-                if viewModel.state.tabs.count > 1 {
+                if hasCloseButton {
                     Button {
                         Task { await viewModel.closeTab(at: index) }
                     } label: {
@@ -220,15 +258,14 @@ package struct PanelView: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
-                    .frame(width: isHovered ? 14 : 0, height: 14)
-                    .padding(.leading, 8)
-                    .padding(.trailing, 6)
+                    .frame(width: 14, height: 14)
+                    .padding(.leading, 5)
                     .opacity(isHovered ? 1 : 0)
                     .allowsHitTesting(isHovered)
                     .zIndex(2)
                 }
             }
-            .frame(height: 26)
+            .frame(height: PanelView.tabStripHeight, alignment: .bottom)
             .contentShape(Rectangle())
             .onHover { hovering in
                 isHovered = hovering

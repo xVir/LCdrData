@@ -115,15 +115,32 @@ package final class AppEnvironment {
                 rightLocation: frontmost.rightPanel.state.location
             )
         }
-        if let last = sessionStore.loadLastPaths() {
-            return PanelSession(leftPath: last.left, rightPath: last.right)
+        if let last = sessionStore.loadLastSession() {
+            return PanelSession(
+                leftPath: last.leftPath,
+                rightPath: last.rightPath,
+                leftTabPaths: last.leftTabPaths,
+                rightTabPaths: last.rightTabPaths,
+                leftActiveTabIndex: last.leftActiveTabIndex,
+                rightActiveTabIndex: last.rightActiveTabIndex
+            )
         }
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         return PanelSession(leftPath: home, rightPath: home)
     }
 
-    /// Records a window's directories as the ones to resume on the next launch.
+    /// Records a window's directories, tabs and front tab as the state to
+    /// resume on the next launch.
     package func rememberLastSession(_ session: PanelSession) {
-        sessionStore.save(leftPath: session.leftPath, rightPath: session.rightPath)
+        sessionStore.save(
+            PanelSessionSnapshot(
+                leftPath: session.leftPath,
+                rightPath: session.rightPath,
+                leftTabPaths: session.leftTabPaths,
+                rightTabPaths: session.rightTabPaths,
+                leftActiveTabIndex: session.leftActiveTabIndex,
+                rightActiveTabIndex: session.rightActiveTabIndex
+            )
+        )
     }
 }

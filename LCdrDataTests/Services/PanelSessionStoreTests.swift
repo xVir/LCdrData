@@ -16,34 +16,56 @@ struct PanelSessionStoreTests {
         let store = PanelSessionStore(defaults: makeIsolatedDefaults())
 
         // Act & Assert
-        #expect(store.loadLastPaths() == nil)
+        #expect(store.loadLastSession() == nil)
     }
 
-    @Test func savedPathsSurviveANewStoreOverTheSameDefaults() {
+    @Test func savedStateSurvivesANewStoreOverTheSameDefaults() {
         // Arrange — a second store stands in for the next launch.
         let defaults = makeIsolatedDefaults()
         let store = PanelSessionStore(defaults: defaults)
 
         // Act
-        store.save(leftPath: "/Users/dskachkov/Projects", rightPath: "/Users/dskachkov/Downloads")
-        let reloaded = PanelSessionStore(defaults: defaults).loadLastPaths()
+        store.save(
+            PanelSessionSnapshot(
+                leftPath: "/Users/dskachkov/Downloads",
+                rightPath: "/Users/dskachkov/Music",
+                leftTabPaths: ["/Users/dskachkov/Projects", "/Users/dskachkov/Downloads"],
+                rightTabPaths: ["/Users/dskachkov/Music"],
+                leftActiveTabIndex: 1,
+                rightActiveTabIndex: 0
+            )
+        )
+        let reloaded = PanelSessionStore(defaults: defaults).loadLastSession()
 
         // Assert
-        #expect(reloaded?.left == "/Users/dskachkov/Projects")
-        #expect(reloaded?.right == "/Users/dskachkov/Downloads")
+        #expect(reloaded?.leftPath == "/Users/dskachkov/Downloads")
+        #expect(reloaded?.rightPath == "/Users/dskachkov/Music")
+        #expect(reloaded?.leftTabPaths == ["/Users/dskachkov/Projects", "/Users/dskachkov/Downloads"])
+        #expect(reloaded?.rightTabPaths == ["/Users/dskachkov/Music"])
+        #expect(reloaded?.leftActiveTabIndex == 1)
     }
 
-    @Test func savingAgainReplacesThePreviousPair() {
+    @Test func savingAgainReplacesThePreviousSnapshot() {
         // Arrange
         let store = PanelSessionStore(defaults: makeIsolatedDefaults())
-        store.save(leftPath: "/a", rightPath: "/b")
+        store.save(PanelSessionSnapshot(leftPath: "/a", rightPath: "/b", leftTabPaths: ["/a", "/x"]))
 
         // Act
-        store.save(leftPath: "/c", rightPath: "/d")
+        store.save(PanelSessionSnapshot(leftPath: "/c", rightPath: "/d"))
 
         // Assert
-        #expect(store.loadLastPaths()?.left == "/c")
-        #expect(store.loadLastPaths()?.right == "/d")
+        #expect(store.loadLastSession()?.leftPath == "/c")
+        #expect(store.loadLastSession()?.rightPath == "/d")
+        #expect(store.loadLastSession()?.leftTabPaths == ["/c"])
+    }
+
+    @Test func aSnapshotWithoutTabsDescribesItsOwnDirectories() {
+        // Arrange & Act
+        let snapshot = PanelSessionSnapshot(leftPath: "/a", rightPath: "/b")
+
+        // Assert
+        #expect(snapshot.leftTabPaths == ["/a"])
+        #expect(snapshot.rightTabPaths == ["/b"])
     }
 
     @Test func emptyPathsAreTreatedAsNothingRecorded() {
@@ -51,10 +73,37 @@ struct PanelSessionStoreTests {
         let store = PanelSessionStore(defaults: makeIsolatedDefaults())
 
         // Act
-        store.save(leftPath: "", rightPath: "/b")
+        store.save(PanelSessionSnapshot(leftPath: "", rightPath: "/b"))
 
         // Assert
-        #expect(store.loadLastPaths() == nil)
+        #expect(store.loadLastSession() == nil)
+    }
+
+    @Test func theOlderTwoPathFormatIsStillRead() {
+        // Arrange — what a pre-tabs version of the app left behind.
+        let defaults = makeIsolatedDefaults()
+        defaults.set(["left": "/legacy/left", "right": "/legacy/right"], forKey: "lastPanelSession")
+
+        // Act
+        let snapshot = PanelSessionStore(defaults: defaults).loadLastSession()
+
+        // Assert
+        #expect(snapshot?.leftPath == "/legacy/left")
+        #expect(snapshot?.rightPath == "/legacy/right")
+        #expect(snapshot?.leftTabPaths == ["/legacy/left"])
+    }
+
+    @Test func theNewFormatWinsOverAStaleLegacyEntry() {
+        // Arrange
+        let defaults = makeIsolatedDefaults()
+        defaults.set(["left": "/legacy/left", "right": "/legacy/right"], forKey: "lastPanelSession")
+        let store = PanelSessionStore(defaults: defaults)
+
+        // Act
+        store.save(PanelSessionSnapshot(leftPath: "/fresh/left", rightPath: "/fresh/right"))
+
+        // Assert
+        #expect(store.loadLastSession()?.leftPath == "/fresh/left")
     }
 
     @Test func panelSessionRoundTripsTabCollectionsAndActiveIndexes() throws {

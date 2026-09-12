@@ -59,34 +59,18 @@ package struct WindowRootView: View {
                 }
             }
             .onChange(of: appState.leftPanel.state.location) { _, newLocation in
-                let persistentDirectory = newLocation.persistentDirectory
-                env.bookmarkStore.save(url: persistentDirectory)
-                session = PanelSession(
-                    id: session.id,
-                    leftPath: persistentDirectory.path,
-                    rightPath: session.rightPath,
-                    leftTabPaths: appState.leftPanel.tabPathsForSession(),
-                    rightTabPaths: session.rightTabPaths.isEmpty ? [session.rightPath] : session.rightTabPaths,
-                    leftActiveTabIndex: appState.leftPanel.state.activeTabIndex,
-                    rightActiveTabIndex: session.rightActiveTabIndex,
-                    leftLocation: newLocation,
-                    rightLocation: session.rightLocation
-                )
+                env.bookmarkStore.save(url: newLocation.persistentDirectory)
+                captureSession()
             }
             .onChange(of: appState.rightPanel.state.location) { _, newLocation in
-                let persistentDirectory = newLocation.persistentDirectory
-                env.bookmarkStore.save(url: persistentDirectory)
-                session = PanelSession(
-                    id: session.id,
-                    leftPath: session.leftPath,
-                    rightPath: persistentDirectory.path,
-                    leftTabPaths: session.leftTabPaths.isEmpty ? [session.leftPath] : session.leftTabPaths,
-                    rightTabPaths: appState.rightPanel.tabPathsForSession(),
-                    leftActiveTabIndex: session.leftActiveTabIndex,
-                    rightActiveTabIndex: appState.rightPanel.state.activeTabIndex,
-                    leftLocation: session.leftLocation,
-                    rightLocation: newLocation
-                )
+                env.bookmarkStore.save(url: newLocation.persistentDirectory)
+                captureSession()
+            }
+            // Opening, closing, reordering or switching tabs usually leaves the
+            // panel's location alone, so the location observers above would
+            // never see it. This one does.
+            .onChange(of: tabLayout) { _, _ in
+                captureSession()
             }
             .onChange(of: session) { _, newValue in
                 env.rememberLastSession(newValue)
@@ -94,5 +78,43 @@ package struct WindowRootView: View {
             .onReceive(NotificationCenter.default.publisher(for: .lcdrConfigurationApplied)) { _ in
                 Task { await appState.applyEffectiveConfiguration() }
             }
+    }
+
+    /// Everything about the tabs that is worth persisting, in one comparable
+    /// value — `PanelTab` itself carries a directory listing, which is far too
+    /// much to diff on every reload.
+    private struct TabLayout: Equatable {
+        let leftPaths: [String]
+        let rightPaths: [String]
+        let leftActiveIndex: Int
+        let rightActiveIndex: Int
+    }
+
+    private var tabLayout: TabLayout {
+        TabLayout(
+            leftPaths: appState.leftPanel.tabPathsForSession(),
+            rightPaths: appState.rightPanel.tabPathsForSession(),
+            leftActiveIndex: appState.leftPanel.state.activeTabIndex,
+            rightActiveIndex: appState.rightPanel.state.activeTabIndex
+        )
+    }
+
+    /// Rebuilds the session from the live panels. Writing it back to the
+    /// binding both feeds macOS window restoration and, through the `session`
+    /// observer, records the state for the next launch.
+    private func captureSession() {
+        let leftLocation = appState.leftPanel.state.location
+        let rightLocation = appState.rightPanel.state.location
+        session = PanelSession(
+            id: session.id,
+            leftPath: leftLocation.persistentDirectory.path,
+            rightPath: rightLocation.persistentDirectory.path,
+            leftTabPaths: appState.leftPanel.tabPathsForSession(),
+            rightTabPaths: appState.rightPanel.tabPathsForSession(),
+            leftActiveTabIndex: appState.leftPanel.state.activeTabIndex,
+            rightActiveTabIndex: appState.rightPanel.state.activeTabIndex,
+            leftLocation: leftLocation,
+            rightLocation: rightLocation
+        )
     }
 }

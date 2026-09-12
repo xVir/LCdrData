@@ -263,6 +263,12 @@ package struct MainWindowView: View {
                 CommandBarView(appState: appState)
             }
             .frame(minWidth: 800, minHeight: 500)
+            .background(
+                // The titlebar's automatic separator draws a hairline right on
+                // top of the tab strip. The tabs supply their own edges.
+                WindowConfigurator { $0.titlebarSeparatorStyle = .none }
+                    .frame(width: 0, height: 0)
+            )
 
             if showProgressOverlay {
                 Color.black.opacity(0.3)
