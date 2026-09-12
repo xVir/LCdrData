@@ -284,6 +284,16 @@ package final class PanelViewModel {
         state.showHiddenFiles = active.showHiddenFiles
     }
 
+    /// Points the panel, and its front tab with it, at a location that came
+    /// from outside the tab snapshot — a new window cloning a live one, where
+    /// the location may be an archive that is never persisted as such.
+    package func adoptClonedLocation(_ location: BrowseLocation) {
+        state.location = location
+        guard state.tabs.indices.contains(state.activeTabIndex) else { return }
+        state.tabs[state.activeTabIndex].location = location
+        state.tabs[state.activeTabIndex].title = title(for: location)
+    }
+
     /// Returns the currently persisted tab snapshot for this panel.
     package func tabPathsForSession() -> [String] {
         state.tabs.map { $0.location.persistentDirectory.path }

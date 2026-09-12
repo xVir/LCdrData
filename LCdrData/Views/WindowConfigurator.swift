@@ -17,7 +17,13 @@ struct WindowConfigurator: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
-        (nsView as? CallbackView)?.configure = configure
+        guard let view = nsView as? CallbackView else { return }
+        view.configure = configure
+        // The closure captures view state, so a changed one must be re-applied
+        // rather than merely stored against the next move into a window.
+        if let window = view.window {
+            configure(window)
+        }
     }
 
     private final class CallbackView: NSView {

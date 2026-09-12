@@ -41,10 +41,17 @@ package struct WindowRootView: View {
             fallbackDirectory: rightURL,
             activeIndex: session.wrappedValue.rightActiveTabIndex
         )
-        state.leftPanel.state.location = session.wrappedValue.leftLocation ?? .directory(leftURL)
-        state.rightPanel.state.location = session.wrappedValue.rightLocation ?? .directory(rightURL)
+        // `restoreTabs` has already picked the location of the tab it could
+        // actually restore — a path that no longer exists is dropped, and the
+        // active index clamped. Only an explicit in-memory location, which is
+        // to say a window being cloned, should override that.
+        if let leftLocation = session.wrappedValue.leftLocation {
+            state.leftPanel.adoptClonedLocation(leftLocation)
+        }
+        if let rightLocation = session.wrappedValue.rightLocation {
+            state.rightPanel.adoptClonedLocation(rightLocation)
+        }
         _appState = State(initialValue: state)
-        env.mostRecentAppState = state
     }
 
     package var body: some View {
@@ -52,6 +59,11 @@ package struct WindowRootView: View {
             .environment(appState)
             .environment(env.columnLayouts)
             .focusedSceneValue(\.appState, appState)
+            // The state built in `init` is discarded on every re-init — SwiftUI
+            // keeps the first one — so the frontmost reference has to be taken
+            // from the `@State` that actually survives, or it dangles and Cmd+N
+            // falls back to the saved session instead of this window.
+            .onAppear { env.mostRecentAppState = appState }
             .task { await env.start() }
             .onChange(of: controlActiveState) { _, newValue in
                 if newValue == .key {
@@ -73,6 +85,11 @@ package struct WindowRootView: View {
                 captureSession()
             }
             .onChange(of: session) { _, newValue in
+                // Only the window the user is actually in defines what the next
+                // launch resumes; otherwise a background window's incidental
+                // change overwrites the layout of the one in front. Restoring
+                // every window would mean a snapshot per `session.id`.
+                guard controlActiveState == .key else { return }
                 env.rememberLastSession(newValue)
             }
             .onReceive(NotificationCenter.default.publisher(for: .lcdrConfigurationApplied)) { _ in

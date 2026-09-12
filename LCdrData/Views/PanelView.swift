@@ -82,7 +82,10 @@ package struct PanelView: View {
             let tabs = viewModel.state.tabs
             // Tabs butt up against each other — their own borders separate them,
             // and overlapping by a point keeps that seam a single hairline.
-            let tabWidth = max(1, geometry.size.width / CGFloat(tabs.count))
+            // Each tab is widened by its share of that overlap, or the row would
+            // come up short and leave bare strip at both ends.
+            let overlap = CGFloat(max(0, tabs.count - 1))
+            let tabWidth = max(1, (geometry.size.width + overlap) / CGFloat(tabs.count))
 
             HStack(spacing: -1) {
                 ForEach(Array(tabs.enumerated()), id: \.element.id) { index, tab in
@@ -150,7 +153,9 @@ package struct PanelView: View {
                 .background {
                     ZStack {
                         if isSelected {
-                            shape.fill(Color(nsColor: .windowBackgroundColor))
+                            // The same material PathBarView uses, so the tab and
+                            // the bar below it read as one surface.
+                            shape.fill(.bar)
                         } else {
                             // Hovering lifts the tab part way towards the front.
                             shape.fill(isHovered ? Color.black.opacity(0.07) : PanelView.tabStripRecess)
@@ -159,7 +164,8 @@ package struct PanelView: View {
                         // The active tab has no bottom edge: it runs into the
                         // path bar below, which is what puts it in front.
                         if isSelected {
-                            Color(nsColor: .windowBackgroundColor)
+                            Rectangle()
+                                .fill(.bar)
                                 .frame(height: 1)
                                 .frame(maxHeight: .infinity, alignment: .bottom)
                         }
