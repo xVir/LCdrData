@@ -25,7 +25,7 @@ struct AppEnvironmentTests {
     @Test func makeFreshSessionResumesThePreviousRunsDirectories() {
         // Arrange
         let store = FakePanelSessionStore()
-        store.save(leftPath: "/Users/test/Projects", rightPath: "/Users/test/Downloads")
+        store.save(PanelSessionSnapshot(leftPath: "/Users/test/Projects", rightPath: "/Users/test/Downloads"))
         let env = makeEnvironment(sessionStore: store)
 
         // Act
@@ -47,14 +47,63 @@ struct AppEnvironmentTests {
         )
 
         // Assert
-        #expect(store.loadLastPaths()?.left == "/Users/test/a")
-        #expect(store.loadLastPaths()?.right == "/Users/test/b")
+        #expect(store.loadLastSession()?.leftPath == "/Users/test/a")
+        #expect(store.loadLastSession()?.rightPath == "/Users/test/b")
+    }
+
+    @Test func rememberLastSessionRecordsTheTabsAndTheFrontTab() {
+        // Arrange
+        let store = FakePanelSessionStore()
+        let env = makeEnvironment(sessionStore: store)
+
+        // Act
+        env.rememberLastSession(
+            PanelSession(
+                leftPath: "/Users/test/b",
+                rightPath: "/Users/test/d",
+                leftTabPaths: ["/Users/test/a", "/Users/test/b"],
+                rightTabPaths: ["/Users/test/c", "/Users/test/d"],
+                leftActiveTabIndex: 1,
+                rightActiveTabIndex: 1
+            )
+        )
+
+        // Assert
+        let stored = store.loadLastSession()
+        #expect(stored?.leftTabPaths == ["/Users/test/a", "/Users/test/b"])
+        #expect(stored?.rightTabPaths == ["/Users/test/c", "/Users/test/d"])
+        #expect(stored?.leftActiveTabIndex == 1)
+        #expect(stored?.rightActiveTabIndex == 1)
+    }
+
+    @Test func makeFreshSessionResumesThePreviousRunsTabs() {
+        // Arrange — the whole point: a relaunch reopens every tab, not just one.
+        let store = FakePanelSessionStore()
+        store.save(
+            PanelSessionSnapshot(
+                leftPath: "/Users/test/b",
+                rightPath: "/Users/test/c",
+                leftTabPaths: ["/Users/test/a", "/Users/test/b"],
+                rightTabPaths: ["/Users/test/c"],
+                leftActiveTabIndex: 1,
+                rightActiveTabIndex: 0
+            )
+        )
+        let env = makeEnvironment(sessionStore: store)
+
+        // Act
+        let session = env.makeFreshSession()
+
+        // Assert
+        #expect(session.leftTabPaths == ["/Users/test/a", "/Users/test/b"])
+        #expect(session.rightTabPaths == ["/Users/test/c"])
+        #expect(session.leftActiveTabIndex == 1)
     }
 
     @Test func frontmostWindowWinsOverThePreviousRun() {
         // Arrange — Cmd+N should open beside what the user is looking at now.
         let store = FakePanelSessionStore()
-        store.save(leftPath: "/stale/left", rightPath: "/stale/right")
+        store.save(PanelSessionSnapshot(leftPath: "/stale/left", rightPath: "/stale/right"))
         let env = makeEnvironment(sessionStore: store)
         let frontmost = AppState(
             leftDirectory: URL(fileURLWithPath: "/Users/test/Documents", isDirectory: true),
@@ -235,14 +284,14 @@ struct AppEnvironmentTests {
 /// In-memory session store so restore expectations don't touch real defaults.
 nonisolated final class FakePanelSessionStore: PanelSessionStoring, @unchecked Sendable {
     private let lock = NSLock()
-    private var paths: (left: String, right: String)?
+    private var snapshot: PanelSessionSnapshot?
 
-    func save(leftPath: String, rightPath: String) {
-        guard !leftPath.isEmpty, !rightPath.isEmpty else { return }
-        lock.withLock { paths = (leftPath, rightPath) }
+    func save(_ snapshot: PanelSessionSnapshot) {
+        guard !snapshot.leftPath.isEmpty, !snapshot.rightPath.isEmpty else { return }
+        lock.withLock { self.snapshot = snapshot }
     }
 
-    func loadLastPaths() -> (left: String, right: String)? {
-        lock.withLock { paths }
+    func loadLastSession() -> PanelSessionSnapshot? {
+        lock.withLock { snapshot }
     }
 }

@@ -41,10 +41,17 @@ package struct WindowRootView: View {
             fallbackDirectory: rightURL,
             activeIndex: session.wrappedValue.rightActiveTabIndex
         )
-        state.leftPanel.state.location = session.wrappedValue.leftLocation ?? .directory(leftURL)
-        state.rightPanel.state.location = session.wrappedValue.rightLocation ?? .directory(rightURL)
+        // `restoreTabs` has already picked the location of the tab it could
+        // actually restore — a path that no longer exists is dropped, and the
+        // active index clamped. Only an explicit in-memory location, which is
+        // to say a window being cloned, should override that.
+        if let leftLocation = session.wrappedValue.leftLocation {
+            state.leftPanel.adoptClonedLocation(leftLocation)
+        }
+        if let rightLocation = session.wrappedValue.rightLocation {
+            state.rightPanel.adoptClonedLocation(rightLocation)
+        }
         _appState = State(initialValue: state)
-        env.mostRecentAppState = state
     }
 
     package var body: some View {
@@ -52,6 +59,11 @@ package struct WindowRootView: View {
             .environment(appState)
             .environment(env.columnLayouts)
             .focusedSceneValue(\.appState, appState)
+            // The state built in `init` is discarded on every re-init — SwiftUI
+            // keeps the first one — so the frontmost reference has to be taken
+            // from the `@State` that actually survives, or it dangles and Cmd+N
+            // falls back to the saved session instead of this window.
+            .onAppear { env.mostRecentAppState = appState }
             .task { await env.start() }
             .onChange(of: controlActiveState) { _, newValue in
                 if newValue == .key {
@@ -59,40 +71,67 @@ package struct WindowRootView: View {
                 }
             }
             .onChange(of: appState.leftPanel.state.location) { _, newLocation in
-                let persistentDirectory = newLocation.persistentDirectory
-                env.bookmarkStore.save(url: persistentDirectory)
-                session = PanelSession(
-                    id: session.id,
-                    leftPath: persistentDirectory.path,
-                    rightPath: session.rightPath,
-                    leftTabPaths: appState.leftPanel.tabPathsForSession(),
-                    rightTabPaths: session.rightTabPaths.isEmpty ? [session.rightPath] : session.rightTabPaths,
-                    leftActiveTabIndex: appState.leftPanel.state.activeTabIndex,
-                    rightActiveTabIndex: session.rightActiveTabIndex,
-                    leftLocation: newLocation,
-                    rightLocation: session.rightLocation
-                )
+                env.bookmarkStore.save(url: newLocation.persistentDirectory)
+                captureSession()
             }
             .onChange(of: appState.rightPanel.state.location) { _, newLocation in
-                let persistentDirectory = newLocation.persistentDirectory
-                env.bookmarkStore.save(url: persistentDirectory)
-                session = PanelSession(
-                    id: session.id,
-                    leftPath: session.leftPath,
-                    rightPath: persistentDirectory.path,
-                    leftTabPaths: session.leftTabPaths.isEmpty ? [session.leftPath] : session.leftTabPaths,
-                    rightTabPaths: appState.rightPanel.tabPathsForSession(),
-                    leftActiveTabIndex: session.leftActiveTabIndex,
-                    rightActiveTabIndex: appState.rightPanel.state.activeTabIndex,
-                    leftLocation: session.leftLocation,
-                    rightLocation: newLocation
-                )
+                env.bookmarkStore.save(url: newLocation.persistentDirectory)
+                captureSession()
+            }
+            // Opening, closing, reordering or switching tabs usually leaves the
+            // panel's location alone, so the location observers above would
+            // never see it. This one does.
+            .onChange(of: tabLayout) { _, _ in
+                captureSession()
             }
             .onChange(of: session) { _, newValue in
+                // Only the window the user is actually in defines what the next
+                // launch resumes; otherwise a background window's incidental
+                // change overwrites the layout of the one in front. Restoring
+                // every window would mean a snapshot per `session.id`.
+                guard controlActiveState == .key else { return }
                 env.rememberLastSession(newValue)
             }
             .onReceive(NotificationCenter.default.publisher(for: .lcdrConfigurationApplied)) { _ in
                 Task { await appState.applyEffectiveConfiguration() }
             }
+    }
+
+    /// Everything about the tabs that is worth persisting, in one comparable
+    /// value — `PanelTab` itself carries a directory listing, which is far too
+    /// much to diff on every reload.
+    private struct TabLayout: Equatable {
+        let leftPaths: [String]
+        let rightPaths: [String]
+        let leftActiveIndex: Int
+        let rightActiveIndex: Int
+    }
+
+    private var tabLayout: TabLayout {
+        TabLayout(
+            leftPaths: appState.leftPanel.tabPathsForSession(),
+            rightPaths: appState.rightPanel.tabPathsForSession(),
+            leftActiveIndex: appState.leftPanel.state.activeTabIndex,
+            rightActiveIndex: appState.rightPanel.state.activeTabIndex
+        )
+    }
+
+    /// Rebuilds the session from the live panels. Writing it back to the
+    /// binding both feeds macOS window restoration and, through the `session`
+    /// observer, records the state for the next launch.
+    private func captureSession() {
+        let leftLocation = appState.leftPanel.state.location
+        let rightLocation = appState.rightPanel.state.location
+        session = PanelSession(
+            id: session.id,
+            leftPath: leftLocation.persistentDirectory.path,
+            rightPath: rightLocation.persistentDirectory.path,
+            leftTabPaths: appState.leftPanel.tabPathsForSession(),
+            rightTabPaths: appState.rightPanel.tabPathsForSession(),
+            leftActiveTabIndex: appState.leftPanel.state.activeTabIndex,
+            rightActiveTabIndex: appState.rightPanel.state.activeTabIndex,
+            leftLocation: leftLocation,
+            rightLocation: rightLocation
+        )
     }
 }

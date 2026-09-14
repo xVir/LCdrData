@@ -147,7 +147,7 @@ Service protocols are `Sendable, nonisolated` so they can be called from any act
 | `AccessPresenter.swift` | `AccessPresenter` protocol — `present(_ context:) async -> URL?`. `NSOpenPanelAccessPresenter` (`@MainActor`) drives a context-titled `NSOpenPanel` pre-navigated to the offending directory; `NoopAccessPresenter` always declines. |
 | `AccessRequestContext.swift` | Why access is being asked for: `.startup`, `.reactive(displayURL:resolvedTarget:)`, `.manualGrant(suggestedURL:)`. Supplies the dedup key. |
 | `DirectorySession.swift` | Watches a directory or the current zip container over an `O_EVTONLY` file descriptor with `DispatchSource.makeFileSystemObjectSource` (write/delete/rename/attrib/extend/revoke), debouncing to `onChange` after **0.28 s**. Short-lived and replaced on navigation. |
-| `PanelSessionStore.swift` | `PanelSessionStoring` over `UserDefaults`: the last left/right directory paths, so a relaunch resumes even when macOS window restoration does not run. |
+| `PanelSessionStore.swift` | `PanelSessionStoring` over `UserDefaults`: a `PanelSessionSnapshot` (both directory paths, both panels' tab paths, both active tab indices), so a relaunch resumes tabs and all even when macOS window restoration does not run. Reads the pre-tabs two-path format as a fallback. |
 | `PanelColumnLayoutStore.swift` | `PanelColumnLayoutStoring` over `UserDefaults`: both panels' column order and widths in one JSON payload under a single key, so the two sides cannot be written out of step. Columns are persisted as raw strings rather than as the enum, so a name this version does not know is skipped on its own instead of taking the layout down with it. Kept out of the KDL file on purpose — that file is hand-edited, and dragging a divider must not rewrite it. |
 | `QuickLookPreviewController.swift` | `@MainActor` `QLPreviewPanelDataSource` adapter for the system Quick Look panel. |
 
@@ -169,7 +169,7 @@ Service protocols are `Sendable, nonisolated` so they can be called from any act
 |---|---|
 | `start()` | Idempotent. Starts the security scope on every stored bookmark, then — if no bookmark covers the account home — requests startup access to it. |
 | `makeFreshSession()` | Seeds a new window, preferring the frontmost window's paths, then the last saved session, then home for both panels. |
-| `rememberLastSession(_:)` | Writes the current paths through `PanelSessionStore`. |
+| `rememberLastSession(_:)` | Writes the current directories, tabs and front tab through `PanelSessionStore`. |
 | `releaseAllScopes()` | Stops every active scope; called from `applicationWillTerminate`. |
 
 Scope activation is fronted by `SecurityScopeActivating` so tests can observe start/stop calls without touching real bookmarks.
@@ -336,7 +336,7 @@ The Settings scene never holds an `AppState`; the notification fan-out is what m
 | Surface | Owner | Keys / paths |
 |---|---|---|
 | `UserDefaults` | `BookmarkStore` | `bookmarks` — `[String: Data]`, URL path → security-scoped bookmark blob |
-| `UserDefaults` | `PanelSessionStore` | `lastPanelSession` — `["left": path, "right": path]` |
+| `UserDefaults` | `PanelSessionStore` | `lastPanelSessionV2` — JSON `PanelSessionSnapshot`; legacy `lastPanelSession` (`["left": path, "right": path]`) still read |
 | Container Application Support | `ConfigurationService` | `~/Library/Containers/com.xvir.LCdrData/Data/Library/Application Support/com.xvir.LCdrData/config.kdl` — user overrides only; defaults stay in the bundle |
 | Window restoration | macOS | `PanelSession` values, `Codable`, restored by `WindowGroup(for:)` |
 

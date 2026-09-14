@@ -1146,4 +1146,27 @@ struct PanelViewModelTests {
         // Assert — panel atomically reverts to /a.
         #expect(vm.state.currentDirectory.path == "/a")
     }
+
+    @Test func adoptingAClonedLocationMovesTheFrontTabWithThePanel() {
+        // Arrange — as a new window cloning a live one: the tab list came from
+        // the snapshot, the location did not.
+        let vm = PanelViewModel(
+            side: .left,
+            initialDirectory: URL(fileURLWithPath: "/tmp/first")
+        )
+        vm.state.tabs = [
+            PanelTab(location: .directory(URL(fileURLWithPath: "/tmp/first")), title: "first"),
+            PanelTab(location: .directory(URL(fileURLWithPath: "/tmp/second")), title: "second")
+        ]
+        vm.state.activeTabIndex = 1
+
+        // Act
+        vm.adoptClonedLocation(.directory(URL(fileURLWithPath: "/tmp/third")))
+
+        // Assert
+        #expect(vm.state.location == .directory(URL(fileURLWithPath: "/tmp/third")))
+        #expect(vm.state.activeTab?.location == .directory(URL(fileURLWithPath: "/tmp/third")))
+        #expect(vm.state.activeTab?.title == "third")
+        #expect(vm.state.tabs[0].location == .directory(URL(fileURLWithPath: "/tmp/first")))
+    }
 }

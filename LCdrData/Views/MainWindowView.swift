@@ -242,6 +242,12 @@ package struct MainWindowView: View {
         return .ignored
     }
 
+    /// True while either panel is showing tabs — `PanelState.isTabBarVisible`
+    /// for the pair.
+    private var showsTabStrip: Bool {
+        appState.leftPanel.state.isTabBarVisible || appState.rightPanel.state.isTabBarVisible
+    }
+
     @ViewBuilder
     private func mainContentLayer(showProgressOverlay: Bool, operations: [FileOperation]) -> some View {
         ZStack {
@@ -263,6 +269,16 @@ package struct MainWindowView: View {
                 CommandBarView(appState: appState)
             }
             .frame(minWidth: 800, minHeight: 500)
+            .background(
+                // The titlebar's automatic separator draws a hairline right on
+                // top of the tab strip, whose tabs supply their own edges. With
+                // no strip there is nothing between the titlebar and the path
+                // bar, so the separator earns its place again.
+                WindowConfigurator { window in
+                    window.titlebarSeparatorStyle = showsTabStrip ? .none : .automatic
+                }
+                .frame(width: 0, height: 0)
+            )
 
             if showProgressOverlay {
                 Color.black.opacity(0.3)
