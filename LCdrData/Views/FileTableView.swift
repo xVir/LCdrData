@@ -118,6 +118,11 @@ package struct FileTableView: View {
                     }
                 }
                 .accessibilityIdentifier("fileList.\(viewModel.side.identifier)")
+                // Stops a click on the blank area below the rows from clearing
+                // the table's selection — see FileListSelectionBridge.
+                .background(FileListSelectionBridge {
+                    appState.activePanel = viewModel.side
+                })
                 .contextMenu(forSelectionType: UUID.self) { ids in
                     FileContextMenu(
                         model: FileContextMenuModel.resolve(selection: ids, in: viewModel.visibleItems),
