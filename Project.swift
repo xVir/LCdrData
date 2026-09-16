@@ -164,7 +164,10 @@ let project = Project(
             productName: "AppEnvironment",
             bundleId: "com.xvir.LCdrData.AppEnvironment",
             deploymentTargets: .macOS("26.4"),
-            sources: ["LCdrData/App/AppEnvironment.swift"],
+            sources: [
+                "LCdrData/App/AppEnvironment.swift",
+                "LCdrData/App/LaunchOptions.swift",
+            ],
             dependencies: [
                 .target(name: "Models"),
                 .target(name: "Services"),
@@ -213,6 +216,7 @@ let project = Project(
                         "LCdrData/Services/**",
                         "LCdrData/ViewModels/**",
                         "LCdrData/App/AppEnvironment.swift",
+                        "LCdrData/App/LaunchOptions.swift",
                         "LCdrData/Views/**",
                     ]
                 ),

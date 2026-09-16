@@ -20,10 +20,13 @@ package struct WindowRootView: View {
         self._session = session
         self.env = env
 
-        let leftURL = env.bookmarkStore.resolve(path: session.wrappedValue.leftPath)
-            ?? URL(fileURLWithPath: session.wrappedValue.leftPath, isDirectory: true)
-        let rightURL = env.bookmarkStore.resolve(path: session.wrappedValue.rightPath)
-            ?? URL(fileURLWithPath: session.wrappedValue.rightPath, isDirectory: true)
+        let launchSession = env.launchOptions.hasPanelOverrides
+            ? env.makeFreshSession()
+            : session.wrappedValue
+        let leftURL = env.bookmarkStore.resolve(path: launchSession.leftPath)
+            ?? URL(fileURLWithPath: launchSession.leftPath, isDirectory: true)
+        let rightURL = env.bookmarkStore.resolve(path: launchSession.rightPath)
+            ?? URL(fileURLWithPath: launchSession.rightPath, isDirectory: true)
 
         let state = AppState(
             leftDirectory: leftURL,
@@ -31,24 +34,29 @@ package struct WindowRootView: View {
             configuration: env.configuration,
             sandboxAccess: env.sandboxAccess
         )
-        state.leftPanel.restoreTabs(
-            from: session.wrappedValue.leftTabPaths,
-            fallbackDirectory: leftURL,
-            activeIndex: session.wrappedValue.leftActiveTabIndex
-        )
-        state.rightPanel.restoreTabs(
-            from: session.wrappedValue.rightTabPaths,
-            fallbackDirectory: rightURL,
-            activeIndex: session.wrappedValue.rightActiveTabIndex
-        )
+        if env.launchOptions.hasPanelOverrides {
+            state.leftPanel.restoreTabs(from: [], fallbackDirectory: leftURL, activeIndex: 0)
+            state.rightPanel.restoreTabs(from: [], fallbackDirectory: rightURL, activeIndex: 0)
+        } else {
+            state.leftPanel.restoreTabs(
+                from: launchSession.leftTabPaths,
+                fallbackDirectory: leftURL,
+                activeIndex: launchSession.leftActiveTabIndex
+            )
+            state.rightPanel.restoreTabs(
+                from: launchSession.rightTabPaths,
+                fallbackDirectory: rightURL,
+                activeIndex: launchSession.rightActiveTabIndex
+            )
+        }
         // `restoreTabs` has already picked the location of the tab it could
         // actually restore — a path that no longer exists is dropped, and the
         // active index clamped. Only an explicit in-memory location, which is
         // to say a window being cloned, should override that.
-        if let leftLocation = session.wrappedValue.leftLocation {
+        if !env.launchOptions.hasPanelOverrides, let leftLocation = launchSession.leftLocation {
             state.leftPanel.adoptClonedLocation(leftLocation)
         }
-        if let rightLocation = session.wrappedValue.rightLocation {
+        if !env.launchOptions.hasPanelOverrides, let rightLocation = launchSession.rightLocation {
             state.rightPanel.adoptClonedLocation(rightLocation)
         }
         _appState = State(initialValue: state)
@@ -71,11 +79,15 @@ package struct WindowRootView: View {
                 }
             }
             .onChange(of: appState.leftPanel.state.location) { _, newLocation in
-                env.bookmarkStore.save(url: newLocation.persistentDirectory)
+                if !env.launchOptions.noSavedState {
+                    env.bookmarkStore.save(url: newLocation.persistentDirectory)
+                }
                 captureSession()
             }
             .onChange(of: appState.rightPanel.state.location) { _, newLocation in
-                env.bookmarkStore.save(url: newLocation.persistentDirectory)
+                if !env.launchOptions.noSavedState {
+                    env.bookmarkStore.save(url: newLocation.persistentDirectory)
+                }
                 captureSession()
             }
             // Opening, closing, reordering or switching tabs usually leaves the
@@ -120,6 +132,7 @@ package struct WindowRootView: View {
     /// binding both feeds macOS window restoration and, through the `session`
     /// observer, records the state for the next launch.
     private func captureSession() {
+        guard !env.launchOptions.noSavedState else { return }
         let leftLocation = appState.leftPanel.state.location
         let rightLocation = appState.rightPanel.state.location
         session = PanelSession(

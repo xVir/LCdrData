@@ -66,6 +66,25 @@ Apple test runner refuses macOS XCUITEST:
 scripts/run-ui-tests.sh
 ```
 
+Each UI test creates its own writable temporary directory with deterministic left
+and right panel contents, passes those paths to the app, and removes the directory
+tree during teardown. This keeps tests independent of the user's files and saved
+panel state.
+
+For deterministic UI-test runs, launch the app with explicit panel directories.
+When either panel argument is present, saved panel-session state and macOS-restored
+panel locations are ignored; an omitted side starts in the home directory:
+
+```bash
+open /tmp/lcdr/LCdrData.app --args \
+  --left /path/to/left-fixtures \
+  --right /path/to/right-fixtures \
+  --no-saved-state
+```
+
+`--no-saved-state` also prevents panel-session and folder-bookmark updates during
+the run, leaving the user's saved state unchanged when the app quits.
+
 ### Working in Xcode
 
 Bazel cannot give you SwiftUI previews or a comfortable debugger, so the Xcode project is

@@ -1,6 +1,6 @@
 import XCTest
 
-final class LCdrDataUITests: XCTestCase {
+final class LCdrDataUITests: LCdrDataUITestCase {
 
     override func setUpWithError() throws {
         // Put setup code here. This method is called before the invocation of each test method in the class.
@@ -17,7 +17,7 @@ final class LCdrDataUITests: XCTestCase {
 
     @MainActor
     func testMainWindowLaunches() throws {
-        let app = XCUIApplication()
+        let app = makeApplication()
         app.launch()
         XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 5))
     }
@@ -26,7 +26,7 @@ final class LCdrDataUITests: XCTestCase {
     func testLaunchPerformance() throws {
         // This measures how long it takes to launch your application.
         measure(metrics: [XCTApplicationLaunchMetric()]) {
-            XCUIApplication().launch()
+            makeApplication().launch()
         }
     }
 }
