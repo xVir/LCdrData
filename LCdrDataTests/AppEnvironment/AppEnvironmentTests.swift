@@ -9,6 +9,55 @@ import Foundation
 @MainActor
 struct AppEnvironmentTests {
 
+    @Test func launchOptionsParsePanelPathsAndNoSavedState() {
+        // Arrange
+        let options = LaunchOptions(arguments: [
+            "LCdrData", "--left", "/tmp/left", "--right", "/tmp/right", "--no-saved-state"
+        ])
+
+        // Assert
+        #expect(options.leftPath == "/tmp/left")
+        #expect(options.rightPath == "/tmp/right")
+        #expect(options.noSavedState)
+        #expect(options.hasPanelOverrides)
+    }
+
+    @Test func launchPanelPathsOverrideSavedSession() {
+        // Arrange
+        let store = FakePanelSessionStore()
+        store.save(PanelSessionSnapshot(leftPath: "/saved/left", rightPath: "/saved/right"))
+        let env = makeEnvironment(
+            sessionStore: store,
+            launchOptions: LaunchOptions(arguments: [
+                "LCdrData", "--left", "/test/left", "--right", "/test/right"
+            ])
+        )
+
+        // Act
+        let session = env.makeFreshSession()
+
+        // Assert
+        #expect(session.leftPath == "/test/left")
+        #expect(session.rightPath == "/test/right")
+        #expect(session.leftTabPaths == [])
+        #expect(session.rightTabPaths == [])
+    }
+
+    @Test func noSavedStateDoesNotRecordSession() {
+        // Arrange
+        let store = FakePanelSessionStore()
+        let env = makeEnvironment(
+            sessionStore: store,
+            launchOptions: LaunchOptions(arguments: ["LCdrData", "--no-saved-state"])
+        )
+
+        // Act
+        env.rememberLastSession(PanelSession(leftPath: "/test/left", rightPath: "/test/right"))
+
+        // Assert
+        #expect(store.loadLastSession() == nil)
+    }
+
     @Test func makeFreshSessionUsesHomeOnAFirstLaunch() {
         // Arrange — nothing recorded by a previous run.
         let env = makeEnvironment(sessionStore: FakePanelSessionStore())
@@ -121,7 +170,10 @@ struct AppEnvironmentTests {
         _ = frontmost  // keep alive — mostRecentAppState is weak
     }
 
-    private func makeEnvironment(sessionStore: PanelSessionStoring) -> AppEnvironment {
+    private func makeEnvironment(
+        sessionStore: PanelSessionStoring,
+        launchOptions: LaunchOptions = LaunchOptions(arguments: ["LCdrData"])
+    ) -> AppEnvironment {
         AppEnvironment(
             configuration: ConfigurationService(),
             bookmarkStore: FakeBookmarkStore(),
@@ -130,7 +182,8 @@ struct AppEnvironmentTests {
                 bookmarkStore: FakeBookmarkStore()
             ),
             scopeActivator: RecordingScopeActivator(),
-            sessionStore: sessionStore
+            sessionStore: sessionStore,
+            launchOptions: launchOptions
         )
     }
 

@@ -1,18 +1,14 @@
 import XCTest
 
-final class LCdrDataUITestsLaunchTests: XCTestCase {
+final class LCdrDataUITestsLaunchTests: LCdrDataUITestCase {
 
     override class var runsForEachTargetApplicationUIConfiguration: Bool {
         false
     }
 
-    override func setUpWithError() throws {
-        continueAfterFailure = false
-    }
-
     @MainActor
     func testLaunch() throws {
-        let app = XCUIApplication()
+        let app = makeApplication()
         app.launch()
 
         // Insert steps here to perform after app launch but before taking a screenshot,

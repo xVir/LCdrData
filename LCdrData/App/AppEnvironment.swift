@@ -25,6 +25,7 @@ package struct SystemSecurityScopeActivator: SecurityScopeActivating {
 @MainActor
 package final class AppEnvironment {
 
+    package let launchOptions: LaunchOptions
     package let configuration: ConfigurationService
     package let bookmarkStore: BookmarkStoreProtocol
     package let sandboxAccess: SandboxAccessService
@@ -37,7 +38,8 @@ package final class AppEnvironment {
     package private(set) var activeScopes: [URL] = []
     private var hasStarted: Bool = false
 
-    package init() {
+    package init(arguments: [String] = ProcessInfo.processInfo.arguments) {
+        self.launchOptions = LaunchOptions(arguments: arguments)
         let configuration = ConfigurationService()
         try? configuration.load()
         self.configuration = configuration
@@ -58,8 +60,10 @@ package final class AppEnvironment {
         sandboxAccess: SandboxAccessService? = nil,
         scopeActivator: SecurityScopeActivating = SystemSecurityScopeActivator(),
         sessionStore: PanelSessionStoring = PanelSessionStore(),
-        columnLayouts: PanelColumnLayoutModel = PanelColumnLayoutModel()
+        columnLayouts: PanelColumnLayoutModel = PanelColumnLayoutModel(),
+        launchOptions: LaunchOptions = LaunchOptions()
     ) {
+        self.launchOptions = launchOptions
         self.configuration = configuration
         self.bookmarkStore = bookmarkStore
         self.sandboxAccess = sandboxAccess ?? SandboxAccessService(
@@ -107,6 +111,13 @@ package final class AppEnvironment {
     /// then the directories recorded on the previous run, and only falls back to
     /// Home on a first launch.
     package func makeFreshSession() -> PanelSession {
+        if launchOptions.hasPanelOverrides {
+            let home = FileManager.default.homeDirectoryForCurrentUser.path
+            return PanelSession(
+                leftPath: launchOptions.leftPath ?? home,
+                rightPath: launchOptions.rightPath ?? home
+            )
+        }
         if let frontmost = mostRecentAppState {
             return PanelSession(
                 leftPath: frontmost.leftPanel.state.location.persistentDirectory.path,
@@ -132,6 +143,7 @@ package final class AppEnvironment {
     /// Records a window's directories, tabs and front tab as the state to
     /// resume on the next launch.
     package func rememberLastSession(_ session: PanelSession) {
+        guard !launchOptions.noSavedState else { return }
         sessionStore.save(
             PanelSessionSnapshot(
                 leftPath: session.leftPath,

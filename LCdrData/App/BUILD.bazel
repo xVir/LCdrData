@@ -6,7 +6,7 @@ load("//:defs.bzl", "PACKAGE_NAME", "SWIFT_COPTS")
 # App layer, which is why one BUILD file defines two targets from one directory.
 swift_library(
     name = "AppEnvironment",
-    srcs = ["AppEnvironment.swift"],
+    srcs = ["AppEnvironment.swift", "LaunchOptions.swift"],
     copts = SWIFT_COPTS,
     module_name = "AppEnvironment",
     package_name = PACKAGE_NAME,
@@ -29,7 +29,7 @@ swift_library(
     name = "LCdrDataLib",
     srcs = glob(
         ["**/*.swift"],
-        exclude = ["AppEnvironment.swift"],
+        exclude = ["AppEnvironment.swift", "LaunchOptions.swift"],
     ),
     copts = SWIFT_COPTS,
     module_name = "LCdrData",

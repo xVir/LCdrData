@@ -14,6 +14,9 @@
 #   scripts/run-ui-tests.sh                                # whole suite
 #   scripts/run-ui-tests.sh PanelSelectionUITests          # one class
 #   scripts/run-ui-tests.sh PanelSelectionUITests/testFoo  # one test
+#
+# Each test creates an isolated temporary left/right directory tree, launches
+# the app with those directories and --no-saved-state, then removes the tree.
 
 set -euo pipefail
 

@@ -91,6 +91,7 @@ package struct FileTableView: View {
                         FileRowView(
                             item: item,
                             viewModel: viewModel,
+                            onActivatePanel: activatePanel,
                             columns: layout.columns,
                             widths: layout.resolvedWidths(availableWidth: Double(contentWidth)),
                             dateFormat: panelDateFormat,
@@ -118,8 +119,8 @@ package struct FileTableView: View {
                     }
                 }
                 .accessibilityIdentifier("fileList.\(viewModel.side.identifier)")
-                // Stops a click on the blank area below the rows from clearing
-                // the table's selection — see FileListSelectionBridge.
+                // Blank-area primary clicks and secondary-click select-under-pointer
+                // — see FileListSelectionBridge.
                 .background(FileListSelectionBridge {
                     appState.activePanel = viewModel.side
                 })
@@ -187,6 +188,11 @@ package struct FileTableView: View {
         DispatchQueue.main.async {
             fileListFocused = true
         }
+    }
+
+    private func activatePanel() {
+        appState.activePanel = viewModel.side
+        focusFileListIfAppropriate()
     }
 
     private func handleExternalFileDrop(providers: [NSItemProvider], into viewModel: PanelViewModel) async {
@@ -440,6 +446,7 @@ private struct SortableColumnHeader: View {
 private struct FileRowView: View {
     package let item: FileItem
     package let viewModel: PanelViewModel
+    package let onActivatePanel: () -> Void
     /// The order and widths the header is drawing right now, handed down as a
     /// plain value so a row can never compute its own geometry.
     package let columns: [FileColumn]
@@ -494,6 +501,7 @@ private struct FileRowView: View {
         )
         .simultaneousGesture(
             TapGesture(count: 1).onEnded {
+                onActivatePanel()
                 viewModel.cursorDidChangeSelection(to: [item.id])
             }
         )
@@ -593,4 +601,3 @@ private struct FileRowView: View {
             .offset(x: -1, y: 1)
     }
 }
-

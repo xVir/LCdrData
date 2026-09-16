@@ -84,6 +84,9 @@ launch restores where you left off.
   it stays regular through sorting and reloads.
 - A `..` row sits at the top of every listing except the filesystem root.
 - Click to select, `⌘`-click to add to the selection, `⇧`-click for a range.
+  A secondary click (right-click / Control-click) on a row that is not already
+  selected collapses the selection to that row before the context menu opens;
+  a secondary click inside the current selection leaves the selection as it is.
 - `Return` enters a directory or a `.zip`; on any other **file** it starts a rename, the way
   Finder does.
   `F2` renames whatever is focused, orthodox-style. Neither applies to `..`.
