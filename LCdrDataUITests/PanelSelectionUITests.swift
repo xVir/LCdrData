@@ -2,6 +2,93 @@ import XCTest
 
 final class PanelSelectionUITests: LCdrDataUITestCase {
 
+    @MainActor
+    func testTabSwitchesActivePanel() throws {
+        let app = makeApplication()
+        app.launch()
+
+        let leftList = app.outlines["fileList.left"]
+        let rightList = app.outlines["fileList.right"]
+        XCTAssertTrue(leftList.waitForExistence(timeout: 20))
+        XCTAssertTrue(rightList.waitForExistence(timeout: 20))
+
+        let rightRow = rightList.outlineRows.element(boundBy: 1)
+        rightRow.click()
+        app.typeKey(XCUIKeyboardKey.tab, modifierFlags: [])
+
+        let leftRow = leftList.outlineRows.element(boundBy: 1)
+        leftRow.click()
+        XCTAssertTrue(leftRow.isSelected)
+    }
+
+    @MainActor
+    func testClickingFileInInactivePanelActivatesAndSelectsIt() throws {
+        let app = makeApplication()
+        app.launch()
+
+        let rightList = app.outlines["fileList.right"]
+        XCTAssertTrue(rightList.waitForExistence(timeout: 20))
+        let row = rightList.outlineRows.element(boundBy: 1)
+
+        row.click()
+
+        XCTAssertTrue(row.isSelected)
+        assertNewFolderDialogAppearsAfterActivating(rightPanel: rightList, in: app)
+    }
+
+    @MainActor
+    func testRightClickingFileInInactivePanelActivatesAndSelectsIt() throws {
+        let app = makeApplication()
+        app.launch()
+
+        let rightList = app.outlines["fileList.right"]
+        XCTAssertTrue(rightList.waitForExistence(timeout: 20))
+        let row = rightList.outlineRows.element(boundBy: 1)
+
+        row.rightClick()
+
+        XCTAssertTrue(row.isSelected)
+        XCTAssertTrue(app.menuItems["Open"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testClickingEmptySpaceInInactivePanelActivatesIt() throws {
+        let app = makeApplication()
+        app.launch()
+
+        let rightList = app.outlines["fileList.right"]
+        XCTAssertTrue(rightList.waitForExistence(timeout: 20))
+        clickEmptySpaceBelowRows(in: rightList)
+
+        assertNewFolderDialogAppearsAfterActivating(rightPanel: rightList, in: app)
+    }
+
+    @MainActor
+    func testRightClickingFileOpensContextMenu() throws {
+        let app = makeApplication()
+        app.launch()
+
+        let leftList = app.outlines["fileList.left"]
+        XCTAssertTrue(leftList.waitForExistence(timeout: 20))
+        leftList.outlineRows.element(boundBy: 1).rightClick()
+
+        XCTAssertTrue(app.menuItems["Open"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.menuItems["Move to Trash"].exists)
+    }
+
+    @MainActor
+    func testRightClickingParentItemOpensContextMenu() throws {
+        let app = makeApplication()
+        app.launch()
+
+        let leftList = app.outlines["fileList.left"]
+        XCTAssertTrue(leftList.waitForExistence(timeout: 20))
+        leftList.outlineRows.element(boundBy: 0).rightClick()
+
+        XCTAssertTrue(app.menuItems["Open"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.menuItems["Move to Trash"].exists)
+    }
+
     /// Clicking the blank area below the last row must not leave the panel
     /// without a selected row — the cursor stays on the row it was on.
     @MainActor
@@ -137,5 +224,24 @@ final class PanelSelectionUITests: LCdrDataUITestCase {
     @MainActor
     private func selectedRowCount(in fileList: XCUIElement) -> Int {
         fileList.outlineRows.allElementsBoundByIndex.filter(\.isSelected).count
+    }
+
+    @MainActor
+    private func assertNewFolderDialogAppearsAfterActivating(
+        rightPanel: XCUIElement,
+        in app: XCUIApplication
+    ) {
+        tapCommandBarButton("F7", in: app)
+        XCTAssertTrue(app.buttons["Cancel"].waitForExistence(timeout: 5))
+        app.buttons.matching(identifier: "Cancel").allElementsBoundByIndex.last?.click()
+    }
+
+    @MainActor
+    private func tapCommandBarButton(_ key: String, in app: XCUIApplication) {
+        let button = app.buttons.matching(
+            NSPredicate(format: "label BEGINSWITH %@", key)
+        ).firstMatch
+        XCTAssertTrue(button.waitForExistence(timeout: 5), "\(key) command button not found")
+        button.click()
     }
 }
