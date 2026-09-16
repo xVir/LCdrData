@@ -11,7 +11,13 @@ final class LCdrDataUITests: LCdrDataUITestCase {
 
     @MainActor
     func testLaunchPerformance() throws {
-        measure(metrics: [XCTApplicationLaunchMetric()]) {
+        let options = XCTMeasureOptions()
+        options.iterationCount = 3
+
+        measure(
+            metrics: [XCTApplicationLaunchMetric()],
+            options: options
+        ) {
             makeApplication().launch()
         }
     }
