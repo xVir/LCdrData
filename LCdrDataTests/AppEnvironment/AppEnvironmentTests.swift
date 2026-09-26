@@ -20,6 +20,17 @@ struct AppEnvironmentTests {
         #expect(options.rightPath == "/tmp/right")
         #expect(options.noSavedState)
         #expect(options.hasPanelOverrides)
+        #expect(options.operationItemDelayMilliseconds == nil)
+        #expect(options.operationMaxActive == nil)
+    }
+
+    @Test func launchOptionsParseOperationPacingAndAllowance() {
+        let options = LaunchOptions(arguments: [
+            "LCdrData", "--operation-item-delay-ms", "250", "--operation-max-active", "1"
+        ])
+
+        #expect(options.operationItemDelayMilliseconds == 250)
+        #expect(options.operationMaxActive == 1)
     }
 
     @Test func launchPanelPathsOverrideSavedSession() {

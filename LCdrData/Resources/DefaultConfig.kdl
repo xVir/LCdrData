@@ -20,3 +20,7 @@ editor {
     default-app "com.apple.TextEdit"
     open-folders #false
 }
+
+operations {
+    max-active 3
+}

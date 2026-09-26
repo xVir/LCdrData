@@ -10,11 +10,32 @@ package final class FileOperationViewModel {
 
     // MARK: - State
 
-    /// Currently active operations.
-    package var activeOperations: [FileOperation] = []
+    /// Tasks that have started. Oldest first. Each holds one allowance slot.
+    package var running: [FileOperation] = []
 
-    /// Whether the progress overlay should be shown.
-    package var showProgressOverlay: Bool = false
+    /// Confirmed tasks that have not started, because the window is at its allowance. Oldest first.
+    package var waiting: [FileOperation] = []
+
+    /// Finished, failed, and cancelled tasks, oldest first.
+    package var settled: [FileOperation] = []
+
+    /// How many tasks may run at once in this window. Values below 1 are ignored.
+    package private(set) var maxActive: Int = 3
+
+    private let listPolicy = TaskListPolicy()
+
+    /// The task list: every running task, every waiting task, then history.
+    package var visibleOperations: [FileOperation] {
+        listPolicy.visible(running: running, waiting: waiting, settledNewestLast: settled)
+    }
+
+    package var indicatorState: TaskIndicatorState {
+        listPolicy.indicatorState(running: running, waiting: waiting, settled: settled)
+    }
+
+    package var hasUnfinishedBackgroundTasks: Bool {
+        !running.isEmpty || !waiting.isEmpty
+    }
 
     /// Whether a confirmation dialog should be shown.
     package var showConfirmationDialog: Bool = false
@@ -31,20 +52,23 @@ package final class FileOperationViewModel {
     /// The current conflict awaiting resolution.
     package var currentConflict: FileConflict?
 
-    /// Whether to apply the chosen resolution to all remaining conflicts.
-    package var applyToAll: Bool = false
+    /// The stored resolution when "apply to all" is active, per operation.
+    private var storedResolutionByOperation: [UUID: ConflictResolution] = [:]
 
-    /// The stored resolution when "apply to all" is active.
-    private var storedResolution: ConflictResolution?
+    /// Operations whose conflicts are answered by `storedResolutionByOperation`.
+    private var applyToAllOperations: Set<UUID> = []
 
-    /// The continuation used to resume after the user resolves a conflict.
-    private var conflictContinuation: CheckedContinuation<ConflictResolution, Never>?
+    /// Running tasks, keyed by operation id. Waiting tasks are not here.
+    private var tasks: [UUID: Task<Void, Never>] = [:]
 
-    /// The continuation used to resume after the user confirms an operation.
-    private var confirmationContinuation: CheckedContinuation<Bool, Never>?
+    /// Work that has been confirmed and is either running or waiting.
+    private var queuedWork: [UUID: QueuedWork] = [:]
 
-    /// The current operation task, used for cancellation.
-    private var currentTask: Task<Void, Never>?
+    /// Conflict questions waiting for the one sheet, in the order they were raised.
+    private var conflictQueue: [ConflictRequest] = []
+
+    /// The conflict currently on the sheet.
+    private var presentedConflict: ConflictRequest?
 
     /// Error message to display if an operation fails.
     package var errorMessage: String?
@@ -136,7 +160,11 @@ package final class FileOperationViewModel {
     }
 
     /// Copies file URLs supplied by an external drag into a panel location.
-    package func performDrop(urls: [URL], to destination: BrowseLocation) async {
+    package func performDrop(
+        urls: [URL],
+        to destination: BrowseLocation,
+        reloadDestination: @escaping () async -> Void = {}
+    ) async {
         let items = urls.map { url in
             let values = try? url.resourceValues(forKeys: [.isDirectoryKey])
             return FileItem(
@@ -147,21 +175,12 @@ package final class FileOperationViewModel {
         }
         guard !items.isEmpty else { return }
 
-        do {
-            try await browseOperationService.copy(
-                items: items,
-                from: .directory(urls[0].deletingLastPathComponent()),
-                to: destination,
-                onProgress: { _ in },
-                onConflict: { [weak self] conflict in
-                    guard let self else { return .skip }
-                    return await self.resolveConflict(conflict)
-                }
-            )
-        } catch {
-            errorMessage = error.localizedDescription
-            showErrorAlert = true
-        }
+        let source = BrowseLocation.directory(urls[0].deletingLastPathComponent())
+        enqueue(
+            .browseCopy(items: items, source: source, destination: destination),
+            reloadSource: {},
+            reloadDestination: reloadDestination
+        )
     }
 
     // MARK: - Delete
@@ -266,6 +285,7 @@ package final class FileOperationViewModel {
         renameItem = nil
     }
 
+
     // MARK: - Confirmation Handling
 
     /// Called when the user confirms a pending operation.
@@ -276,12 +296,23 @@ package final class FileOperationViewModel {
         guard let operation = pendingOperationType else { return }
         pendingOperationType = nil
 
-        currentTask = Task {
-            await executeOperation(
-                operation,
-                reloadSource: reloadSource,
-                reloadDestination: reloadDestination
-            )
+        switch operation {
+        case .createFolder(let directory, let name):
+            newFolderName = name
+            Task {
+                await performCreateFolder(in: directory)
+                await reloadSource()
+                await reloadDestination()
+            }
+        case .rename(let item, let newName):
+            renameItem = FileItem(url: item, name: item.lastPathComponent, isDirectory: false)
+            Task {
+                await performRename(newName: newName)
+                await reloadSource()
+                await reloadDestination()
+            }
+        default:
+            enqueue(operation, reloadSource: reloadSource, reloadDestination: reloadDestination)
         }
     }
 
@@ -290,382 +321,351 @@ package final class FileOperationViewModel {
         pendingOperationType = nil
     }
 
-    // MARK: - Operation Execution
+    /// Lowers or raises how many tasks may run. Running tasks are left alone.
+    /// A value below 1 is ignored.
+    package func setAllowance(_ value: Int) {
+        guard value >= 1 else { return }
+        maxActive = value
+        startWaitingIfSlotsFree()
+    }
 
-    /// Executes a confirmed file operation.
-    private func executeOperation(
-        _ operation: FileOperationType,
-        reloadSource: @escaping () async -> Void,
-        reloadDestination: @escaping () async -> Void
-    ) async {
-        // Reset conflict state for this operation
-        applyToAll = false
-        storedResolution = nil
+    /// Stops one task. A waiting task never starts. A running task stays running
+    /// until the current item's write returns.
+    package func cancel(id: UUID) {
+        if let index = waiting.firstIndex(where: { $0.id == id }) {
+            var operation = waiting.remove(at: index)
+            operation.status = .cancelled
+            queuedWork[id] = nil
+            appendSettled(operation)
+            return
+        }
+        guard let index = running.firstIndex(where: { $0.id == id }) else { return }
+        running[index].isFinishingCurrentItem = true
+        cancelConflictWait(id)
+        tasks[id]?.cancel()
+    }
 
-        switch operation {
-        case .copy(let sources, let destination):
-            await executeCopy(
-                sources: sources,
-                destination: destination,
-                reloadSource: reloadSource,
-                reloadDestination: reloadDestination
-            )
-
-        case .move(let sources, let destination):
-            await executeMove(
-                sources: sources,
-                destination: destination,
-                reloadSource: reloadSource,
-                reloadDestination: reloadDestination
-            )
-
-        case .delete(let items):
-            await executeDelete(
-                items: items,
-                reloadSource: reloadSource,
-                reloadDestination: reloadDestination
-            )
-
-        case .permanentDelete(let items):
-            await executePermanentDelete(
-                items: items,
-                reloadSource: reloadSource,
-                reloadDestination: reloadDestination
-            )
-
-        case .createFolder(let directory, let name):
-            newFolderName = name
-            await performCreateFolder(in: directory)
-            await reloadSource()
-            await reloadDestination()
-
-        case .rename(let item, let newName):
-            renameItem = FileItem(url: item, name: item.lastPathComponent, isDirectory: false)
-            await performRename(newName: newName)
-            await reloadSource()
-            await reloadDestination()
-
-        case .browseCopy(let items, let source, let destination):
-            await executeBrowseTransfer(
-                kind: .copy,
-                items: items,
-                source: source,
-                destination: destination,
-                reloadSource: reloadSource,
-                reloadDestination: reloadDestination
-            )
-
-        case .browseMove(let items, let source, let destination):
-            await executeBrowseTransfer(
-                kind: .move,
-                items: items,
-                source: source,
-                destination: destination,
-                reloadSource: reloadSource,
-                reloadDestination: reloadDestination
-            )
-
-        case .browseDelete(let items, let source, let permanently):
-            await executeBrowseDelete(
-                items: items,
-                source: source,
-                permanently: permanently,
-                reloadSource: reloadSource,
-                reloadDestination: reloadDestination
-            )
+    package func cancelAllUnfinished() {
+        for id in waiting.map(\.id) {
+            cancel(id: id)
+        }
+        for id in running.map(\.id) {
+            cancel(id: id)
         }
     }
 
-    private func executeBrowseTransfer(
-        kind: FileOperationKind,
-        items: [FileItem],
-        source: BrowseLocation,
-        destination: BrowseLocation,
+    /// Whether the task list is open. The ring lives in the title bar, and the
+    /// list is drawn in the window under it.
+    package var isTaskListPresented = false
+
+    /// After the list is closed with nothing still running, the ring is drawn empty
+    /// until the next operation starts. Finished rows stay in the list.
+    package private(set) var ringIsEmpty = false
+
+    private var lastTaskListToggle: TimeInterval = 0
+
+    package func toggleTaskList() {
+        let now = ProcessInfo.processInfo.systemUptime
+        // A title-bar click can be delivered twice: once to the ring, once to the button.
+        if now - lastTaskListToggle < 0.05 { return }
+        lastTaskListToggle = now
+        isTaskListPresented.toggle()
+        if !isTaskListPresented {
+            emptyRingIfIdle()
+        }
+    }
+
+    package func dismissTaskList() {
+        guard isTaskListPresented else { return }
+        isTaskListPresented = false
+        emptyRingIfIdle()
+    }
+
+    private func emptyRingIfIdle() {
+        if running.isEmpty && waiting.isEmpty {
+            ringIsEmpty = true
+        }
+    }
+
+    // MARK: - Queue
+
+    private struct QueuedWork {
+        var operation: FileOperation
+        let type: FileOperationType
+        let reloadSource: () async -> Void
+        let reloadDestination: () async -> Void
+    }
+
+    private struct ConflictRequest {
+        let operationID: UUID
+        let conflict: FileConflict
+        let continuation: CheckedContinuation<ConflictResolution, Never>
+    }
+
+    private func enqueue(
+        _ type: FileOperationType,
         reloadSource: @escaping () async -> Void,
         reloadDestination: @escaping () async -> Void
-    ) async {
-        let operationID = UUID()
-        activeOperations.append(
-            FileOperation(
-                id: operationID,
-                kind: kind,
-                sourceURLs: items.map(\.url),
-                destinationURL: destination.watchURL,
-                status: .inProgress
-            )
+    ) {
+        let id = UUID()
+        let operation = trackedOperation(id: id, type: type, status: .pending)
+        queuedWork[id] = QueuedWork(
+            operation: operation,
+            type: type,
+            reloadSource: reloadSource,
+            reloadDestination: reloadDestination
         )
-        showProgressOverlay = true
+        if running.count < maxActive {
+            promote(id)
+        } else {
+            waiting.append(operation)
+        }
+    }
 
+    private func promote(_ id: UUID) {
+        guard var work = queuedWork[id] else { return }
+        waiting.removeAll { $0.id == id }
+        work.operation.status = .inProgress
+        queuedWork[id] = work
+        ringIsEmpty = false
+        running.append(work.operation)
+        tasks[id] = Task { [weak self] in
+            await self?.run(id)
+        }
+    }
+
+    private func startWaitingIfSlotsFree() {
+        while running.count < maxActive, let next = waiting.first {
+            promote(next.id)
+        }
+    }
+
+    private func run(_ id: UUID) async {
+        guard let work = queuedWork[id] else { return }
+        let status: FileOperationStatus
         do {
-            let onProgress: @Sendable (FileOperationProgress) -> Void = { [weak self] progress in
-                Task { @MainActor [weak self] in
-                    self?.updateProgress(operationID: operationID, progress: progress)
-                }
-            }
-            let onConflict: @Sendable (FileConflict) async -> ConflictResolution = { [weak self] conflict in
-                guard let self else { return .skip }
-                return await self.resolveConflict(conflict)
-            }
-            if kind == .copy {
-                try await browseOperationService.copy(
-                    items: items,
-                    from: source,
-                    to: destination,
-                    onProgress: onProgress,
-                    onConflict: onConflict
-                )
-            } else {
-                try await browseOperationService.move(
-                    items: items,
-                    from: source,
-                    to: destination,
-                    onProgress: onProgress,
-                    onConflict: onConflict
-                )
-            }
-            updateStatus(operationID: operationID, status: .completed)
+            try await perform(work.type, operationID: id)
+            try Task.checkCancellation()
+            status = .completed
         } catch is CancellationError {
-            updateStatus(operationID: operationID, status: .cancelled)
+            status = .cancelled
         } catch {
-            updateStatus(operationID: operationID, status: .failed(error.localizedDescription))
-            errorMessage = error.localizedDescription
-            showErrorAlert = true
+            status = .failed(error.localizedDescription)
         }
-
-        showProgressOverlay = false
-        await reloadSource()
-        await reloadDestination()
-        cleanUpCompletedOperations(operationID: operationID)
+        await finish(id, status: status, work: work)
     }
 
-    private func executeBrowseDelete(
-        items: [FileItem],
-        source: BrowseLocation,
-        permanently: Bool,
-        reloadSource: @escaping () async -> Void,
-        reloadDestination: @escaping () async -> Void
-    ) async {
-        do {
-            try await browseOperationService.delete(
-                items: items,
-                from: source,
-                permanently: permanently
-            )
-        } catch {
-            errorMessage = error.localizedDescription
-            showErrorAlert = true
+    private func finish(_ id: UUID, status: FileOperationStatus, work: QueuedWork) async {
+        tasks[id] = nil
+        queuedWork[id] = nil
+        storedResolutionByOperation[id] = nil
+        applyToAllOperations.remove(id)
+        if let index = running.firstIndex(where: { $0.id == id }) {
+            var operation = running.remove(at: index)
+            operation.status = status
+            operation.isFinishingCurrentItem = false
+            appendSettled(operation)
         }
-        await reloadSource()
-        await reloadDestination()
+        await work.reloadSource()
+        await work.reloadDestination()
+        startWaitingIfSlotsFree()
     }
 
-    private func executeCopy(
-        sources: [URL],
-        destination: URL,
-        reloadSource: @escaping () async -> Void,
-        reloadDestination: @escaping () async -> Void
-    ) async {
-        let operationID = UUID()
-        let operation = FileOperation(
-            id: operationID,
-            kind: .copy,
-            sourceURLs: sources,
-            destinationURL: destination,
-            status: .inProgress
-        )
-        activeOperations.append(operation)
-        showProgressOverlay = true
+    private func perform(_ type: FileOperationType, operationID: UUID) async throws {
+        let onProgress: @Sendable (FileOperationProgress) -> Void = { [weak self] progress in
+            Task { @MainActor [weak self] in
+                self?.updateProgress(operationID: operationID, progress: progress)
+            }
+        }
+        let onConflict: @Sendable (FileConflict) async -> ConflictResolution = { [weak self] conflict in
+            guard let self else { return .skip }
+            return await self.resolveConflict(conflict, operationID: operationID)
+        }
 
-        do {
+        switch type {
+        case .copy(let sources, let destination):
             try await operationService.copy(
                 sources: sources,
                 to: destination,
-                onProgress: { [weak self] progress in
-                    Task { @MainActor [weak self] in
-                        self?.updateProgress(operationID: operationID, progress: progress)
-                    }
-                },
-                onConflict: { [weak self] conflict in
-                    guard let self else { return .skip }
-                    return await self.resolveConflict(conflict)
-                }
+                onProgress: onProgress,
+                onConflict: onConflict
             )
-            updateStatus(operationID: operationID, status: .completed)
-        } catch is CancellationError {
-            updateStatus(operationID: operationID, status: .cancelled)
-        } catch {
-            updateStatus(operationID: operationID, status: .failed(error.localizedDescription))
-            errorMessage = error.localizedDescription
-            showErrorAlert = true
-        }
-
-        showProgressOverlay = false
-        await reloadSource()
-        await reloadDestination()
-
-        // Clean up completed operations after a short delay
-        cleanUpCompletedOperations(operationID: operationID)
-    }
-
-    private func executeMove(
-        sources: [URL],
-        destination: URL,
-        reloadSource: @escaping () async -> Void,
-        reloadDestination: @escaping () async -> Void
-    ) async {
-        let operationID = UUID()
-        let operation = FileOperation(
-            id: operationID,
-            kind: .move,
-            sourceURLs: sources,
-            destinationURL: destination,
-            status: .inProgress
-        )
-        activeOperations.append(operation)
-        showProgressOverlay = true
-
-        do {
+        case .move(let sources, let destination):
             try await operationService.move(
                 sources: sources,
                 to: destination,
-                onProgress: { [weak self] progress in
-                    Task { @MainActor [weak self] in
-                        self?.updateProgress(operationID: operationID, progress: progress)
-                    }
-                },
-                onConflict: { [weak self] conflict in
-                    guard let self else { return .skip }
-                    return await self.resolveConflict(conflict)
-                }
+                onProgress: onProgress,
+                onConflict: onConflict
             )
-            updateStatus(operationID: operationID, status: .completed)
-        } catch is CancellationError {
-            updateStatus(operationID: operationID, status: .cancelled)
-        } catch {
-            updateStatus(operationID: operationID, status: .failed(error.localizedDescription))
-            errorMessage = error.localizedDescription
-            showErrorAlert = true
+        case .delete(let items):
+            _ = try await operationService.trash(items: items, onProgress: onProgress)
+        case .permanentDelete(let items):
+            try await operationService.deletePermanently(items: items, onProgress: onProgress)
+        case .browseCopy(let items, let source, let destination):
+            try await browseOperationService.copy(
+                items: items,
+                from: source,
+                to: destination,
+                onProgress: onProgress,
+                onConflict: onConflict
+            )
+        case .browseMove(let items, let source, let destination):
+            try await browseOperationService.move(
+                items: items,
+                from: source,
+                to: destination,
+                onProgress: onProgress,
+                onConflict: onConflict
+            )
+        case .browseDelete(let items, let source, let permanently):
+            try await browseOperationService.delete(
+                items: items,
+                from: source,
+                permanently: permanently,
+                onProgress: onProgress
+            )
+        case .createFolder, .rename:
+            break
         }
-
-        showProgressOverlay = false
-        await reloadSource()
-        await reloadDestination()
-
-        cleanUpCompletedOperations(operationID: operationID)
     }
 
-    private func executeDelete(
-        items: [URL],
-        reloadSource: @escaping () async -> Void,
-        reloadDestination: @escaping () async -> Void
-    ) async {
-        let operationID = UUID()
-        let operation = FileOperation(
-            id: operationID,
-            kind: .delete,
-            sourceURLs: items,
-            status: .inProgress
-        )
-        activeOperations.append(operation)
-
-        do {
-            _ = try await operationService.trash(items: items)
-            updateStatus(operationID: operationID, status: .completed)
-        } catch {
-            updateStatus(operationID: operationID, status: .failed(error.localizedDescription))
-            errorMessage = error.localizedDescription
-            showErrorAlert = true
+    private func trackedOperation(
+        id: UUID,
+        type: FileOperationType,
+        status: FileOperationStatus
+    ) -> FileOperation {
+        switch type {
+        case .copy(let sources, let destination):
+            return FileOperation(
+                id: id,
+                kind: .copy,
+                sourceURLs: sources,
+                destinationURL: destination,
+                status: status
+            )
+        case .move(let sources, let destination):
+            return FileOperation(
+                id: id,
+                kind: .move,
+                sourceURLs: sources,
+                destinationURL: destination,
+                status: status
+            )
+        case .delete(let items):
+            return FileOperation(id: id, kind: .delete, sourceURLs: items, status: status)
+        case .permanentDelete(let items):
+            return FileOperation(id: id, kind: .permanentDelete, sourceURLs: items, status: status)
+        case .browseCopy(let items, _, let destination):
+            return FileOperation(
+                id: id,
+                kind: .copy,
+                sourceURLs: items.map(\.url),
+                destinationURL: destination.watchURL,
+                status: status
+            )
+        case .browseMove(let items, _, let destination):
+            return FileOperation(
+                id: id,
+                kind: .move,
+                sourceURLs: items.map(\.url),
+                destinationURL: destination.watchURL,
+                status: status
+            )
+        case .browseDelete(let items, _, let permanently):
+            return FileOperation(
+                id: id,
+                kind: permanently ? .permanentDelete : .delete,
+                sourceURLs: items.map(\.url),
+                status: status
+            )
+        case .createFolder, .rename:
+            return FileOperation(id: id, kind: .rename, sourceURLs: [], status: status)
         }
-
-        await reloadSource()
-        await reloadDestination()
-
-        cleanUpCompletedOperations(operationID: operationID)
     }
 
-    private func executePermanentDelete(
-        items: [URL],
-        reloadSource: @escaping () async -> Void,
-        reloadDestination: @escaping () async -> Void
-    ) async {
-        let operationID = UUID()
-        let operation = FileOperation(
-            id: operationID,
-            kind: .permanentDelete,
-            sourceURLs: items,
-            status: .inProgress
-        )
-        activeOperations.append(operation)
-
-        do {
-            try await operationService.deletePermanently(items: items)
-            updateStatus(operationID: operationID, status: .completed)
-        } catch {
-            updateStatus(operationID: operationID, status: .failed(error.localizedDescription))
-            errorMessage = error.localizedDescription
-            showErrorAlert = true
+    private func appendSettled(_ operation: FileOperation) {
+        settled.append(operation)
+        let overflow = settled.count - TaskListPolicy.settledCapacity
+        if overflow > 0 {
+            settled.removeFirst(overflow)
         }
+    }
 
-        await reloadSource()
-        await reloadDestination()
-
-        cleanUpCompletedOperations(operationID: operationID)
+    private func updateProgress(operationID: UUID, progress: FileOperationProgress) {
+        guard let index = running.firstIndex(where: { $0.id == operationID }) else { return }
+        running[index].progress = progress
     }
 
     // MARK: - Conflict Resolution
 
-    /// Resolves a file conflict, either from stored resolution or by prompting the user.
-    private func resolveConflict(_ conflict: FileConflict) async -> ConflictResolution {
-        if applyToAll, let stored = storedResolution {
+    /// Resolves a file conflict for one running task. "Apply to all" does not
+    /// answer any other task. A second task waits until the sheet is free.
+    private func resolveConflict(
+        _ conflict: FileConflict,
+        operationID: UUID
+    ) async -> ConflictResolution {
+        if applyToAllOperations.contains(operationID),
+           let stored = storedResolutionByOperation[operationID] {
             return stored
         }
 
-        return await withCheckedContinuation { continuation in
-            self.conflictContinuation = continuation
-            self.currentConflict = conflict
-            self.showConflictDialog = true
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                conflictQueue.append(
+                    ConflictRequest(
+                        operationID: operationID,
+                        conflict: conflict,
+                        continuation: continuation
+                    )
+                )
+                presentNextConflict()
+            }
+        } onCancel: {
+            Task { @MainActor [weak self] in
+                self?.cancelConflictWait(operationID)
+            }
         }
+    }
+
+    private func presentNextConflict() {
+        guard presentedConflict == nil, !conflictQueue.isEmpty else { return }
+        let request = conflictQueue.removeFirst()
+        presentedConflict = request
+        currentConflict = request.conflict
+        showConflictDialog = true
     }
 
     /// Called when the user selects a conflict resolution.
     package func resolveCurrentConflict(with resolution: ConflictResolution, applyToAll: Bool) {
-        self.applyToAll = applyToAll
+        guard let request = presentedConflict else { return }
         if applyToAll {
-            self.storedResolution = resolution
+            applyToAllOperations.insert(request.operationID)
+            storedResolutionByOperation[request.operationID] = resolution
         }
-
+        presentedConflict = nil
         showConflictDialog = false
         currentConflict = nil
-        conflictContinuation?.resume(returning: resolution)
-        conflictContinuation = nil
+        request.continuation.resume(returning: resolution)
+        presentNextConflict()
     }
 
-    // MARK: - Cancellation
-
-    /// Cancels the current running operation.
-    package func cancelCurrentOperation() {
-        currentTask?.cancel()
-        currentTask = nil
-        showProgressOverlay = false
-    }
-
-    // MARK: - Progress Tracking
-
-    private func updateProgress(operationID: UUID, progress: FileOperationProgress) {
-        guard let index = activeOperations.firstIndex(where: { $0.id == operationID }) else {
-            return
+    /// Resumes a task that is blocked on the conflict sheet so cancellation can proceed.
+    private func cancelConflictWait(_ operationID: UUID) {
+        if let presented = presentedConflict, presented.operationID == operationID {
+            presentedConflict = nil
+            showConflictDialog = false
+            currentConflict = nil
+            presented.continuation.resume(returning: .skip)
+            presentNextConflict()
         }
-        activeOperations[index].progress = progress
-    }
-
-    private func updateStatus(operationID: UUID, status: FileOperationStatus) {
-        guard let index = activeOperations.firstIndex(where: { $0.id == operationID }) else {
-            return
+        var kept: [ConflictRequest] = []
+        for request in conflictQueue {
+            if request.operationID == operationID {
+                request.continuation.resume(returning: .skip)
+            } else {
+                kept.append(request)
+            }
         }
-        activeOperations[index].status = status
-    }
-
-    private func cleanUpCompletedOperations(operationID: UUID) {
-        activeOperations.removeAll { $0.id == operationID }
+        conflictQueue = kept
     }
 }

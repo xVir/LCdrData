@@ -124,7 +124,7 @@ Everything acts on the active panel's selection, with the other panel as the des
 | Refresh | `⌘R` | Reload the active panel |
 
 - Destructive operations ask first.
-- Long copies and moves show a progress overlay that can be cancelled part-way.
+- Copy, move, and delete run in the background. A ring in the title bar shows their combined progress, and clicking it lists each one with its own progress. A window runs only as many as `operations.max-active` at once; the rest wait. Cancel stops a running operation without undoing items that already finished, and a waiting operation never starts.
 - When a file already exists at the destination, a dialog offers **overwrite**, **skip** or
   **rename** — and an *apply to all* toggle so a large batch needs answering once.
 - Panels refresh themselves when their directory changes on disk, so an operation performed
@@ -219,6 +219,10 @@ editor {
     default-app "com.apple.TextEdit"
     open-folders #false
 }
+
+operations {
+    max-active 3
+}
 ```
 
 Each `bookmarks` entry is a `label|path` pair and becomes an item in the Favorites menu;
@@ -228,6 +232,8 @@ Each `bookmarks` entry is a `label|path` pair and becomes an item in the Favorit
 names an application you do not have installed, `F4` falls back to the system default handler
 rather than refusing to open the file. It applies to `F4` alone — `Return` and double-click
 still open a file the way Finder would.
+
+`operations.max-active` is how many long file operations (copy, move, folder removal) may run at once in a window. The default is 3. A further operation waits, and can be cancelled before it starts. A value below 1 is ignored.
 
 `editor.open-folders` extends `F4` to folders, which is what an editor that opens a project
 directory wants. Off by default, so `F4` over a folder does nothing. Turn it on and `F4` hands

@@ -34,6 +34,9 @@ package struct WindowRootView: View {
             configuration: env.configuration,
             sandboxAccess: env.sandboxAccess
         )
+        if let maxActive = env.launchOptions.operationMaxActive {
+            state.fileOperations.setAllowance(maxActive)
+        }
         if env.launchOptions.hasPanelOverrides {
             state.leftPanel.restoreTabs(from: [], fallbackDirectory: leftURL, activeIndex: 0)
             state.rightPanel.restoreTabs(from: [], fallbackDirectory: rightURL, activeIndex: 0)
@@ -71,7 +74,10 @@ package struct WindowRootView: View {
             // keeps the first one — so the frontmost reference has to be taken
             // from the `@State` that actually survives, or it dangles and Cmd+N
             // falls back to the saved session instead of this window.
-            .onAppear { env.mostRecentAppState = appState }
+            .onAppear {
+                env.mostRecentAppState = appState
+                env.registerWindow(appState)
+            }
             .task { await env.start() }
             .onChange(of: controlActiveState) { _, newValue in
                 if newValue == .key {

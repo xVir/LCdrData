@@ -204,6 +204,7 @@ package actor ArchiveService: ArchiveServiceProtocol {
             throw ArchiveServiceError.entryNotFound(normalizedPaths.first ?? "")
         }
         for entryPath in entryPaths {
+            try Task.checkCancellation()
             guard let entry = archive[entryPath] else { continue }
             try archive.remove(entry)
         }

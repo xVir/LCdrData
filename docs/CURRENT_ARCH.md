@@ -116,7 +116,7 @@ One consequence of `MemberImportVisibility` is worth knowing: a file can need `i
 | `PanelSession.swift` | Window identity and collapsed left/right paths for `WindowGroup(for:)`. Optional live `BrowseLocation`s let `⌘N` clone archive interiors; custom Codable deliberately omits them so relaunch restores only real containing directories. |
 | `SortDescriptor.swift` | `FileSortDescriptor` with `Column { name, size, dateModified, dateCreated, kind }`; `toggle(column:)` flips direction on the same column and resets to ascending on a new one. |
 | `ColumnLayout.swift` | `FileColumn { name, size, dateModified, kind }` — the columns that have a UI, deliberately narrower than the sort columns, which also include `dateCreated`. `PanelColumnLayout` holds the order and each fixed column's width; `name` stores none, being the slack column derived as `available − Σ(others)`, which is what keeps a row's widths summing to the panel's. `resizing(dividerAfter:by:availableWidth:)` trades width between the two columns the dragged divider separates, so that divider lands under the pointer and the others hold still; it, `moving(from:to:)` and `targetIndex(draggedIndex:translationX:widths:)` are pure, so the whole drag calculus is unit-tested without a view. `init(sanitizing:)` is the only public initialiser: it drops unknown or duplicate columns, appends missing ones and clamps widths, so no stored data can yield a layout the table cannot draw. |
-| `AppConfiguration.swift` | Effective settings with defaults (hidden off, sort by name ascending, font 13, date `yyyy-MM-dd HH:mm`, editor `com.apple.TextEdit`); nested `BookmarkEntry { label, path }`; computed `sortDescriptor`. |
+| `AppConfiguration.swift` | Effective settings with defaults (hidden off, sort by name ascending, font 13, date `yyyy-MM-dd HH:mm`, editor `com.apple.TextEdit`, `operationsMaxActive` 3); nested `BookmarkEntry { label, path }`; computed `sortDescriptor`. |
 
 ### 4.2 Core/Utilities
 
@@ -158,7 +158,7 @@ Service protocols are `Sendable, nonisolated` so they can be called from any act
 | `PanelViewModel.swift` | One per panel. Dispatches listing by `BrowseLocation`, enters and leaves zip locations atomically, watches the directory or container, tracks archive writability, and temporarily extracts members for Quick Look/F4/drag-out. |
 | `AppState.swift` | **Per-window** state: `leftPanel`, `rightPanel`, `activePanel`, the window's `FileOperationViewModel`, its `QuickLookPreviewController`, and a reference to the shared `ConfigurationService`. Exposes `switchActivePanel()`, `applyEffectiveConfiguration()`, `presentOpenFolderPanel()`, `copySelectedPathsToPasteboard()`, `navigateActivePanelToFavorite(path:)`, and a computed `commands: CommandRunner`. |
 | `CommandRunner.swift` | `package struct`. The single executor for `Command`, resolving active and inactive panels from one `AppState` and answering `isEnabled(_:)` so every surface greys out consistently. |
-| `FileOperationViewModel.swift` | The dialog-and-progress coordinator over `BrowseOperationService`: location-aware confirmations, external drops, mkdir/rename/delete, and cross-filesystem/archive copy and move. Conflict resolution still suspends on a `CheckedContinuation`. |
+| `FileOperationViewModel.swift` | The dialog-and-progress coordinator over `BrowseOperationService`. Confirmed copy, move, and delete run as background tasks up to `operations.max-active`; the rest wait. Conflict resolution still suspends on a `CheckedContinuation`, one sheet at a time. |
 | `FocusedAppState.swift` | Declares `ActiveAppStateKey` and `FocusedValues.appState` so menu commands act on the key window's `AppState` rather than a captured one. (There is no type named `FocusedAppState`.) |
 
 ### 4.5 App/AppEnvironment — shared services
@@ -186,7 +186,7 @@ Scope activation is fronted by `SecurityScopeActivating` so tests can observe st
 | `CommandBarView.swift` | The bottom F3–F8 strip; each button asks `CommandRunner.isEnabled` and calls `perform`. |
 | `StatusBarView.swift` | Item counts and selected-size summary. |
 | `FileContextMenu.swift` | The secondary-click menu, in three variants resolved by `FileContextMenuModel`, routed through `CommandRunner`. |
-| `FileOperationProgressView.swift` | The copy/move progress overlay with Cancel. Not shown for trash or delete. |
+| `TaskIndicatorView.swift` | The title-bar ring and the task list it opens. Each running row has its own progress bar and a Cancel button. |
 | `ConflictResolutionView.swift` | Overwrite / Skip / Rename with an apply-to-all toggle; resumes the continuation in `FileOperationViewModel`. |
 | `RenameDialogView.swift` | The rename sheet for a single item. |
 | `ConfigurationView.swift` | The Settings window: a two-pane `HSplitView` with syntax-highlighted bundled defaults on the left and an editable overrides pane on the right. Apply parses, merges, writes and closes — it leaves the window open only when the KDL is rejected, so the inline error stays readable; Cancel reverts the pane to the last applied text and closes. Both close via `@Environment(\.dismiss)` — the revert matters because the `Settings` scene keeps the view alive across closes. |
@@ -220,6 +220,9 @@ bookmarks {
 editor {
     default-app "com.apple.TextEdit"
     open-folders #false
+}
+operations {
+    max-active 3
 }
 ```
 

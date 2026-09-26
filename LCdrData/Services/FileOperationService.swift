@@ -49,16 +49,32 @@ package nonisolated protocol FileOperationServiceProtocol: Sendable {
     ) async throws
 
     /// Moves files to Trash.
-    func trash(items: [URL]) async throws -> [URL]
+    func trash(
+        items: [URL],
+        onProgress: @escaping @Sendable (FileOperationProgress) -> Void
+    ) async throws -> [URL]
 
     /// Removes files or folders from disk without moving them to Trash.
-    func deletePermanently(items: [URL]) async throws
+    func deletePermanently(
+        items: [URL],
+        onProgress: @escaping @Sendable (FileOperationProgress) -> Void
+    ) async throws
 
     /// Creates a new folder at the specified URL with the given name.
     func createFolder(in directory: URL, name: String) async throws -> URL
 
     /// Renames an item at the specified URL to a new name.
     func rename(item: URL, to newName: String) async throws -> URL
+}
+
+extension FileOperationServiceProtocol {
+    package func trash(items: [URL]) async throws -> [URL] {
+        try await trash(items: items, onProgress: { _ in })
+    }
+
+    package func deletePermanently(items: [URL]) async throws {
+        try await deletePermanently(items: items, onProgress: { _ in })
+    }
 }
 
 /// Concrete implementation using Foundation's FileManager.
@@ -99,30 +115,56 @@ package nonisolated final class FileOperationService: FileOperationServiceProtoc
         )
     }
 
-    package func trash(items: [URL]) async throws -> [URL] {
-        return try await Task.detached {
+    package func trash(
+        items: [URL],
+        onProgress: @escaping @Sendable (FileOperationProgress) -> Void
+    ) async throws -> [URL] {
+        let work = Task.detached { () throws -> [URL] in
             let fm = FileManager()
             var trashedURLs: [URL] = []
-
-            for item in items {
+            for (index, item) in items.enumerated() {
+                try Task.checkCancellation()
                 var resultingURL: NSURL?
                 try fm.trashItem(at: item, resultingItemURL: &resultingURL)
                 if let trashedURL = resultingURL as URL? {
                     trashedURLs.append(trashedURL)
                 }
+                onProgress(FileOperationProgress(
+                    totalItems: items.count,
+                    completedItems: index + 1,
+                    currentItemName: item.lastPathComponent
+                ))
             }
-
             return trashedURLs
-        }.value
+        }
+        return try await withTaskCancellationHandler {
+            try await work.value
+        } onCancel: {
+            work.cancel()
+        }
     }
 
-    package func deletePermanently(items: [URL]) async throws {
-        try await Task.detached {
+    package func deletePermanently(
+        items: [URL],
+        onProgress: @escaping @Sendable (FileOperationProgress) -> Void
+    ) async throws {
+        let work = Task.detached {
             let fm = FileManager()
-            for item in items {
+            for (index, item) in items.enumerated() {
+                try Task.checkCancellation()
                 try fm.removeItem(at: item)
+                onProgress(FileOperationProgress(
+                    totalItems: items.count,
+                    completedItems: index + 1,
+                    currentItemName: item.lastPathComponent
+                ))
             }
-        }.value
+        }
+        try await withTaskCancellationHandler {
+            try await work.value
+        } onCancel: {
+            work.cancel()
+        }
     }
 
     package func createFolder(in directory: URL, name: String) async throws -> URL {
@@ -192,6 +234,7 @@ package nonisolated final class FileOperationService: FileOperationServiceProtoc
                     destination: destinationURL
                 )
                 let resolution = await onConflict(conflict)
+                try Task.checkCancellation()
 
                 switch resolution {
                 case .overwrite:
@@ -215,7 +258,18 @@ package nonisolated final class FileOperationService: FileOperationServiceProtoc
                 completedItems: index + 1,
                 currentItemName: itemName
             ))
+            try await Self.paceForUITest()
         }
+    }
+
+    /// `--operation-item-delay-ms` is a UI-test launch option. Production launches omit it.
+    private static func paceForUITest() async throws {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let flag = arguments.firstIndex(of: "--operation-item-delay-ms"),
+              flag + 1 < arguments.count,
+              let milliseconds = Int(arguments[flag + 1]),
+              milliseconds > 0 else { return }
+        try await Task.sleep(for: .milliseconds(milliseconds))
     }
 
     /// True when `a` and `b` refer to the same filesystem object (normalized paths).

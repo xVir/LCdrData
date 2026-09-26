@@ -121,9 +121,10 @@ package struct FileTableView: View {
                 .accessibilityIdentifier("fileList.\(viewModel.side.identifier)")
                 // Blank-area primary clicks and secondary-click select-under-pointer
                 // — see FileListSelectionBridge.
-                .background(FileListSelectionBridge {
-                    appState.activePanel = viewModel.side
-                })
+                .background(FileListSelectionBridge(
+                    onActivatePanel: { appState.activePanel = viewModel.side },
+                    onPrimaryBlankClick: { appState.fileOperations.dismissTaskList() }
+                ))
                 .contextMenu(forSelectionType: UUID.self) { ids in
                     FileContextMenu(
                         model: FileContextMenuModel.resolve(selection: ids, in: viewModel.visibleItems),
@@ -213,9 +214,15 @@ package struct FileTableView: View {
                 continue
             }
         }
+        let panel = viewModel
+        let location = panel.state.location
         await appState.fileOperations.performDrop(
             urls: sourceURLs,
-            to: viewModel.state.location
+            to: location,
+            reloadDestination: {
+                guard panel.state.location == location else { return }
+                await panel.reload(.keepSelection)
+            }
         )
         await viewModel.reload(.keepSelection)
         await appState.inactivePanelViewModel.reload(.keepSelection)

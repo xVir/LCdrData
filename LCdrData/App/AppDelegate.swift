@@ -17,6 +17,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let environment, environment.hasUnfinishedBackgroundTasks else {
+            return .terminateNow
+        }
+        let alert = NSAlert()
+        alert.messageText = "File operations are still running"
+        alert.informativeText = "Closing stops them. Items already finished stay finished, and operations that have not started will not run."
+        alert.addButton(withTitle: "Cancel and Close")
+        alert.addButton(withTitle: "Keep Open")
+        if alert.runModal() == .alertFirstButtonReturn {
+            environment.cancelUnfinishedBackgroundTasks()
+            return .terminateNow
+        }
+        return .terminateCancel
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         environment?.releaseAllScopes()
     }

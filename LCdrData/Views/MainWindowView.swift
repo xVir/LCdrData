@@ -20,7 +20,7 @@ package struct MainWindowView: View {
         let dateFormat = appState.configuration.current.appearanceDateFormat
         let fontSize = CGFloat(appState.configuration.current.appearanceFontSize)
 
-        mainContentLayer(showProgressOverlay: ops.showProgressOverlay, operations: ops.activeOperations)
+        mainContentLayer(showTaskList: ops.isTaskListPresented)
             .environment(\.lcPanelDateFormat, dateFormat)
             .environment(\.lcPanelFontSize, fontSize)
             .task {
@@ -30,9 +30,7 @@ package struct MainWindowView: View {
                 focusedPanel = .left
             }
             .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-                guard !appState.fileOperations.showConfirmationDialog
-                        && !appState.fileOperations.showProgressOverlay
-                        && appState.fileOperations.activeOperations.isEmpty else {
+                guard !appState.fileOperations.showConfirmationDialog else {
                     return
                 }
                 Task {
@@ -99,22 +97,30 @@ package struct MainWindowView: View {
                 // Source-panel intent depends on the operation: delete / move
                 // need to land on the neighbour of the doomed URLs; copy
                 // (which doesn't remove rows from the source) keeps selection.
+                let sourcePanel = appState.activePanelViewModel
+                let destinationPanel = appState.inactivePanelViewModel
+                let sourceLocation = sourcePanel.state.location
+                let destinationLocation = destinationPanel.state.location
                 let sourceIntent: Cursor.Intent
                 switch ops.pendingOperationType {
                 case .delete(let urls), .permanentDelete(let urls):
                     sourceIntent = .landOnNeighbourOf(urls)
                 case .move(let urls, _):
                     sourceIntent = .landOnNeighbourOf(urls)
+                case .browseMove(let items, _, _), .browseDelete(let items, _, _):
+                    sourceIntent = .landOnNeighbourOf(items.map(\.url))
                 default:
                     sourceIntent = .keepSelection
                 }
 
                 ops.confirmOperation(
-                    reloadSource: { [weak appState] in
-                        await appState?.activePanelViewModel.reload(sourceIntent)
+                    reloadSource: {
+                        guard sourcePanel.state.location == sourceLocation else { return }
+                        await sourcePanel.reload(sourceIntent)
                     },
-                    reloadDestination: { [weak appState] in
-                        await appState?.inactivePanelViewModel.reload(.keepSelection)
+                    reloadDestination: {
+                        guard destinationPanel.state.location == destinationLocation else { return }
+                        await destinationPanel.reload(.keepSelection)
                     }
                 )
             }
@@ -204,7 +210,6 @@ package struct MainWindowView: View {
     private var keyboardRoutingActive: Bool {
         let ops = appState.fileOperations
         return !ops.showConfirmationDialog
-            && !ops.showProgressOverlay
             && !ops.showRenameDialog
             && !ops.showNewFolderDialog
             && !ops.showConflictDialog
@@ -249,7 +254,7 @@ package struct MainWindowView: View {
     }
 
     @ViewBuilder
-    private func mainContentLayer(showProgressOverlay: Bool, operations: [FileOperation]) -> some View {
+    private func mainContentLayer(showTaskList: Bool) -> some View {
         ZStack {
             VStack(spacing: 0) {
                 HSplitView {
@@ -270,24 +275,27 @@ package struct MainWindowView: View {
             }
             .frame(minWidth: 800, minHeight: 500)
             .background(
-                // The titlebar's automatic separator draws a hairline right on
-                // top of the tab strip, whose tabs supply their own edges. With
-                // no strip there is nothing between the titlebar and the path
-                // bar, so the separator earns its place again.
-                WindowConfigurator { window in
-                    window.titlebarSeparatorStyle = showsTabStrip ? .none : .automatic
-                }
+                WindowConfigurator(
+                    showsTabStrip: showsTabStrip,
+                    operations: appState.fileOperations
+                )
                 .frame(width: 0, height: 0)
             )
 
-            if showProgressOverlay {
-                Color.black.opacity(0.3)
-                    .ignoresSafeArea()
-
-                FileOperationProgressView(
-                    operations: operations,
-                    onCancel: { appState.fileOperations.cancelCurrentOperation() }
-                )
+            if showTaskList {
+                ZStack(alignment: .topTrailing) {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            appState.fileOperations.dismissTaskList()
+                        }
+                    TaskListView(operations: appState.fileOperations)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+                        .shadow(radius: 8)
+                        .padding(.top, 8)
+                        .padding(.trailing, 12)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
     }

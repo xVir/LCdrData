@@ -146,6 +146,48 @@ closes the FD. Listing I/O does **not** go through the session; the panel still
 calls `FileSystemServiceProtocol.listDirectory` directly. The session is purely
 the URL-scoped lifecycle wrapper.
 
+## Background task
+
+A Copy, Move, Move to Trash, permanent delete, or delete inside an archive, belonging to one **window**. It is either **running** or **waiting**. A single small file is still a background task. A drop of files onto a panel is a Copy and starts without a confirmation question. When it finishes, a panel that has since moved to another location stays there. Two background tasks do not wait for each other, even when they name the same items. Rename and New Folder are not.
+
+_Avoid_: Extract (unpack is Copy); deciding from how long this particular one might take.
+
+## Window
+
+One on-screen frame holding a single **panel session**. How many file operations may run at once is that window's own allowance; another window's operations do not consume it. Lowering the allowance does not cancel a **running** operation. Raising it lets **waiting** operations start, oldest first, until the allowance is full. Closing the window, or quitting, while it still has a **running** or **waiting** operation asks first. A window that only has history closes without asking.
+
+_Avoid_: an app-wide operations pool; closing silently cancels running work.
+
+## Running
+
+A file operation in a **window** that has started. It holds one of that window's allowances until it finishes, fails, or is cancelled — including while it is paused on a name-conflict question. A window asks only one such question at a time. “Apply to all” answers the rest of that operation’s conflicts only.
+
+_Avoid_: calling that pause Waiting; one answer covering every running operation.
+
+## Waiting
+
+A file operation in a **window** that has been confirmed and has not started, because that window is already at its allowance. It starts only when a **running** operation gives up its slot.
+
+_Avoid_: a conflict question; an operation that has already begun.
+
+## Cancel
+
+Stop one file operation. An item that already finished — copied, moved, trashed, or deleted — stays finished. If the current item cannot be stopped mid-write, the operation stays **running** until that write returns, and only then is it cancelled. On a **running** operation that is asking a name-conflict question, Cancel closes that question as well. The slot is then free. On a **waiting** operation, Cancel means it never starts.
+
+_Avoid_: pause; resume; undo.
+
+## Task list
+
+The operations a **window** shows for itself. Every **running** operation and every **waiting** operation is on it, running first (oldest at the top), then waiting (the one that will start next at the top of that group). A running operation shows its own progress. Finished, failed, and cancelled ones share the history slots that are left under 10 rows, newest at the top of that group.
+
+_Avoid_: hiding a running or waiting operation to make room for history.
+
+## Task indicator
+
+The ring in a **window**'s title bar for that window's file operations. Its arc is the combined item progress of every **running** operation in that window. A **waiting** operation does not move it. When nothing is **running** or **waiting**, it stays as a closed ring until the **task list** is closed. Closing the list draws the ring empty, as at the start of an operation, and leaves finished, failed, and cancelled rows in the list for the rest of that window's session. The closed ring is red when any history row is a failure, and blue otherwise.
+
+_Avoid_: a pie; a spinner; hiding the ring the moment the last operation ends; a closed ring that still looks like work in progress.
+
 ## Panel session
 
 The pair of **locations** one window's panels are showing, carried as a
