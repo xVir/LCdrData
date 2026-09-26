@@ -39,6 +39,19 @@ nonisolated final class MockFileOperationService: FileOperationServiceProtocol, 
     var createFolderReturnURL: URL?
     var renameReturnURL: URL?
     var createConflict = false
+    var holdCopy = false
+    private let copyLock = NSLock()
+    private var copyContinuations: [CheckedContinuation<Void, Never>] = []
+    private(set) var copyIsSuspended = false
+    private(set) var copyCallCount = 0
+
+    func resumeHeldCopy() {
+        copyLock.lock()
+        let continuation = copyContinuations.isEmpty ? nil : copyContinuations.removeFirst()
+        copyIsSuspended = !copyContinuations.isEmpty
+        copyLock.unlock()
+        continuation?.resume()
+    }
 
     func copy(
         sources: [URL],
@@ -47,8 +60,20 @@ nonisolated final class MockFileOperationService: FileOperationServiceProtocol, 
         onConflict: @Sendable (FileConflict) async -> ConflictResolution
     ) async throws {
         copyCalled = true
+        copyCallCount += 1
         lastCopySources = sources
         lastCopyDestination = destination
+
+        if holdCopy {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                copyLock.lock()
+                copyContinuations.append(continuation)
+                copyIsSuspended = true
+                copyLock.unlock()
+            }
+        }
+
+        try Task.checkCancellation()
 
         if shouldThrowOnCopy {
             throw FileOperationError.invalidDestination
@@ -94,7 +119,10 @@ nonisolated final class MockFileOperationService: FileOperationServiceProtocol, 
         }
     }
 
-    func trash(items: [URL]) async throws -> [URL] {
+    func trash(
+        items: [URL],
+        onProgress: @escaping @Sendable (FileOperationProgress) -> Void
+    ) async throws -> [URL] {
         trashCalled = true
         lastTrashItems = items
 
@@ -102,14 +130,31 @@ nonisolated final class MockFileOperationService: FileOperationServiceProtocol, 
             throw FileOperationError.invalidDestination
         }
 
+        for (index, item) in items.enumerated() {
+            onProgress(FileOperationProgress(
+                totalItems: items.count,
+                completedItems: index + 1,
+                currentItemName: item.lastPathComponent
+            ))
+        }
         return items
     }
 
-    func deletePermanently(items: [URL]) async throws {
+    func deletePermanently(
+        items: [URL],
+        onProgress: @escaping @Sendable (FileOperationProgress) -> Void
+    ) async throws {
         deletePermanentlyCalled = true
         lastDeletePermanentlyItems = items
         if shouldThrowOnDeletePermanently {
             throw FileOperationError.invalidDestination
+        }
+        for (index, item) in items.enumerated() {
+            onProgress(FileOperationProgress(
+                totalItems: items.count,
+                completedItems: index + 1,
+                currentItemName: item.lastPathComponent
+            ))
         }
     }
 
@@ -469,13 +514,169 @@ struct FileOperationViewModelTests {
 
     // MARK: - Cancel Operation
 
-    @Test func cancelCurrentOperationHidesProgress() {
-        let mockService = MockFileOperationService()
-        let vm = FileOperationViewModel(operationService: mockService)
+    @Test func secondCopyWaitsWhenTheWindowIsAtItsAllowance() async {
+        let mock = MockFileOperationService()
+        mock.holdCopy = true
+        let vm = FileOperationViewModel(operationService: mock)
+        vm.setAllowance(1)
 
-        vm.showProgressOverlay = true
-        vm.cancelCurrentOperation()
+        vm.pendingOperationType = browseCopy(name: "first")
+        vm.confirmOperation(reloadSource: {}, reloadDestination: {})
+        await waitUntil { mock.copyIsSuspended }
 
-        #expect(!vm.showProgressOverlay)
+        vm.pendingOperationType = browseCopy(name: "second")
+        vm.confirmOperation(reloadSource: {}, reloadDestination: {})
+
+        #expect(vm.running.count == 1)
+        #expect(vm.waiting.count == 1)
+        #expect(vm.waiting.first?.status == .pending)
+        #expect(mock.copyCallCount == 1)
+    }
+
+    @Test func cancellingAWaitingCopyNeverRunsIt() async {
+        let mock = MockFileOperationService()
+        mock.holdCopy = true
+        let vm = FileOperationViewModel(operationService: mock)
+        vm.setAllowance(1)
+
+        vm.pendingOperationType = browseCopy(name: "first")
+        vm.confirmOperation(reloadSource: {}, reloadDestination: {})
+        await waitUntil { mock.copyIsSuspended }
+
+        vm.pendingOperationType = browseCopy(name: "second")
+        vm.confirmOperation(reloadSource: {}, reloadDestination: {})
+        let waitingID = vm.waiting[0].id
+        vm.cancel(id: waitingID)
+
+        #expect(vm.waiting.isEmpty)
+        #expect(vm.settled.first?.status == .cancelled)
+        #expect(mock.copyCallCount == 1)
+
+        mock.resumeHeldCopy()
+        await waitUntil { vm.running.isEmpty }
+    }
+
+    @Test func finishingACopyStartsTheOldestWaitingCopy() async {
+        let mock = MockFileOperationService()
+        mock.holdCopy = true
+        let vm = FileOperationViewModel(operationService: mock)
+        vm.setAllowance(1)
+
+        vm.pendingOperationType = browseCopy(name: "first")
+        vm.confirmOperation(reloadSource: {}, reloadDestination: {})
+        await waitUntil { mock.copyIsSuspended }
+
+        vm.pendingOperationType = browseCopy(name: "second")
+        vm.confirmOperation(reloadSource: {}, reloadDestination: {})
+
+        mock.holdCopy = false
+        mock.resumeHeldCopy()
+        await waitUntil { mock.copyCallCount == 2 }
+
+        #expect(vm.waiting.isEmpty)
+        #expect(vm.running.count == 1)
+        #expect(vm.settled.first?.status == .completed)
+    }
+
+    @Test func cancelKeepsARunningCopyRunningUntilTheCurrentWriteReturns() async {
+        let mock = MockFileOperationService()
+        mock.holdCopy = true
+        let vm = FileOperationViewModel(operationService: mock)
+        vm.setAllowance(1)
+
+        vm.pendingOperationType = browseCopy(name: "huge")
+        vm.confirmOperation(reloadSource: {}, reloadDestination: {})
+        await waitUntil { mock.copyIsSuspended }
+
+        vm.cancel(id: vm.running[0].id)
+
+        #expect(vm.running.first?.status == .inProgress)
+        #expect(vm.running.first?.isFinishingCurrentItem == true)
+
+        mock.resumeHeldCopy()
+        await waitUntil { vm.running.isEmpty }
+        #expect(vm.settled.first?.status == .cancelled)
+    }
+
+    @Test func aFailedCopyIsASettledRowWithoutAnAlert() async {
+        let mock = MockFileOperationService()
+        mock.shouldThrowOnCopy = true
+        let vm = FileOperationViewModel(operationService: mock)
+
+        vm.pendingOperationType = browseCopy(name: "broken")
+        vm.confirmOperation(reloadSource: {}, reloadDestination: {})
+        await waitUntil { !vm.settled.isEmpty }
+
+        #expect(vm.showErrorAlert == false)
+        if case .failed = vm.settled.first?.status {
+        } else {
+            Issue.record("expected a failed row")
+        }
+    }
+
+    @Test func closingTheTaskListClearsHistoryAndLeavesRunningWork() async {
+        let mock = MockFileOperationService()
+        mock.shouldThrowOnCopy = true
+        let vm = FileOperationViewModel(operationService: mock)
+        vm.pendingOperationType = browseCopy(name: "broken")
+        vm.confirmOperation(reloadSource: {}, reloadDestination: {})
+        await waitUntil { !vm.settled.isEmpty }
+
+        mock.shouldThrowOnCopy = false
+        mock.holdCopy = true
+        vm.pendingOperationType = browseCopy(name: "live")
+        vm.confirmOperation(reloadSource: {}, reloadDestination: {})
+        await waitUntil { mock.copyIsSuspended }
+
+        vm.acknowledgeSettled()
+
+        #expect(vm.settled.isEmpty)
+        #expect(vm.running.count == 1)
+        mock.resumeHeldCopy()
+        await waitUntil { vm.running.isEmpty }
+    }
+
+    @Test func loweringTheAllowanceDoesNotCancelARunningCopy() async {
+        let mock = MockFileOperationService()
+        mock.holdCopy = true
+        let vm = FileOperationViewModel(operationService: mock)
+        vm.setAllowance(2)
+
+        vm.pendingOperationType = browseCopy(name: "one")
+        vm.confirmOperation(reloadSource: {}, reloadDestination: {})
+        await waitUntil { mock.copyCallCount == 1 }
+        vm.pendingOperationType = browseCopy(name: "two")
+        vm.confirmOperation(reloadSource: {}, reloadDestination: {})
+        await waitUntil { mock.copyCallCount == 2 }
+
+        vm.setAllowance(1)
+
+        #expect(vm.running.count == 2)
+        mock.resumeHeldCopy()
+        mock.resumeHeldCopy()
+        await waitUntil { vm.running.isEmpty }
+    }
+
+    private func browseCopy(name: String) -> FileOperationType {
+        let item = FileItem(
+            url: URL(fileURLWithPath: "/src/\(name).txt"),
+            name: "\(name).txt",
+            isDirectory: false
+        )
+        return .browseCopy(
+            items: [item],
+            source: .directory(URL(fileURLWithPath: "/src", isDirectory: true)),
+            destination: .directory(URL(fileURLWithPath: "/dst", isDirectory: true))
+        )
+    }
+
+    private func waitUntil(
+        _ condition: @escaping @MainActor () -> Bool,
+        limit: Int = 50
+    ) async {
+        for _ in 0..<limit {
+            if condition() { return }
+            await Task.yield()
+        }
     }
 }

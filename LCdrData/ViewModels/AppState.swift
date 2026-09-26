@@ -68,6 +68,7 @@ package final class AppState {
                 archiveService: archiveService
             )
         )
+        self.fileOperations.setAllowance(cfg.operationsMaxActive)
     }
 
     /// Convenience initializer with a default `ConfigurationService` (must run on the main actor).
@@ -126,6 +127,7 @@ package final class AppState {
         rightPanel.editorDefaultAppBundleID = cfg.editorDefaultAppBundleID
         leftPanel.editorOpenFolders = cfg.editorOpenFolders
         rightPanel.editorOpenFolders = cfg.editorOpenFolders
+        fileOperations.setAllowance(cfg.operationsMaxActive)
         async let left: Void = leftPanel.reload(.keepSelection)
         async let right: Void = rightPanel.reload(.keepSelection)
         _ = await (left, right)

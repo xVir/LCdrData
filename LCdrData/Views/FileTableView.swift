@@ -213,9 +213,15 @@ package struct FileTableView: View {
                 continue
             }
         }
+        let panel = viewModel
+        let location = panel.state.location
         await appState.fileOperations.performDrop(
             urls: sourceURLs,
-            to: viewModel.state.location
+            to: location,
+            reloadDestination: {
+                guard panel.state.location == location else { return }
+                await panel.reload(.keepSelection)
+            }
         )
         await viewModel.reload(.keepSelection)
         await appState.inactivePanelViewModel.reload(.keepSelection)

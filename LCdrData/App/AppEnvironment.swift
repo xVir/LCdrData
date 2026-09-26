@@ -34,6 +34,7 @@ package final class AppEnvironment {
     /// Shared by every window, so the columns look the same wherever you look.
     package let columnLayouts: PanelColumnLayoutModel
     package weak var mostRecentAppState: AppState?
+    private var windowStates: [WeakAppState] = []
 
     package private(set) var activeScopes: [URL] = []
     private var hasStarted: Bool = false
@@ -73,6 +74,21 @@ package final class AppEnvironment {
         self.scopeActivator = scopeActivator
         self.sessionStore = sessionStore
         self.columnLayouts = columnLayouts
+    }
+
+    package func registerWindow(_ state: AppState) {
+        windowStates.removeAll { $0.state == nil || $0.state === state }
+        windowStates.append(WeakAppState(state: state))
+    }
+
+    package var hasUnfinishedBackgroundTasks: Bool {
+        windowStates.contains { $0.state?.fileOperations.hasUnfinishedBackgroundTasks == true }
+    }
+
+    package func cancelUnfinishedBackgroundTasks() {
+        for box in windowStates {
+            box.state?.fileOperations.cancelAllUnfinished()
+        }
     }
 
     /// Acquires security scope on every bookmark currently in the store, then
@@ -155,4 +171,8 @@ package final class AppEnvironment {
             )
         )
     }
+}
+
+private struct WeakAppState {
+    weak var state: AppState?
 }

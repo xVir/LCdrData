@@ -14,11 +14,16 @@ package nonisolated protocol BrowseOperationServiceProtocol: Sendable {
         items: [FileItem],
         from source: BrowseLocation,
         to destination: BrowseLocation,
-        onProgress: @Sendable (FileOperationProgress) -> Void,
+        onProgress: @escaping @Sendable (FileOperationProgress) -> Void,
         onConflict: @Sendable (FileConflict) async -> ConflictResolution
     ) async throws
 
-    func delete(items: [FileItem], from source: BrowseLocation, permanently: Bool) async throws
+    func delete(
+        items: [FileItem],
+        from source: BrowseLocation,
+        permanently: Bool,
+        onProgress: @escaping @Sendable (FileOperationProgress) -> Void
+    ) async throws
     func createDirectory(at location: BrowseLocation, name: String) async throws
     func rename(item: FileItem, at location: BrowseLocation, to newName: String) async throws
 }
@@ -99,7 +104,7 @@ package actor BrowseOperationService: BrowseOperationServiceProtocol {
         items: [FileItem],
         from source: BrowseLocation,
         to destination: BrowseLocation,
-        onProgress: @Sendable (FileOperationProgress) -> Void,
+        onProgress: @escaping @Sendable (FileOperationProgress) -> Void,
         onConflict: @Sendable (FileConflict) async -> ConflictResolution
     ) async throws {
         if source == destination {
@@ -157,27 +162,39 @@ package actor BrowseOperationService: BrowseOperationServiceProtocol {
             return
         }
         if !transferredItems.isEmpty {
-            try await delete(items: transferredItems, from: source, permanently: true)
+            try await delete(
+                items: transferredItems,
+                from: source,
+                permanently: true,
+                onProgress: onProgress
+            )
         }
     }
 
     package func delete(
         items: [FileItem],
         from source: BrowseLocation,
-        permanently: Bool
+        permanently: Bool,
+        onProgress: @escaping @Sendable (FileOperationProgress) -> Void
     ) async throws {
         switch source {
         case .directory:
             if permanently {
-                try await fileService.deletePermanently(items: items.map(\.url))
+                try await fileService.deletePermanently(items: items.map(\.url), onProgress: onProgress)
             } else {
-                _ = try await fileService.trash(items: items.map(\.url))
+                _ = try await fileService.trash(items: items.map(\.url), onProgress: onProgress)
             }
         case .zipArchive(let container, _):
-            try await archiveService.remove(
-                container: container,
-                paths: try archivePaths(for: items)
-            )
+            let paths = try archivePaths(for: items)
+            for (index, path) in paths.enumerated() {
+                try Task.checkCancellation()
+                try await archiveService.remove(container: container, paths: [path])
+                onProgress(FileOperationProgress(
+                    totalItems: paths.count,
+                    completedItems: index + 1,
+                    currentItemName: (path as NSString).lastPathComponent
+                ))
+            }
         }
     }
 
@@ -236,6 +253,7 @@ package actor BrowseOperationService: BrowseOperationServiceProtocol {
         var transferredItems: [FileItem] = []
 
         for (index, pair) in zip(items, sourceURLs).enumerated() {
+            try Task.checkCancellation()
             let (item, sourceURL) = pair
             var destinationName = item.name
             if existingNames.contains(destinationName) {
@@ -287,6 +305,7 @@ package actor BrowseOperationService: BrowseOperationServiceProtocol {
 
         var transferredItems: [FileItem] = []
         for (index, item) in items.enumerated() {
+            try Task.checkCancellation()
             let recorder = ConflictResolutionRecorder()
             try await fileService.copy(
                 sources: [temporaryDirectory.appendingPathComponent(item.name)],

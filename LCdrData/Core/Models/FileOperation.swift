@@ -18,6 +18,8 @@ package struct FileOperation: Identifiable, Sendable {
     package let destinationURL: URL?
     package var status: FileOperationStatus
     package var progress: FileOperationProgress?
+    /// Cancel was asked, but the current item cannot be stopped until its write returns.
+    package var isFinishingCurrentItem: Bool
 
     package init(
         id: UUID = UUID(),
@@ -25,7 +27,8 @@ package struct FileOperation: Identifiable, Sendable {
         sourceURLs: [URL],
         destinationURL: URL? = nil,
         status: FileOperationStatus = .pending,
-        progress: FileOperationProgress? = nil
+        progress: FileOperationProgress? = nil,
+        isFinishingCurrentItem: Bool = false
     ) {
         self.id = id
         self.kind = kind
@@ -33,6 +36,7 @@ package struct FileOperation: Identifiable, Sendable {
         self.destinationURL = destinationURL
         self.status = status
         self.progress = progress
+        self.isFinishingCurrentItem = isFinishingCurrentItem
     }
 
     /// Human-readable description of the operation.
