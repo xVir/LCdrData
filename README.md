@@ -180,6 +180,10 @@ bookmarks {
     - "Projects|~/Projects"
     - "Downloads|~/Downloads"
 }
+
+operations {
+    max-active 3
+}
 ```
 
 `bookmarks` entries become the Favorites menu.

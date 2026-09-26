@@ -116,7 +116,7 @@ One consequence of `MemberImportVisibility` is worth knowing: a file can need `i
 | `PanelSession.swift` | Window identity and collapsed left/right paths for `WindowGroup(for:)`. Optional live `BrowseLocation`s let `⌘N` clone archive interiors; custom Codable deliberately omits them so relaunch restores only real containing directories. |
 | `SortDescriptor.swift` | `FileSortDescriptor` with `Column { name, size, dateModified, dateCreated, kind }`; `toggle(column:)` flips direction on the same column and resets to ascending on a new one. |
 | `ColumnLayout.swift` | `FileColumn { name, size, dateModified, kind }` — the columns that have a UI, deliberately narrower than the sort columns, which also include `dateCreated`. `PanelColumnLayout` holds the order and each fixed column's width; `name` stores none, being the slack column derived as `available − Σ(others)`, which is what keeps a row's widths summing to the panel's. `resizing(dividerAfter:by:availableWidth:)` trades width between the two columns the dragged divider separates, so that divider lands under the pointer and the others hold still; it, `moving(from:to:)` and `targetIndex(draggedIndex:translationX:widths:)` are pure, so the whole drag calculus is unit-tested without a view. `init(sanitizing:)` is the only public initialiser: it drops unknown or duplicate columns, appends missing ones and clamps widths, so no stored data can yield a layout the table cannot draw. |
-| `AppConfiguration.swift` | Effective settings with defaults (hidden off, sort by name ascending, font 13, date `yyyy-MM-dd HH:mm`, editor `com.apple.TextEdit`); nested `BookmarkEntry { label, path }`; computed `sortDescriptor`. |
+| `AppConfiguration.swift` | Effective settings with defaults (hidden off, sort by name ascending, font 13, date `yyyy-MM-dd HH:mm`, editor `com.apple.TextEdit`, `operationsMaxActive` 3); nested `BookmarkEntry { label, path }`; computed `sortDescriptor`. |
 
 ### 4.2 Core/Utilities
 
@@ -220,6 +220,9 @@ bookmarks {
 editor {
     default-app "com.apple.TextEdit"
     open-folders #false
+}
+operations {
+    max-active 3
 }
 ```
 

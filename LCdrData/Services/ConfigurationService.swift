@@ -190,6 +190,12 @@ package final class ConfigurationService {
             }
         }
 
+        if let operations = document["operations"] {
+            if let maxActive = intArg(from: operations, childName: "max-active"), maxActive >= 1 {
+                result.operationsMaxActive = maxActive
+            }
+        }
+
         return result
     }
 

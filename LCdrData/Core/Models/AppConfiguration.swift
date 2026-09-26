@@ -21,6 +21,9 @@ package struct AppConfiguration: Equatable, Sendable {
     package var bookmarkEntries: [BookmarkEntry]
     package var editorDefaultAppBundleID: String?
     package var editorOpenFolders: Bool
+    /// How many background file operations may run at once in one window.
+    /// Further ones stay waiting until a slot frees. `operations.max-active` in KDL.
+    package var operationsMaxActive: Int
 
     package static let defaults = AppConfiguration(
         panelShowHiddenFiles: false,
@@ -33,7 +36,8 @@ package struct AppConfiguration: Equatable, Sendable {
             BookmarkEntry(label: "Downloads", path: "~/Downloads")
         ],
         editorDefaultAppBundleID: "com.apple.TextEdit",
-        editorOpenFolders: false
+        editorOpenFolders: false,
+        operationsMaxActive: 3
     )
 
     package var sortDescriptor: FileSortDescriptor {

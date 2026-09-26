@@ -28,6 +28,10 @@ struct ConfigurationServiceTests {
         open-folders #false
     }
 
+    operations {
+        max-active 3
+    }
+
     """
 
     private func makeService(tempDir: URL) -> ConfigurationService {
@@ -72,6 +76,46 @@ struct ConfigurationServiceTests {
         """)
 
         #expect(svc.current.editorOpenFolders == true)
+    }
+
+    @Test func operationsMaxActiveDefaultsToThreeAndParsesFromKDL() throws {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("LCdrDataCfgTest-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        let svc = makeService(tempDir: tmp)
+        try svc.load()
+
+        #expect(svc.current.operationsMaxActive == 3)
+
+        try svc.apply(fromUserKDL: """
+        operations {
+            max-active 5
+        }
+
+        """)
+
+        #expect(svc.current.operationsMaxActive == 5)
+    }
+
+    @Test func operationsMaxActiveIgnoresValuesBelowOne() throws {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("LCdrDataCfgTest-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        let svc = makeService(tempDir: tmp)
+        try svc.load()
+
+        try svc.apply(fromUserKDL: """
+        operations {
+            max-active 0
+        }
+
+        """)
+
+        #expect(svc.current.operationsMaxActive == 3)
     }
 
     @Test func applyUserKDLMergesOntoDefaults() throws {
