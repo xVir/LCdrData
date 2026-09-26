@@ -86,6 +86,7 @@ package struct PanelView: View {
             // come up short and leave bare strip at both ends.
             let overlap = CGFloat(max(0, tabs.count - 1))
             let tabWidth = max(1, (geometry.size.width + overlap) / CGFloat(tabs.count))
+            let titles = displayTitles(fitting: tabWidth)
 
             HStack(spacing: -1) {
                 ForEach(Array(tabs.enumerated()), id: \.element.id) { index, tab in
@@ -94,6 +95,7 @@ package struct PanelView: View {
                         appState: appState,
                         index: index,
                         tab: tab,
+                        title: titles.indices.contains(index) ? titles[index] : tab.title,
                         width: tabWidth
                     )
                     // The active tab's border must win over its neighbours'.
@@ -104,11 +106,37 @@ package struct PanelView: View {
         }
     }
 
+    /// Titles for this panel's tabs, qualified against every open tab in the window
+    /// and shortened to the width of one tab on this strip.
+    private func displayTitles(fitting tabWidth: CGFloat) -> [String] {
+        let left = appState.leftPanel.state.tabs.map(\.location)
+        let right = appState.rightPanel.state.tabs.map(\.location)
+        let logical = TabTitle.labels(for: left + right)
+        let hasClose = viewModel.state.tabs.count > 1
+        let leading: CGFloat = hasClose ? 5 + 14 + 4 : 10
+        let available = max(0, tabWidth - leading - 10)
+        let fitted = TabTitle.fitted(logical) { text in
+            Self.titleWidth(text) <= available
+        }
+        let start = viewModel.side.identifier == PanelSide.left.identifier ? 0 : left.count
+        let end = start + viewModel.state.tabs.count
+        guard start >= 0, end <= fitted.count else {
+            return viewModel.state.tabs.map(\.title)
+        }
+        return Array(fitted[start..<end])
+    }
+
+    private static func titleWidth(_ text: String) -> CGFloat {
+        let font = NSFont.systemFont(ofSize: 12, weight: .semibold)
+        return ceil((text as NSString).size(withAttributes: [.font: font]).width)
+    }
+
     private struct TabBarItemView: View {
         let viewModel: PanelViewModel
         let appState: AppState
         let index: Int
         let tab: PanelTab
+        let title: String
         let width: CGFloat
 
         @State private var isHovered = false
@@ -139,15 +167,17 @@ package struct PanelView: View {
                 Button {
                     Task { await viewModel.activateTab(at: index) }
                 } label: {
-                    Text(tab.title)
+                    Text(title)
                         .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
                         .lineLimit(1)
-                        .truncationMode(.middle)
+                        .truncationMode(.tail)
                         .frame(maxWidth: .infinity)
                         .padding(.leading, hasCloseButton ? closeButtonZone : 10)
                         .padding(.trailing, 10)
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("tab.\(viewModel.side.identifier).\(index)")
+                .accessibilityLabel(title)
                 .foregroundStyle(isSelected ? .primary : .secondary)
                 .frame(height: height)
                 .background {
@@ -183,7 +213,7 @@ package struct PanelView: View {
                 .frame(width: width, height: height, alignment: .bottom)
                 .onDrag {
                     let provider = NSItemProvider(object: "\(viewModel.side.identifier):\(index)" as NSString)
-                    provider.suggestedName = tab.title
+                    provider.suggestedName = title
                     return provider
                 }
                 .onDrop(of: [UTType.text], isTargeted: $isDropTargeted) { providers in
