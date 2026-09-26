@@ -28,14 +28,21 @@ struct FileListSelectionBridge: NSViewRepresentable {
     /// blank-area primary click, or a secondary click on a row.
     let onActivatePanel: () -> Void
 
+    /// A blank-area primary click is swallowed before the rest of the window
+    /// sees it, so the task list cannot dismiss itself from that click.
+    var onPrimaryBlankClick: () -> Void = {}
+
     func makeNSView(context: Context) -> NSView {
         let view = BridgeView()
         view.onActivatePanel = onActivatePanel
+        view.onPrimaryBlankClick = onPrimaryBlankClick
         return view
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
-        (nsView as? BridgeView)?.onActivatePanel = onActivatePanel
+        guard let view = nsView as? BridgeView else { return }
+        view.onActivatePanel = onActivatePanel
+        view.onPrimaryBlankClick = onPrimaryBlankClick
     }
 
     static func dismantleNSView(_ nsView: NSView, coordinator: ()) {
@@ -45,6 +52,7 @@ struct FileListSelectionBridge: NSViewRepresentable {
     private final class BridgeView: NSView {
 
         var onActivatePanel: (() -> Void)?
+        var onPrimaryBlankClick: (() -> Void)?
 
         private var monitor: Any?
         private weak var tableView: NSTableView?
@@ -77,6 +85,7 @@ struct FileListSelectionBridge: NSViewRepresentable {
                 }
                 guard self.shouldSwallowPrimaryBlankClick(event) else { return event }
                 self.activatePanel()
+                self.onPrimaryBlankClick?()
                 return nil
             }
         }

@@ -354,14 +354,13 @@ package final class FileOperationViewModel {
         }
     }
 
-    /// Drops finished, failed, and cancelled rows. Running and waiting rows stay.
-    package func acknowledgeSettled() {
-        settled.removeAll()
-    }
-
     /// Whether the task list is open. The ring lives in the title bar, and the
     /// list is drawn in the window under it.
     package var isTaskListPresented = false
+
+    /// After the list is closed with nothing still running, the ring is drawn empty
+    /// until the next operation starts. Finished rows stay in the list.
+    package private(set) var ringIsEmpty = false
 
     private var lastTaskListToggle: TimeInterval = 0
 
@@ -372,14 +371,20 @@ package final class FileOperationViewModel {
         lastTaskListToggle = now
         isTaskListPresented.toggle()
         if !isTaskListPresented {
-            acknowledgeSettled()
+            emptyRingIfIdle()
         }
     }
 
     package func dismissTaskList() {
         guard isTaskListPresented else { return }
         isTaskListPresented = false
-        acknowledgeSettled()
+        emptyRingIfIdle()
+    }
+
+    private func emptyRingIfIdle() {
+        if running.isEmpty && waiting.isEmpty {
+            ringIsEmpty = true
+        }
     }
 
     // MARK: - Queue
@@ -422,6 +427,7 @@ package final class FileOperationViewModel {
         waiting.removeAll { $0.id == id }
         work.operation.status = .inProgress
         queuedWork[id] = work
+        ringIsEmpty = false
         running.append(work.operation)
         tasks[id] = Task { [weak self] in
             await self?.run(id)

@@ -569,13 +569,14 @@ struct FileOperationViewModelTests {
         vm.pendingOperationType = browseCopy(name: "second")
         vm.confirmOperation(reloadSource: {}, reloadDestination: {})
 
-        mock.holdCopy = false
         mock.resumeHeldCopy()
-        await waitUntil { mock.copyCallCount == 2 }
+        await waitUntil { mock.copyCallCount == 2 && vm.running.count == 1 }
 
         #expect(vm.waiting.isEmpty)
         #expect(vm.running.count == 1)
         #expect(vm.settled.first?.status == .completed)
+        mock.resumeHeldCopy()
+        await waitUntil { vm.running.isEmpty }
     }
 
     @Test func cancelKeepsARunningCopyRunningUntilTheCurrentWriteReturns() async {
@@ -614,13 +615,14 @@ struct FileOperationViewModelTests {
         }
     }
 
-    @Test func closingTheTaskListClearsHistoryAndLeavesRunningWork() async {
+    @Test func closingTheTaskListKeepsFinishedRowsForTheWindowSession() async {
         let mock = MockFileOperationService()
         mock.shouldThrowOnCopy = true
         let vm = FileOperationViewModel(operationService: mock)
         vm.pendingOperationType = browseCopy(name: "broken")
         vm.confirmOperation(reloadSource: {}, reloadDestination: {})
         await waitUntil { !vm.settled.isEmpty }
+        let finishedID = vm.settled[0].id
 
         mock.shouldThrowOnCopy = false
         mock.holdCopy = true
@@ -628,12 +630,24 @@ struct FileOperationViewModelTests {
         vm.confirmOperation(reloadSource: {}, reloadDestination: {})
         await waitUntil { mock.copyIsSuspended }
 
-        vm.acknowledgeSettled()
+        vm.isTaskListPresented = true
+        vm.dismissTaskList()
+        vm.toggleTaskList()
+        vm.toggleTaskList()
 
-        #expect(vm.settled.isEmpty)
+        #expect(vm.settled.contains { $0.id == finishedID })
         #expect(vm.running.count == 1)
+        #expect(!vm.ringIsEmpty)
         mock.resumeHeldCopy()
         await waitUntil { vm.running.isEmpty }
+        #expect(vm.settled.contains { $0.id == finishedID })
+        #expect(!vm.ringIsEmpty)
+
+        vm.toggleTaskList()
+        vm.dismissTaskList()
+
+        #expect(vm.ringIsEmpty)
+        #expect(vm.settled.contains { $0.id == finishedID })
     }
 
     @Test func loweringTheAllowanceDoesNotCancelARunningCopy() async {

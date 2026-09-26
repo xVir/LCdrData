@@ -36,8 +36,13 @@ package struct TaskIndicatorButton: View {
             // The title bar redraws the accent as white. This blue is the progress fill.
             arc = Color(nsColor: .systemBlue)
         case .settled(let hasFailure):
-            fraction = 1
-            arc = hasFailure ? .red : Color(nsColor: .systemBlue)
+            if operations.ringIsEmpty {
+                fraction = 0
+                arc = Color(nsColor: .systemBlue)
+            } else {
+                fraction = 1
+                arc = hasFailure ? .red : Color(nsColor: .systemBlue)
+            }
         }
         return ZStack {
             Circle()

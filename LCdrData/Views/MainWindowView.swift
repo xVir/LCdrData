@@ -283,17 +283,19 @@ package struct MainWindowView: View {
             )
 
             if showTaskList {
-                Color.black.opacity(0.001)
-                    .ignoresSafeArea()
-                    .onTapGesture {
-                        appState.fileOperations.dismissTaskList()
-                    }
-                TaskListView(operations: appState.fileOperations)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
-                    .shadow(radius: 8)
-                    .padding(.top, 8)
-                    .padding(.trailing, 12)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                ZStack(alignment: .topTrailing) {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            appState.fileOperations.dismissTaskList()
+                        }
+                    TaskListView(operations: appState.fileOperations)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+                        .shadow(radius: 8)
+                        .padding(.top, 8)
+                        .padding(.trailing, 12)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
     }

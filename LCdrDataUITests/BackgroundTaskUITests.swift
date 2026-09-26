@@ -22,6 +22,21 @@ final class BackgroundTaskUITests: LCdrDataUITestCase {
     }
 
     @MainActor
+    func testClickingEmptyPanelSpaceClosesTheTaskList() throws {
+        let app = launchPacedApp(maxActive: nil, itemDelayMilliseconds: 0)
+        copyBatch("batch1", in: app)
+        openTaskList(in: app)
+
+        clickEmptySpace(in: app.outlines["fileList.left"])
+
+        let list = app.descendants(matching: .any)["task-list"]
+        XCTAssertFalse(
+            list.waitForExistence(timeout: 1),
+            "clicking empty space in a panel left the task list open"
+        )
+    }
+
+    @MainActor
     func testRunningCopyShowsAProgressBarThatAdvancesAndTheFinishedRowStays() throws {
         let app = launchPacedApp()
         copyBatch("batch1", in: app)
@@ -95,10 +110,13 @@ final class BackgroundTaskUITests: LCdrDataUITestCase {
     }
 
     @MainActor
-    private func launchPacedApp(maxActive: Int? = nil) -> XCUIApplication {
+    private func launchPacedApp(
+        maxActive: Int? = nil,
+        itemDelayMilliseconds: Int? = nil
+    ) -> XCUIApplication {
         let app = makeApplication()
         app.launchArguments.append(contentsOf: [
-            "--operation-item-delay-ms", "\(itemDelayMilliseconds)",
+            "--operation-item-delay-ms", "\(itemDelayMilliseconds ?? self.itemDelayMilliseconds)",
         ])
         if let maxActive {
             app.launchArguments.append(contentsOf: ["--operation-max-active", "\(maxActive)"])
@@ -141,6 +159,21 @@ final class BackgroundTaskUITests: LCdrDataUITestCase {
             indicator.click()
         }
         XCTAssertTrue(app.descendants(matching: .any)["task-list"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    private func clickEmptySpace(in fileList: XCUIElement) {
+        let listFrame = fileList.frame
+        let rows = fileList.outlineRows
+        let lastRowMaxY = rows.element(boundBy: rows.count - 1).frame.maxY
+        XCTAssertGreaterThan(
+            listFrame.maxY - lastRowMaxY,
+            24,
+            "no blank area below the rows"
+        )
+        let emptyY = (lastRowMaxY + listFrame.maxY) / 2
+        let normalizedY = (emptyY - listFrame.minY) / listFrame.height
+        fileList.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: normalizedY)).click()
     }
 
     @MainActor
