@@ -20,6 +20,11 @@ for copy / move).
 
 A panel's mutable surface is `PanelState`; its behaviour lives on `PanelViewModel`.
 
+## Tab
+
+One **location** open in a **panel**. A panel holds one or more tabs, and exactly one of them is in front.
+_Avoid_: the Tab key, which switches the **active panel**; a window.
+
 ## Location
 
 Where a panel currently is: either a **directory** or a folder inside an **archive**.
