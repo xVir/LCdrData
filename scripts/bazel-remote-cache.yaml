@@ -1,0 +1,15 @@
+services:
+  bazel-cache:
+    image: buchgr/bazel-remote-cache:v2.6.2
+    container_name: bazel-cache
+    ports:
+      - "127.0.0.1:39092:9092"
+    tmpfs:
+      - /data:size=6g,mode=1777
+    command:
+      - --dir=/data
+      - --max_size=4
+      - --storage_mode=zstd
+      - --grpc_address=0.0.0.0:9092      
+      - --access_log_level=none
+    restart: unless-stopped
