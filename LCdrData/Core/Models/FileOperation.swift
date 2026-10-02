@@ -58,6 +58,44 @@ package struct FileOperation: Identifiable, Sendable {
             return "Renaming"
         }
     }
+
+    /// Where the items went, or will go. Copy and move name the destination
+    /// folder, trash says "Trash", and a permanent delete names the folder the
+    /// items were removed from. A path inside `homePath` is abbreviated with `~`.
+    package func locationDescription(
+        homePath: String = FileManager.default.homeDirectoryForCurrentUser.path
+    ) -> String {
+        switch kind {
+        case .copy, .move:
+            guard let destinationURL else { return "" }
+            return abbreviatedFilePath(destinationURL, homePath: homePath)
+        case .delete:
+            return "Trash"
+        case .permanentDelete:
+            let parents = sourceURLs.map { $0.deletingLastPathComponent() }
+            let uniqueParents = Set(parents.map(\.path))
+            if uniqueParents.count == 1, let parent = parents.first {
+                return abbreviatedFilePath(parent, homePath: homePath)
+            }
+            if uniqueParents.count > 1 {
+                return "Multiple folders"
+            }
+            return ""
+        case .createFolder, .rename:
+            return ""
+        }
+    }
+}
+
+/// `~/Documents` when `url` is inside `homePath`. A path that only shares a
+/// prefix with home — `/Users/media` against `/Users/me` — stays absolute.
+private func abbreviatedFilePath(_ url: URL, homePath: String) -> String {
+    let path = url.path
+    let home = URL(fileURLWithPath: homePath).path
+    if path == home { return "~" }
+    let prefix = home.hasSuffix("/") ? home : home + "/"
+    guard path.hasPrefix(prefix) else { return path }
+    return "~/" + path.dropFirst(prefix.count)
 }
 
 /// Status of a file operation.

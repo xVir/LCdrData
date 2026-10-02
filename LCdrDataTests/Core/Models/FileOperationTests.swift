@@ -69,6 +69,72 @@ struct FileOperationTests {
         #expect(op.displayDescription == "Renaming")
     }
 
+    @Test func locationDescriptionAbbreviatesADestinationInsideHome() {
+        let op = FileOperation(
+            kind: .copy,
+            sourceURLs: [URL(fileURLWithPath: "/Users/me/Desktop/a.txt")],
+            destinationURL: URL(fileURLWithPath: "/Users/me/Documents")
+        )
+        #expect(op.locationDescription(homePath: "/Users/me") == "~/Documents")
+    }
+
+    @Test func locationDescriptionKeepsADestinationOutsideHome() {
+        let op = FileOperation(
+            kind: .move,
+            sourceURLs: [URL(fileURLWithPath: "/tmp/a")],
+            destinationURL: URL(fileURLWithPath: "/Volumes/Data/Inbox")
+        )
+        #expect(op.locationDescription(homePath: "/Users/me") == "/Volumes/Data/Inbox")
+    }
+
+    @Test func locationDescriptionDoesNotAbbreviateAPathThatOnlySharesAPrefix() {
+        let op = FileOperation(
+            kind: .copy,
+            sourceURLs: [URL(fileURLWithPath: "/tmp/a")],
+            destinationURL: URL(fileURLWithPath: "/Users/media")
+        )
+        #expect(op.locationDescription(homePath: "/Users/me") == "/Users/media")
+    }
+
+    @Test func locationDescriptionForHomeItselfIsATilde() {
+        let op = FileOperation(
+            kind: .copy,
+            sourceURLs: [URL(fileURLWithPath: "/tmp/a")],
+            destinationURL: URL(fileURLWithPath: "/Users/me")
+        )
+        #expect(op.locationDescription(homePath: "/Users/me") == "~")
+    }
+
+    @Test func locationDescriptionForTrashIsTrash() {
+        let op = FileOperation(
+            kind: .delete,
+            sourceURLs: [URL(fileURLWithPath: "/Users/me/Desktop/a.txt")]
+        )
+        #expect(op.locationDescription(homePath: "/Users/me") == "Trash")
+    }
+
+    @Test func locationDescriptionForPermanentDeleteIsTheSourceFolder() {
+        let op = FileOperation(
+            kind: .permanentDelete,
+            sourceURLs: [
+                URL(fileURLWithPath: "/Users/me/Desktop/a.txt"),
+                URL(fileURLWithPath: "/Users/me/Desktop/b.txt"),
+            ]
+        )
+        #expect(op.locationDescription(homePath: "/Users/me") == "~/Desktop")
+    }
+
+    @Test func locationDescriptionForPermanentDeleteFromSeveralFolders() {
+        let op = FileOperation(
+            kind: .permanentDelete,
+            sourceURLs: [
+                URL(fileURLWithPath: "/Users/me/Desktop/a.txt"),
+                URL(fileURLWithPath: "/Users/me/Documents/b.txt"),
+            ]
+        )
+        #expect(op.locationDescription(homePath: "/Users/me") == "Multiple folders")
+    }
+
     @Test func defaultStatusIsPending() {
         let op = FileOperation(
             kind: .copy,
