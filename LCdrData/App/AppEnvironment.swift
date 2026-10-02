@@ -148,6 +148,8 @@ package final class AppEnvironment {
                 rightPath: last.rightPath,
                 leftTabPaths: last.leftTabPaths,
                 rightTabPaths: last.rightTabPaths,
+                leftTabSorts: last.leftTabSorts,
+                rightTabSorts: last.rightTabSorts,
                 leftActiveTabIndex: last.leftActiveTabIndex,
                 rightActiveTabIndex: last.rightActiveTabIndex
             )
@@ -156,8 +158,8 @@ package final class AppEnvironment {
         return PanelSession(leftPath: home, rightPath: home)
     }
 
-    /// Records a window's directories, tabs and front tab as the state to
-    /// resume on the next launch.
+    /// Records a window's directories, tabs, each tab's column sort, and the
+    /// front tab as the state to resume on the next launch.
     package func rememberLastSession(_ session: PanelSession) {
         guard !launchOptions.noSavedState else { return }
         sessionStore.save(
@@ -166,6 +168,8 @@ package final class AppEnvironment {
                 rightPath: session.rightPath,
                 leftTabPaths: session.leftTabPaths,
                 rightTabPaths: session.rightTabPaths,
+                leftTabSorts: session.leftTabSorts,
+                rightTabSorts: session.rightTabSorts,
                 leftActiveTabIndex: session.leftActiveTabIndex,
                 rightActiveTabIndex: session.rightActiveTabIndex
             )

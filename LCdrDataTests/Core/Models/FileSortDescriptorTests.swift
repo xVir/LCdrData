@@ -59,4 +59,26 @@ struct FileSortDescriptorTests {
         #expect(sort1 == sort2)
         #expect(sort1 != sort3)
     }
+
+    @Test func encodingRoundTripsColumnAndDirection() throws {
+        // Arrange
+        let sort = FileSortDescriptor(column: .dateModified, ascending: false)
+
+        // Act
+        let decoded = try JSONDecoder().decode(FileSortDescriptor.self, from: JSONEncoder().encode(sort))
+
+        // Assert
+        #expect(decoded == sort)
+    }
+
+    @Test func anUnknownColumnDecodesAsNameAndKeepsItsDirection() throws {
+        // Arrange
+        let json = Data(#"{"column":"not-a-column","ascending":false}"#.utf8)
+
+        // Act
+        let decoded = try JSONDecoder().decode(FileSortDescriptor.self, from: json)
+
+        // Assert
+        #expect(decoded == FileSortDescriptor(column: .name, ascending: false))
+    }
 }

@@ -67,7 +67,8 @@ launch restores where you left off.
 ## The file table
 
 - Columns: Name, Size, Date Modified, Kind. Click a header to sort; click again to reverse.
-  Directories group before files.
+  Directories group before files. Each tab keeps its own column and direction, and both come
+  back with that tab the next time the app launches.
 - Drag the divider between two headers to **resize** a column, or drag a header itself to
   **reorder** the columns. A header only starts moving after a few points of travel, so a plain
   click still sorts. The divider you grab follows the pointer: the column on its left takes the

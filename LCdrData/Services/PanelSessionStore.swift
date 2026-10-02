@@ -1,12 +1,18 @@
 import Foundation
+import Models
 
 /// A window's panels as they should come back on the next launch: the two
-/// directories, the tabs open in each panel, and which tab was in front.
+/// directories, the tabs open in each panel, each tab's column sort, and which
+/// tab was in front.
 package struct PanelSessionSnapshot: Codable, Equatable, Sendable {
     package let leftPath: String
     package let rightPath: String
     package let leftTabPaths: [String]
     package let rightTabPaths: [String]
+    /// Aligned with `leftTabPaths`. Empty when the snapshot predates per-tab sort.
+    package let leftTabSorts: [FileSortDescriptor]
+    /// Aligned with `rightTabPaths`. Empty when the snapshot predates per-tab sort.
+    package let rightTabSorts: [FileSortDescriptor]
     package let leftActiveTabIndex: Int
     package let rightActiveTabIndex: Int
 
@@ -15,6 +21,8 @@ package struct PanelSessionSnapshot: Codable, Equatable, Sendable {
         rightPath: String,
         leftTabPaths: [String] = [],
         rightTabPaths: [String] = [],
+        leftTabSorts: [FileSortDescriptor] = [],
+        rightTabSorts: [FileSortDescriptor] = [],
         leftActiveTabIndex: Int = 0,
         rightActiveTabIndex: Int = 0
     ) {
@@ -24,8 +32,47 @@ package struct PanelSessionSnapshot: Codable, Equatable, Sendable {
         // reader never has to decide what an empty tab list means.
         self.leftTabPaths = leftTabPaths.isEmpty ? [leftPath] : leftTabPaths
         self.rightTabPaths = rightTabPaths.isEmpty ? [rightPath] : rightTabPaths
+        self.leftTabSorts = leftTabSorts
+        self.rightTabSorts = rightTabSorts
         self.leftActiveTabIndex = max(0, leftActiveTabIndex)
         self.rightActiveTabIndex = max(0, rightActiveTabIndex)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case leftPath
+        case rightPath
+        case leftTabPaths
+        case rightTabPaths
+        case leftTabSorts
+        case rightTabSorts
+        case leftActiveTabIndex
+        case rightActiveTabIndex
+    }
+
+    package init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(
+            leftPath: container.decode(String.self, forKey: .leftPath),
+            rightPath: container.decode(String.self, forKey: .rightPath),
+            leftTabPaths: container.decodeIfPresent([String].self, forKey: .leftTabPaths) ?? [],
+            rightTabPaths: container.decodeIfPresent([String].self, forKey: .rightTabPaths) ?? [],
+            leftTabSorts: container.decodeIfPresent([FileSortDescriptor].self, forKey: .leftTabSorts) ?? [],
+            rightTabSorts: container.decodeIfPresent([FileSortDescriptor].self, forKey: .rightTabSorts) ?? [],
+            leftActiveTabIndex: container.decodeIfPresent(Int.self, forKey: .leftActiveTabIndex) ?? 0,
+            rightActiveTabIndex: container.decodeIfPresent(Int.self, forKey: .rightActiveTabIndex) ?? 0
+        )
+    }
+
+    package func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(leftPath, forKey: .leftPath)
+        try container.encode(rightPath, forKey: .rightPath)
+        try container.encode(leftTabPaths, forKey: .leftTabPaths)
+        try container.encode(rightTabPaths, forKey: .rightTabPaths)
+        try container.encode(leftTabSorts, forKey: .leftTabSorts)
+        try container.encode(rightTabSorts, forKey: .rightTabSorts)
+        try container.encode(leftActiveTabIndex, forKey: .leftActiveTabIndex)
+        try container.encode(rightActiveTabIndex, forKey: .rightActiveTabIndex)
     }
 }
 

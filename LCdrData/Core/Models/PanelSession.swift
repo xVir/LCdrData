@@ -8,6 +8,11 @@ package struct PanelSession: Hashable, Codable, Sendable {
     package let rightPath: String
     package let leftTabPaths: [String]
     package let rightTabPaths: [String]
+    /// Column sort for each left-panel tab, aligned with `leftTabPaths`.
+    /// Empty means the session was saved before per-tab sort was recorded.
+    package let leftTabSorts: [FileSortDescriptor]
+    /// Column sort for each right-panel tab, aligned with `rightTabPaths`.
+    package let rightTabSorts: [FileSortDescriptor]
     package let leftActiveTabIndex: Int
     package let rightActiveTabIndex: Int
     /// In-memory locations used when cloning a live window. They are
@@ -21,6 +26,8 @@ package struct PanelSession: Hashable, Codable, Sendable {
         rightPath: String,
         leftTabPaths: [String] = [],
         rightTabPaths: [String] = [],
+        leftTabSorts: [FileSortDescriptor] = [],
+        rightTabSorts: [FileSortDescriptor] = [],
         leftActiveTabIndex: Int = 0,
         rightActiveTabIndex: Int = 0,
         leftLocation: BrowseLocation? = nil,
@@ -31,6 +38,8 @@ package struct PanelSession: Hashable, Codable, Sendable {
         self.rightPath = rightPath
         self.leftTabPaths = leftTabPaths
         self.rightTabPaths = rightTabPaths
+        self.leftTabSorts = leftTabSorts
+        self.rightTabSorts = rightTabSorts
         self.leftActiveTabIndex = max(0, leftActiveTabIndex)
         self.rightActiveTabIndex = max(0, rightActiveTabIndex)
         self.leftLocation = leftLocation
@@ -43,6 +52,8 @@ package struct PanelSession: Hashable, Codable, Sendable {
         case rightPath
         case leftTabPaths
         case rightTabPaths
+        case leftTabSorts
+        case rightTabSorts
         case leftActiveTabIndex
         case rightActiveTabIndex
     }
@@ -54,6 +65,8 @@ package struct PanelSession: Hashable, Codable, Sendable {
         self.rightPath = try container.decode(String.self, forKey: .rightPath)
         self.leftTabPaths = try container.decodeIfPresent([String].self, forKey: .leftTabPaths) ?? [leftPath]
         self.rightTabPaths = try container.decodeIfPresent([String].self, forKey: .rightTabPaths) ?? [rightPath]
+        self.leftTabSorts = try container.decodeIfPresent([FileSortDescriptor].self, forKey: .leftTabSorts) ?? []
+        self.rightTabSorts = try container.decodeIfPresent([FileSortDescriptor].self, forKey: .rightTabSorts) ?? []
         self.leftActiveTabIndex = try container.decodeIfPresent(Int.self, forKey: .leftActiveTabIndex) ?? 0
         self.rightActiveTabIndex = try container.decodeIfPresent(Int.self, forKey: .rightActiveTabIndex) ?? 0
         self.leftLocation = nil
@@ -67,6 +80,8 @@ package struct PanelSession: Hashable, Codable, Sendable {
         try container.encode(rightPath, forKey: .rightPath)
         try container.encode(leftTabPaths, forKey: .leftTabPaths)
         try container.encode(rightTabPaths, forKey: .rightTabPaths)
+        try container.encode(leftTabSorts, forKey: .leftTabSorts)
+        try container.encode(rightTabSorts, forKey: .rightTabSorts)
         try container.encode(leftActiveTabIndex, forKey: .leftActiveTabIndex)
         try container.encode(rightActiveTabIndex, forKey: .rightActiveTabIndex)
     }

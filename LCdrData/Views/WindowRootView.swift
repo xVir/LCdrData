@@ -44,12 +44,14 @@ package struct WindowRootView: View {
             state.leftPanel.restoreTabs(
                 from: launchSession.leftTabPaths,
                 fallbackDirectory: leftURL,
-                activeIndex: launchSession.leftActiveTabIndex
+                activeIndex: launchSession.leftActiveTabIndex,
+                sortDescriptors: launchSession.leftTabSorts
             )
             state.rightPanel.restoreTabs(
                 from: launchSession.rightTabPaths,
                 fallbackDirectory: rightURL,
-                activeIndex: launchSession.rightActiveTabIndex
+                activeIndex: launchSession.rightActiveTabIndex,
+                sortDescriptors: launchSession.rightTabSorts
             )
         }
         // `restoreTabs` has already picked the location of the tab it could
@@ -117,10 +119,13 @@ package struct WindowRootView: View {
 
     /// Everything about the tabs that is worth persisting, in one comparable
     /// value — `PanelTab` itself carries a directory listing, which is far too
-    /// much to diff on every reload.
+    /// much to diff on every reload. Sort is included so a header click on the
+    /// same folder still rewrites the saved session.
     private struct TabLayout: Equatable {
         let leftPaths: [String]
         let rightPaths: [String]
+        let leftSorts: [FileSortDescriptor]
+        let rightSorts: [FileSortDescriptor]
         let leftActiveIndex: Int
         let rightActiveIndex: Int
     }
@@ -129,6 +134,8 @@ package struct WindowRootView: View {
         TabLayout(
             leftPaths: appState.leftPanel.tabPathsForSession(),
             rightPaths: appState.rightPanel.tabPathsForSession(),
+            leftSorts: appState.leftPanel.tabSortsForSession(),
+            rightSorts: appState.rightPanel.tabSortsForSession(),
             leftActiveIndex: appState.leftPanel.state.activeTabIndex,
             rightActiveIndex: appState.rightPanel.state.activeTabIndex
         )
@@ -147,6 +154,8 @@ package struct WindowRootView: View {
             rightPath: rightLocation.persistentDirectory.path,
             leftTabPaths: appState.leftPanel.tabPathsForSession(),
             rightTabPaths: appState.rightPanel.tabPathsForSession(),
+            leftTabSorts: appState.leftPanel.tabSortsForSession(),
+            rightTabSorts: appState.rightPanel.tabSortsForSession(),
             leftActiveTabIndex: appState.leftPanel.state.activeTabIndex,
             rightActiveTabIndex: appState.rightPanel.state.activeTabIndex,
             leftLocation: leftLocation,

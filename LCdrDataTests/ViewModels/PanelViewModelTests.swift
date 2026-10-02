@@ -1147,4 +1147,128 @@ struct PanelViewModelTests {
         #expect(vm.state.activeTab?.title == "third")
         #expect(vm.state.tabs[0].location == .directory(URL(fileURLWithPath: "/tmp/first")))
     }
+
+    @Test func restoringTabsAppliesEachTabsColumnSort() throws {
+        // Arrange
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let first = root.appendingPathComponent("first", isDirectory: true)
+        let second = root.appendingPathComponent("second", isDirectory: true)
+        try FileManager.default.createDirectory(at: first, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: second, withIntermediateDirectories: true)
+        let vm = PanelViewModel(
+            side: .left,
+            initialDirectory: first,
+            sortDescriptor: FileSortDescriptor(column: .name, ascending: true)
+        )
+
+        // Act
+        vm.restoreTabs(
+            from: [first.path, second.path],
+            fallbackDirectory: first,
+            activeIndex: 1,
+            sortDescriptors: [
+                FileSortDescriptor(column: .size, ascending: false),
+                FileSortDescriptor(column: .dateModified, ascending: true)
+            ]
+        )
+
+        // Assert — the front tab's sort is the one the table shows.
+        #expect(vm.state.tabs.map(\.sortDescriptor) == [
+            FileSortDescriptor(column: .size, ascending: false),
+            FileSortDescriptor(column: .dateModified, ascending: true)
+        ])
+        #expect(vm.state.activeTabIndex == 1)
+        #expect(vm.state.sortDescriptor == FileSortDescriptor(column: .dateModified, ascending: true))
+    }
+
+    @Test func restoringTabsDropsAMissingPathTogetherWithItsSort() throws {
+        // Arrange
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let kept = root.appendingPathComponent("kept", isDirectory: true)
+        try FileManager.default.createDirectory(at: kept, withIntermediateDirectories: true)
+        let vm = PanelViewModel(
+            side: .left,
+            initialDirectory: kept,
+            sortDescriptor: FileSortDescriptor(column: .name, ascending: true)
+        )
+
+        // Act — the gone path sat between two real ones, so a shifted sort
+        // would land on the wrong folder.
+        vm.restoreTabs(
+            from: [kept.path, root.appendingPathComponent("gone").path, kept.path],
+            fallbackDirectory: kept,
+            activeIndex: 0,
+            sortDescriptors: [
+                FileSortDescriptor(column: .size, ascending: false),
+                FileSortDescriptor(column: .kind, ascending: true),
+                FileSortDescriptor(column: .dateCreated, ascending: false)
+            ]
+        )
+
+        // Assert
+        #expect(vm.state.tabs.count == 2)
+        #expect(vm.state.tabs.map(\.sortDescriptor) == [
+            FileSortDescriptor(column: .size, ascending: false),
+            FileSortDescriptor(column: .dateCreated, ascending: false)
+        ])
+    }
+
+    @Test func restoringTabsWithoutARecordedSortUsesThePanelSort() throws {
+        // Arrange — a session saved before per-tab sort stored only paths.
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let folder = root.appendingPathComponent("folder", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let configured = FileSortDescriptor(column: .kind, ascending: false)
+        let vm = PanelViewModel(
+            side: .left,
+            initialDirectory: folder,
+            sortDescriptor: configured
+        )
+
+        // Act
+        vm.restoreTabs(from: [folder.path], fallbackDirectory: folder, activeIndex: 0)
+
+        // Assert
+        #expect(vm.state.sortDescriptor == configured)
+        #expect(vm.state.tabs.map(\.sortDescriptor) == [configured])
+    }
+
+    @Test func tabSortsForSessionReportTheLiveSortOfTheFrontTab() {
+        // Arrange — the header updates the panel sort before the tab is written back.
+        let vm = PanelViewModel(
+            side: .left,
+            initialDirectory: URL(fileURLWithPath: "/tmp/active")
+        )
+        vm.state.tabs = [
+            PanelTab(
+                location: .directory(URL(fileURLWithPath: "/tmp/active")),
+                sortDescriptor: FileSortDescriptor(column: .name, ascending: true)
+            ),
+            PanelTab(
+                location: .directory(URL(fileURLWithPath: "/tmp/other")),
+                sortDescriptor: FileSortDescriptor(column: .size, ascending: false)
+            )
+        ]
+        vm.state.activeTabIndex = 0
+        vm.state.sortDescriptor = FileSortDescriptor(column: .dateModified, ascending: false)
+
+        // Act
+        let sorts = vm.tabSortsForSession()
+
+        // Assert
+        #expect(sorts == [
+            FileSortDescriptor(column: .dateModified, ascending: false),
+            FileSortDescriptor(column: .size, ascending: false)
+        ])
+    }
+
+    private func makeTemporaryDirectory() throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("lcdr-tab-sort-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
 }

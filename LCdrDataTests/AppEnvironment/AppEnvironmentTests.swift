@@ -160,6 +160,66 @@ struct AppEnvironmentTests {
         #expect(session.leftActiveTabIndex == 1)
     }
 
+    @Test func rememberLastSessionRecordsEachTabsColumnSort() {
+        // Arrange
+        let store = FakePanelSessionStore()
+        let env = makeEnvironment(sessionStore: store)
+        let leftSorts = [
+            FileSortDescriptor(column: .name, ascending: true),
+            FileSortDescriptor(column: .size, ascending: false)
+        ]
+        let rightSorts = [FileSortDescriptor(column: .kind, ascending: true)]
+
+        // Act
+        env.rememberLastSession(
+            PanelSession(
+                leftPath: "/Users/test/b",
+                rightPath: "/Users/test/d",
+                leftTabPaths: ["/Users/test/a", "/Users/test/b"],
+                rightTabPaths: ["/Users/test/d"],
+                leftTabSorts: leftSorts,
+                rightTabSorts: rightSorts,
+                leftActiveTabIndex: 1,
+                rightActiveTabIndex: 0
+            )
+        )
+
+        // Assert
+        #expect(store.loadLastSession()?.leftTabSorts == leftSorts)
+        #expect(store.loadLastSession()?.rightTabSorts == rightSorts)
+    }
+
+    @Test func makeFreshSessionResumesEachTabsColumnSort() {
+        // Arrange
+        let store = FakePanelSessionStore()
+        let leftSorts = [
+            FileSortDescriptor(column: .dateModified, ascending: false),
+            FileSortDescriptor(column: .size, ascending: true)
+        ]
+        let rightSorts = [FileSortDescriptor(column: .kind, ascending: false)]
+        store.save(
+            PanelSessionSnapshot(
+                leftPath: "/Users/test/b",
+                rightPath: "/Users/test/c",
+                leftTabPaths: ["/Users/test/a", "/Users/test/b"],
+                rightTabPaths: ["/Users/test/c"],
+                leftTabSorts: leftSorts,
+                rightTabSorts: rightSorts,
+                leftActiveTabIndex: 1,
+                rightActiveTabIndex: 0
+            )
+        )
+        let env = makeEnvironment(sessionStore: store)
+
+        // Act
+        let session = env.makeFreshSession()
+
+        // Assert
+        #expect(session.leftTabSorts == leftSorts)
+        #expect(session.rightTabSorts == rightSorts)
+        #expect(session.leftTabPaths == ["/Users/test/a", "/Users/test/b"])
+    }
+
     @Test func frontmostWindowWinsOverThePreviousRun() {
         // Arrange — Cmd+N should open beside what the user is looking at now.
         let store = FakePanelSessionStore()

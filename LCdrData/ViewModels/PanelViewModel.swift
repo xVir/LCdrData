@@ -255,24 +255,36 @@ package final class PanelViewModel {
     }
 
     /// Replaces the panel's tab list with a saved snapshot and activates the requested index.
-    package func restoreTabs(from paths: [String], fallbackDirectory: URL, activeIndex: Int = 0) {
-        let resolved = paths.compactMap { path -> URL? in
+    ///
+    /// `sortDescriptors` lines up with `paths`. A tab with no recorded sort uses
+    /// the panel's current sort. A path that no longer exists is dropped
+    /// together with the sort that belonged to it.
+    package func restoreTabs(
+        from paths: [String],
+        fallbackDirectory: URL,
+        activeIndex: Int = 0,
+        sortDescriptors: [FileSortDescriptor] = []
+    ) {
+        let resolved: [(url: URL, sort: FileSortDescriptor)] = paths.enumerated().compactMap { index, path in
             let candidate = URL(fileURLWithPath: path, isDirectory: true)
             guard FileManager.default.fileExists(atPath: candidate.path) else { return nil }
-            return candidate
+            let sort = sortDescriptors.indices.contains(index) ? sortDescriptors[index] : state.sortDescriptor
+            return (candidate, sort)
         }
 
-        let tabs = (resolved.isEmpty ? [fallbackDirectory] : resolved).enumerated().map { index, url in
-            PanelTab(
-                id: UUID(),
-                location: .directory(url),
-                title: url.lastPathComponent.isEmpty ? "Home" : url.lastPathComponent,
-                cursor: index == 0 ? state.cursor : Cursor(),
-                sortDescriptor: state.sortDescriptor,
-                showHiddenFiles: state.showHiddenFiles,
-                items: nil
-            )
-        }
+        let tabs = (resolved.isEmpty ? [(fallbackDirectory, state.sortDescriptor)] : resolved)
+            .enumerated()
+            .map { index, entry in
+                PanelTab(
+                    id: UUID(),
+                    location: .directory(entry.url),
+                    title: entry.url.lastPathComponent.isEmpty ? "Home" : entry.url.lastPathComponent,
+                    cursor: index == 0 ? state.cursor : Cursor(),
+                    sortDescriptor: entry.sort,
+                    showHiddenFiles: state.showHiddenFiles,
+                    items: nil
+                )
+            }
 
         guard !tabs.isEmpty else { return }
         state.tabs = tabs
@@ -297,6 +309,14 @@ package final class PanelViewModel {
     /// Returns the currently persisted tab snapshot for this panel.
     package func tabPathsForSession() -> [String] {
         state.tabs.map { $0.location.persistentDirectory.path }
+    }
+
+    /// Column sort for every tab, in tab order. The front tab reports the live
+    /// panel sort, which is updated before the tab itself is written back.
+    package func tabSortsForSession() -> [FileSortDescriptor] {
+        state.tabs.enumerated().map { index, tab in
+            index == state.activeTabIndex ? state.sortDescriptor : tab.sortDescriptor
+        }
     }
 
     /// Replaces `currentSession` with a fresh one for the panel's directory.
