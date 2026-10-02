@@ -29,8 +29,16 @@ package final class FileOperationViewModel {
         listPolicy.visible(running: running, waiting: waiting, settledNewestLast: settled)
     }
 
+    /// A failure since the task list was last opened. Later successes do not clear it.
+    private var hasUnacknowledgedFailure = false
+
     package var indicatorState: TaskIndicatorState {
-        listPolicy.indicatorState(running: running, waiting: waiting, settled: settled)
+        listPolicy.indicatorState(
+            running: running,
+            waiting: waiting,
+            settled: settled,
+            unacknowledgedFailure: hasUnacknowledgedFailure
+        )
     }
 
     package var hasUnfinishedBackgroundTasks: Bool {
@@ -370,7 +378,9 @@ package final class FileOperationViewModel {
         if now - lastTaskListToggle < 0.05 { return }
         lastTaskListToggle = now
         isTaskListPresented.toggle()
-        if !isTaskListPresented {
+        if isTaskListPresented {
+            hasUnacknowledgedFailure = false
+        } else {
             emptyRingIfIdle()
         }
     }
@@ -585,6 +595,9 @@ package final class FileOperationViewModel {
 
     private func appendSettled(_ operation: FileOperation) {
         settled.append(operation)
+        if case .failed = operation.status, !isTaskListPresented {
+            hasUnacknowledgedFailure = true
+        }
         let overflow = settled.count - TaskListPolicy.settledCapacity
         if overflow > 0 {
             settled.removeFirst(overflow)

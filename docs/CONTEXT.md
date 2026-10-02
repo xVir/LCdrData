@@ -184,7 +184,7 @@ _Avoid_: hiding a running or waiting operation to make room for history.
 
 ## Task indicator
 
-The ring in a **window**'s title bar for that window's file operations. Its arc is the combined item progress of every **running** operation in that window. A **waiting** operation does not move it. When nothing is **running** or **waiting**, it stays as a closed ring until the **task list** is closed. Closing the list draws the ring empty, as at the start of an operation, and leaves finished, failed, and cancelled rows in the list for the rest of that window's session. The closed ring is red when any history row is a failure, and blue otherwise.
+The ring in a **window**'s title bar for that window's file operations. Its arc is the combined item progress of every **running** operation in that window. A **waiting** operation does not move it. When nothing is **running** or **waiting**, it stays as a closed ring until the **task list** is closed. Closing the list draws the ring empty, as at the start of an operation, and leaves finished, failed, and cancelled rows in the list for the rest of that window's session. The closed ring is red after a failure, and stays red through later successes, until the list is opened. Opening it acknowledges that failure, so the ring is blue again until another operation fails.
 
 _Avoid_: a pie; a spinner; hiding the ring the moment the last operation ends; a closed ring that still looks like work in progress.
 

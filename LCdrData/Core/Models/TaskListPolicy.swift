@@ -40,10 +40,13 @@ package struct TaskListPolicy: Sendable {
         return Double(completedItems) / Double(totalItems)
     }
 
+    /// `unacknowledgedFailure` is a failure the task list has not been opened for.
+    /// Older failures that are still in history do not keep the ring red.
     package func indicatorState(
         running: [FileOperation],
         waiting: [FileOperation],
-        settled: [FileOperation]
+        settled: [FileOperation],
+        unacknowledgedFailure: Bool = false
     ) -> TaskIndicatorState {
         if !running.isEmpty {
             return .running(fraction: aggregateFraction(running: running) ?? 0)
@@ -52,10 +55,6 @@ package struct TaskListPolicy: Sendable {
             return .running(fraction: 0)
         }
         guard !settled.isEmpty else { return .hidden }
-        let hasFailure = settled.contains { operation in
-            if case .failed = operation.status { return true }
-            return false
-        }
-        return .settled(hasFailure: hasFailure)
+        return .settled(hasFailure: unacknowledgedFailure)
     }
 }

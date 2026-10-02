@@ -59,13 +59,23 @@ struct TaskListPolicyTests {
         )
     }
 
-    @Test func indicatorIsTheErrorColorWhenHistoryContainsAFailure() {
+    @Test func indicatorIsRedOnlyForAnUnacknowledgedFailure() {
         let settled = [
             operation(name: "ok", status: .completed),
             operation(name: "bad", status: .failed("disk full")),
         ]
 
-        #expect(policy.indicatorState(running: [], waiting: [], settled: settled) == .settled(hasFailure: true))
+        #expect(
+            policy.indicatorState(
+                running: [],
+                waiting: [],
+                settled: settled,
+                unacknowledgedFailure: true
+            ) == .settled(hasFailure: true)
+        )
+        #expect(
+            policy.indicatorState(running: [], waiting: [], settled: settled) == .settled(hasFailure: false)
+        )
     }
 
     @Test func indicatorIsHiddenWhenNothingIsLeft() {

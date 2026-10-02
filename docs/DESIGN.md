@@ -125,7 +125,7 @@ Everything acts on the active panel's selection, with the other panel as the des
 | Refresh | `⌘R` | Reload the active panel |
 
 - Destructive operations ask first.
-- Copy, move, and delete run in the background. A ring in the title bar shows their combined progress, and clicking it lists each one with its own progress. A window runs only as many as `operations.max-active` at once; the rest wait. Cancel stops a running operation without undoing items that already finished, and a waiting operation never starts.
+- Copy, move, and delete run in the background. A ring in the title bar shows their combined progress, and clicking it lists each one with its own progress. After a failure the ring stays red, including through later operations that succeed, until that click. It is then blue again until another operation fails. A window runs only as many as `operations.max-active` at once; the rest wait. Cancel stops a running operation without undoing items that already finished, and a waiting operation never starts.
 - When a file already exists at the destination, a dialog offers **overwrite**, **skip** or
   **rename** — and an *apply to all* toggle so a large batch needs answering once.
 - Panels refresh themselves when their directory changes on disk, so an operation performed

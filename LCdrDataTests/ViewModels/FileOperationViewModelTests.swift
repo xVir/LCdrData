@@ -615,6 +615,42 @@ struct FileOperationViewModelTests {
         }
     }
 
+    @Test func theIndicatorStaysRedUntilTheTaskListIsOpened() async {
+        // Arrange
+        let mock = MockFileOperationService()
+        mock.shouldThrowOnCopy = true
+        let vm = FileOperationViewModel(operationService: mock)
+
+        // Act — one failure, then a later success.
+        vm.pendingOperationType = browseCopy(name: "broken")
+        vm.confirmOperation(reloadSource: {}, reloadDestination: {})
+        await waitUntil { !vm.settled.isEmpty }
+        mock.shouldThrowOnCopy = false
+        vm.pendingOperationType = browseCopy(name: "ok")
+        vm.confirmOperation(reloadSource: {}, reloadDestination: {})
+        await waitUntil { vm.settled.count == 2 }
+
+        // Assert — success does not clear the error color.
+        #expect(vm.indicatorState == .settled(hasFailure: true))
+
+        // Act — opening the list is what acknowledges the failure.
+        vm.toggleTaskList()
+
+        // Assert
+        #expect(vm.isTaskListPresented)
+        #expect(vm.indicatorState == .settled(hasFailure: false))
+
+        // Act — a later failure, with the list closed, turns it red again.
+        vm.dismissTaskList()
+        mock.shouldThrowOnCopy = true
+        vm.pendingOperationType = browseCopy(name: "broken-again")
+        vm.confirmOperation(reloadSource: {}, reloadDestination: {})
+        await waitUntil { vm.settled.count == 3 }
+
+        // Assert
+        #expect(vm.indicatorState == .settled(hasFailure: true))
+    }
+
     @Test func closingTheTaskListKeepsFinishedRowsForTheWindowSession() async {
         let mock = MockFileOperationService()
         mock.shouldThrowOnCopy = true
