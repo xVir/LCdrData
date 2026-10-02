@@ -1,0 +1,42 @@
+#!/bin/sh
+# After `git worktree add`, symlink this repo's machine-local Bazel config into
+# the new worktree. `.bazelrc` pulls that file in with `try-import`, and
+# `local.bazelrc` is gitignored, so a fresh worktree would otherwise build
+# without it.
+#
+# Git also runs this hook on every checkout and on clone. A new linked worktree
+# is the case where the previous HEAD is the all-zero ref and this checkout is
+# not the main worktree.
+#
+# Hooks are not versioned in `.git/hooks`. This copy is activated with:
+#   ln -sfn ../../.githooks/post-checkout .git/hooks/post-checkout
+
+set -eu
+
+if [ -e local.bazelrc ] || [ -L local.bazelrc ]; then
+    exit 0
+fi
+
+prev_head=$1
+is_branch_checkout=$3
+null_ref=0000000000000000000000000000000000000000
+
+if [ "$is_branch_checkout" != "1" ] || [ "$prev_head" != "$null_ref" ]; then
+    exit 0
+fi
+
+git_dir=$(cd "$(git rev-parse --git-dir)" && pwd -P)
+common_dir=$(cd "$(git rev-parse --git-common-dir)" && pwd -P)
+if [ "$git_dir" = "$common_dir" ]; then
+    exit 0
+fi
+
+main_worktree=$(git worktree list --porcelain | sed -n 's/^worktree //p' | head -n 1)
+source="$main_worktree/local.bazelrc"
+
+if [ ! -f "$source" ]; then
+    exit 0
+fi
+
+ln -s "$source" local.bazelrc
+echo "Linked local.bazelrc -> $source"
