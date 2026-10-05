@@ -119,20 +119,21 @@ package final class PanelViewModel {
 
         do {
             let items: [FileItem]
-            switch state.location {
-            case .directory(let url):
+            if let archive = state.location.archive {
+                isLocationWritable = await archiveService.isWritable(container: archive.container)
+                items = try await archiveService.list(
+                    container: archive.container,
+                    internalPath: archive.internalPath,
+                    showHidden: state.showHiddenFiles
+                )
+            } else if case .directory(let url) = state.location {
                 isLocationWritable = true
                 items = try await fileSystemService.listDirectory(
                     at: url,
                     showHidden: state.showHiddenFiles
                 )
-            case .zipArchive(let container, let internalPath):
-                isLocationWritable = await archiveService.isWritable(container: container)
-                items = try await archiveService.list(
-                    container: container,
-                    internalPath: internalPath,
-                    showHidden: state.showHiddenFiles
-                )
+            } else {
+                items = []
             }
 
             let sorted = sortItems(items)
@@ -469,12 +470,16 @@ package final class PanelViewModel {
         let currentLocation = state.location
         let intent: Cursor.Intent
         if Self.sameLocation(location, currentLocation.parent) {
-            switch currentLocation {
-            case .directory(let url):
+            if case .directory(let url) = currentLocation {
                 intent = .landOnChild(url)
-            case .zipArchive(let container, let internalPath) where internalPath.isEmpty:
-                intent = .landOnChild(container)
-            case .zipArchive:
+            } else if let archive = currentLocation.archive, archive.internalPath.isEmpty {
+                intent = .landOnChild(archive.container)
+            } else if let archive = currentLocation.archive {
+                intent = .landOnArchiveChild(
+                    container: archive.container,
+                    internalPath: archive.internalPath
+                )
+            } else {
                 intent = .fresh
             }
         } else {
@@ -586,10 +591,10 @@ package final class PanelViewModel {
             return
         }
         if item.isArchive {
-            await navigate(to: .zipArchive(container: item.url, internalPath: ""))
+            await navigate(to: .archive(container: item.url, internalPath: ""))
         } else if item.isNavigableDirectory {
             if let container = item.archiveContainer, let internalPath = item.archiveInternalPath {
-                await navigate(to: .zipArchive(container: container, internalPath: internalPath))
+                await navigate(to: .archive(container: container, internalPath: internalPath))
             } else {
                 await navigate(to: item.url)
             }
@@ -891,12 +896,11 @@ package final class PanelViewModel {
         switch (lhs, rhs) {
         case (.directory(let left), .directory(let right)):
             return left.standardizedFileURL.path == right.standardizedFileURL.path
-        case (
-            .zipArchive(let leftContainer, let leftPath),
-            .zipArchive(let rightContainer, let rightPath)
-        ):
-            return leftContainer.standardizedFileURL.path == rightContainer.standardizedFileURL.path
-                && leftPath == rightPath
+        case (.zipArchive, .zipArchive), (.tarGzArchive, .tarGzArchive):
+            guard let left = lhs.archive, let right = rhs.archive else { return false }
+            return left.format == right.format
+                && left.container.standardizedFileURL.path == right.container.standardizedFileURL.path
+                && left.internalPath == right.internalPath
         default:
             return false
         }

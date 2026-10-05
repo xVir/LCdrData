@@ -63,6 +63,19 @@ struct BrowseLocationTests {
         #expect(watchURL == container)
     }
 
+    @Test func tarGzFolderParentStaysInsideArchive() {
+        // Arrange
+        let container = URL(fileURLWithPath: "/Users/test/Documents/files.tar.gz")
+        let location = BrowseLocation.tarGzArchive(container: container, internalPath: "photos/vacation")
+
+        // Act
+        let parent = location.parent
+
+        // Assert
+        #expect(parent == .tarGzArchive(container: container, internalPath: "photos"))
+        #expect(location.displayPath == "/Users/test/Documents/files.tar.gz/photos/vacation")
+    }
+
     @Test func archiveRootParentIsContainingDirectory() {
         // Arrange
         let container = URL(fileURLWithPath: "/Users/test/Documents/files.zip")

@@ -105,6 +105,15 @@ struct FileFormatterTests {
         #expect(FileFormatter.kind(for: item) == "Document")
     }
 
+    @Test func kindForTarGzUsesCompoundExtension() {
+        let item = FileItem(
+            url: URL(fileURLWithPath: "/tmp/notes.tar.gz"),
+            name: "notes.tar.gz",
+            isDirectory: false
+        )
+        #expect(FileFormatter.kind(for: item) == "TAR.GZ")
+    }
+
     @Test func kindForArchiveMemberUsesMemberExtension() {
         let item = FileItem(
             archiveContainer: URL(fileURLWithPath: "/tmp/files.zip"),

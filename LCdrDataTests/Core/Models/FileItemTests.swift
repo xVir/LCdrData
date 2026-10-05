@@ -213,6 +213,32 @@ struct FileItemTests {
         #expect(first.id == second.id)
     }
 
+    @Test func tarGzFileIsEnterableWithoutBeingNavigableDirectory() {
+        // Arrange
+        let item = FileItem(
+            url: URL(fileURLWithPath: "/tmp/FILES.TAR.GZ"),
+            name: "FILES.TAR.GZ",
+            isDirectory: false
+        )
+
+        // Assert
+        #expect(item.isArchive)
+        #expect(item.isEnterable)
+        #expect(item.isNavigableDirectory == false)
+    }
+
+    @Test func plainTarFileIsNotAnArchive() {
+        // Arrange
+        let item = FileItem(
+            url: URL(fileURLWithPath: "/tmp/files.tar"),
+            name: "files.tar",
+            isDirectory: false
+        )
+
+        // Assert
+        #expect(item.isArchive == false)
+    }
+
     @Test func zipFileIsEnterableWithoutBeingNavigableDirectory() {
         // Arrange
         let item = FileItem(

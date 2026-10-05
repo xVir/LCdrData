@@ -200,11 +200,10 @@ package final class FileOperationViewModel {
 
         let count = items.count
         let itemWord = count == 1 ? "item" : "items"
-        switch panel.state.location {
-        case .directory:
-            confirmationMessage = "Move \(count) \(itemWord) to Trash?"
-        case .zipArchive:
+        if panel.state.location.isArchive {
             confirmationMessage = "Delete \(count) \(itemWord) from archive? This cannot be undone."
+        } else {
+            confirmationMessage = "Move \(count) \(itemWord) to Trash?"
         }
         pendingOperationType = .browseDelete(
             items: items,
@@ -277,7 +276,7 @@ package final class FileOperationViewModel {
             let location: BrowseLocation
             if let container = item.archiveContainer, let internalPath = item.archiveInternalPath {
                 let parentPath = (internalPath as NSString).deletingLastPathComponent
-                location = .zipArchive(
+                location = .archive(
                     container: container,
                     internalPath: parentPath == "." ? "" : parentPath
                 )

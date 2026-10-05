@@ -31,7 +31,21 @@ package enum ArchiveServiceError: Error, Equatable, Sendable {
     case insufficientSpace
 }
 
+nonisolated func archiveContainerIsWritable(_ container: URL) -> Bool {
+    let fileManager = FileManager.default
+    guard
+        let attributes = try? fileManager.attributesOfItem(atPath: container.path),
+        let permissions = (attributes[.posixPermissions] as? NSNumber)?.uint16Value,
+        permissions & 0o222 != 0
+    else {
+        return false
+    }
+    return fileManager.isWritableFile(atPath: container.path)
+}
+
 package actor ArchiveService: ArchiveServiceProtocol {
+    private let tarGzArchive = TarGzArchiveService()
+
     package init() {}
 
     package func list(
@@ -39,6 +53,13 @@ package actor ArchiveService: ArchiveServiceProtocol {
         internalPath: String,
         showHidden: Bool
     ) async throws -> [FileItem] {
+        if ArchiveFormat(url: container) == .tarGz {
+            return try await tarGzArchive.list(
+                container: container,
+                internalPath: internalPath,
+                showHidden: showHidden
+            )
+        }
         let archive: Archive
         do {
             archive = try Archive(url: container, accessMode: .read)
@@ -81,22 +102,17 @@ package actor ArchiveService: ArchiveServiceProtocol {
     }
 
     package func isWritable(container: URL) async -> Bool {
-        isWritableOnDisk(container)
-    }
-
-    private func isWritableOnDisk(_ container: URL) -> Bool {
-        let fileManager = FileManager.default
-        guard
-            let attributes = try? fileManager.attributesOfItem(atPath: container.path),
-            let permissions = (attributes[.posixPermissions] as? NSNumber)?.uint16Value,
-            permissions & 0o222 != 0
-        else {
-            return false
+        if ArchiveFormat(url: container) == .tarGz {
+            return await tarGzArchive.isWritable(container: container)
         }
-        return fileManager.isWritableFile(atPath: container.path)
+        return archiveContainerIsWritable(container)
     }
 
     package func extract(container: URL, paths: [String], to destination: URL) async throws {
+        if ArchiveFormat(url: container) == .tarGz {
+            try await tarGzArchive.extract(container: container, paths: paths, to: destination)
+            return
+        }
         let archive = try Archive(url: container, accessMode: .read)
         let maximumEntrySize = UInt64(4) * 1024 * 1024 * 1024
         var batches: [(path: String, entries: [Entry])] = []
@@ -149,7 +165,11 @@ package actor ArchiveService: ArchiveServiceProtocol {
     }
 
     package func add(container: URL, internalPath: String, sources: [URL]) async throws {
-        guard isWritableOnDisk(container) else { throw ArchiveServiceError.notWritable }
+        if ArchiveFormat(url: container) == .tarGz {
+            try await tarGzArchive.add(container: container, internalPath: internalPath, sources: sources)
+            return
+        }
+        guard archiveContainerIsWritable(container) else { throw ArchiveServiceError.notWritable }
         let archive = try Archive(url: container, accessMode: .update)
         let basePath = internalPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         if !basePath.isEmpty {
@@ -170,7 +190,16 @@ package actor ArchiveService: ArchiveServiceProtocol {
         source: URL,
         name: String
     ) async throws {
-        guard isWritableOnDisk(container) else { throw ArchiveServiceError.notWritable }
+        if ArchiveFormat(url: container) == .tarGz {
+            try await tarGzArchive.add(
+                container: container,
+                internalPath: internalPath,
+                source: source,
+                name: name
+            )
+            return
+        }
+        guard archiveContainerIsWritable(container) else { throw ArchiveServiceError.notWritable }
         let basePath = internalPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         if !basePath.isEmpty {
             try validateArchivePath(basePath)
@@ -184,7 +213,11 @@ package actor ArchiveService: ArchiveServiceProtocol {
     }
 
     package func remove(container: URL, paths: [String]) async throws {
-        guard isWritableOnDisk(container) else { throw ArchiveServiceError.notWritable }
+        if ArchiveFormat(url: container) == .tarGz {
+            try await tarGzArchive.remove(container: container, paths: paths)
+            return
+        }
+        guard archiveContainerIsWritable(container) else { throw ArchiveServiceError.notWritable }
         let archive = try Archive(url: container, accessMode: .update)
         let normalizedPaths = try paths.map { path in
             let normalized = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
@@ -211,7 +244,11 @@ package actor ArchiveService: ArchiveServiceProtocol {
     }
 
     package func createDirectory(container: URL, internalPath: String, name: String) async throws {
-        guard isWritableOnDisk(container) else { throw ArchiveServiceError.notWritable }
+        if ArchiveFormat(url: container) == .tarGz {
+            try await tarGzArchive.createDirectory(container: container, internalPath: internalPath, name: name)
+            return
+        }
+        guard archiveContainerIsWritable(container) else { throw ArchiveServiceError.notWritable }
         let basePath = internalPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         let path = basePath.isEmpty ? name : basePath + "/" + name
         try validateArchivePath(path)
@@ -225,7 +262,11 @@ package actor ArchiveService: ArchiveServiceProtocol {
     }
 
     package func rename(container: URL, path: String, newName: String) async throws {
-        guard isWritableOnDisk(container) else { throw ArchiveServiceError.notWritable }
+        if ArchiveFormat(url: container) == .tarGz {
+            try await tarGzArchive.rename(container: container, path: path, newName: newName)
+            return
+        }
+        guard archiveContainerIsWritable(container) else { throw ArchiveServiceError.notWritable }
         let normalizedPath = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         try validateArchivePath(normalizedPath)
         guard !newName.contains("/") else {

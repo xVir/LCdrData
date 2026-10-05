@@ -47,42 +47,38 @@ package actor BrowseOperationService: BrowseOperationServiceProtocol {
         onProgress: @Sendable (FileOperationProgress) -> Void,
         onConflict: @Sendable (FileConflict) async -> ConflictResolution
     ) async throws {
-        switch (source, destination) {
-        case (.directory, .directory(let destinationURL)):
+        switch (source.archive, destination.archive) {
+        case (nil, nil):
+            guard case .directory(let destinationURL) = destination else { return }
             try await fileService.copy(
                 sources: items.map(\.url),
                 to: destinationURL,
                 onProgress: onProgress,
                 onConflict: onConflict
             )
-        case (.directory, .zipArchive(let container, let internalPath)):
+        case (nil, let destinationArchive?):
             _ = try await copyIntoArchive(
                 items: items,
                 sourceURLs: items.map(\.url),
-                container: container,
-                internalPath: internalPath,
+                container: destinationArchive.container,
+                internalPath: destinationArchive.internalPath,
                 onProgress: onProgress,
                 onConflict: onConflict
             )
-        case (
-            .zipArchive(let container, _),
-            .directory(let destinationURL)
-        ):
+        case (let sourceArchive?, nil):
+            guard case .directory(let destinationURL) = destination else { return }
             _ = try await copyFromArchive(
                 items: items,
-                container: container,
+                container: sourceArchive.container,
                 destination: destinationURL,
                 onProgress: onProgress,
                 onConflict: onConflict
             )
-        case (
-            .zipArchive(let sourceContainer, _),
-            .zipArchive(let destinationContainer, let destinationPath)
-        ):
+        case (let sourceArchive?, let destinationArchive?):
             let temporaryDirectory = try makeTemporaryDirectory()
             defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
             try await archiveService.extract(
-                container: sourceContainer,
+                container: sourceArchive.container,
                 paths: try archivePaths(for: items),
                 to: temporaryDirectory
             )
@@ -92,8 +88,8 @@ package actor BrowseOperationService: BrowseOperationServiceProtocol {
             _ = try await copyIntoArchive(
                 items: items,
                 sourceURLs: extractedItems,
-                container: destinationContainer,
-                internalPath: destinationPath,
+                container: destinationArchive.container,
+                internalPath: destinationArchive.internalPath,
                 onProgress: onProgress,
                 onConflict: onConflict
             )
@@ -121,44 +117,42 @@ package actor BrowseOperationService: BrowseOperationServiceProtocol {
         }
 
         let transferredItems: [FileItem]
-        switch (source, destination) {
-        case (.directory, .zipArchive(let container, let internalPath)):
+        switch (source.archive, destination.archive) {
+        case (nil, let destinationArchive?):
             transferredItems = try await copyIntoArchive(
                 items: items,
                 sourceURLs: items.map(\.url),
-                container: container,
-                internalPath: internalPath,
+                container: destinationArchive.container,
+                internalPath: destinationArchive.internalPath,
                 onProgress: onProgress,
                 onConflict: onConflict
             )
-        case (.zipArchive(let container, _), .directory(let destinationURL)):
+        case (let sourceArchive?, nil):
+            guard case .directory(let destinationURL) = destination else { return }
             transferredItems = try await copyFromArchive(
                 items: items,
-                container: container,
+                container: sourceArchive.container,
                 destination: destinationURL,
                 onProgress: onProgress,
                 onConflict: onConflict
             )
-        case (
-            .zipArchive(let sourceContainer, _),
-            .zipArchive(let destinationContainer, let destinationPath)
-        ):
+        case (let sourceArchive?, let destinationArchive?):
             let temporaryDirectory = try makeTemporaryDirectory()
             defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
             try await archiveService.extract(
-                container: sourceContainer,
+                container: sourceArchive.container,
                 paths: try archivePaths(for: items),
                 to: temporaryDirectory
             )
             transferredItems = try await copyIntoArchive(
                 items: items,
                 sourceURLs: items.map { temporaryDirectory.appendingPathComponent($0.name) },
-                container: destinationContainer,
-                internalPath: destinationPath,
+                container: destinationArchive.container,
+                internalPath: destinationArchive.internalPath,
                 onProgress: onProgress,
                 onConflict: onConflict
             )
-        case (.directory, .directory):
+        case (nil, nil):
             return
         }
         if !transferredItems.isEmpty {
@@ -177,37 +171,33 @@ package actor BrowseOperationService: BrowseOperationServiceProtocol {
         permanently: Bool,
         onProgress: @escaping @Sendable (FileOperationProgress) -> Void
     ) async throws {
-        switch source {
-        case .directory:
-            if permanently {
-                try await fileService.deletePermanently(items: items.map(\.url), onProgress: onProgress)
-            } else {
-                _ = try await fileService.trash(items: items.map(\.url), onProgress: onProgress)
-            }
-        case .zipArchive(let container, _):
+        if let archive = source.archive {
             let paths = try archivePaths(for: items)
             for (index, path) in paths.enumerated() {
                 try Task.checkCancellation()
-                try await archiveService.remove(container: container, paths: [path])
+                try await archiveService.remove(container: archive.container, paths: [path])
                 onProgress(FileOperationProgress(
                     totalItems: paths.count,
                     completedItems: index + 1,
                     currentItemName: (path as NSString).lastPathComponent
                 ))
             }
+        } else if permanently {
+            try await fileService.deletePermanently(items: items.map(\.url), onProgress: onProgress)
+        } else {
+            _ = try await fileService.trash(items: items.map(\.url), onProgress: onProgress)
         }
     }
 
     package func createDirectory(at location: BrowseLocation, name: String) async throws {
-        switch location {
-        case .directory(let url):
-            _ = try await fileService.createFolder(in: url, name: name)
-        case .zipArchive(let container, let internalPath):
+        if let archive = location.archive {
             try await archiveService.createDirectory(
-                container: container,
-                internalPath: internalPath,
+                container: archive.container,
+                internalPath: archive.internalPath,
                 name: name
             )
+        } else if case .directory(let url) = location {
+            _ = try await fileService.createFolder(in: url, name: name)
         }
     }
 
@@ -216,14 +206,13 @@ package actor BrowseOperationService: BrowseOperationServiceProtocol {
         at location: BrowseLocation,
         to newName: String
     ) async throws {
-        switch location {
-        case .directory:
-            _ = try await fileService.rename(item: item.url, to: newName)
-        case .zipArchive(let container, _):
+        if let archive = location.archive {
             guard let path = item.archiveInternalPath else {
                 throw FileOperationError.invalidDestination
             }
-            try await archiveService.rename(container: container, path: path, newName: newName)
+            try await archiveService.rename(container: archive.container, path: path, newName: newName)
+        } else {
+            _ = try await fileService.rename(item: item.url, to: newName)
         }
     }
 

@@ -56,12 +56,16 @@ package enum FileFormatter {
         if item.isSymlink { return "Alias" }
         if item.isDirectory { return "Folder" }
 
-        let ext: String
+        let name: String
         if let internalPath = item.archiveInternalPath {
-            ext = (internalPath as NSString).pathExtension.lowercased()
+            name = (internalPath as NSString).lastPathComponent
         } else {
-            ext = item.url.pathExtension.lowercased()
+            name = item.name
         }
+        let lowercased = name.lowercased()
+        if lowercased.hasSuffix(".tar.gz") { return "TAR.GZ" }
+        if lowercased.hasSuffix(".tgz") { return "TGZ" }
+        let ext = (name as NSString).pathExtension
         if ext.isEmpty { return "Document" }
         return ext.uppercased()
     }

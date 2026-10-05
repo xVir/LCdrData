@@ -88,7 +88,7 @@ launch restores where you left off.
   A secondary click (right-click / Control-click) on a row that is not already
   selected collapses the selection to that row before the context menu opens;
   a secondary click inside the current selection leaves the selection as it is.
-- `Return` enters a directory or a `.zip`; on any other **file** it starts a rename, the way
+- `Return` enters a directory, a `.zip`, or a `.tar.gz` (including `.tgz`); on any other **file** it starts a rename, the way
   Finder does.
   `F2` renames whatever is focused, orthodox-style. Neither applies to `..`.
 - Double-click or `⌘↓` opens a file and enters a directory.
@@ -143,7 +143,7 @@ filename — the buffer clears after a second of silence.
 | Shortcut | Action |
 |---|---|
 | `Tab` | Switch active panel |
-| `Return` | Enter a directory or `.zip`, or rename any other focused **file** |
+| `Return` | Enter a directory, `.zip`, or `.tar.gz`, or rename any other focused **file** |
 | `F2` | Rename the focused item (not `..`) |
 | `Delete` / forward delete | Go to parent directory |
 | `⌘↑` | Go to parent directory |
@@ -240,7 +240,7 @@ still open a file the way Finder would.
 directory wants. Off by default, so `F4` over a folder does nothing. Turn it on and `F4` hands
 the folder to the same application. On the `..` row it hands over the folder the panel is
 currently showing, not its parent — that row is the one under the eye, and the parent folder is
-one `Enter` away in any case. Folders **inside** a ZIP
+one `Enter` away in any case. Folders **inside** an archive
 stay excluded either way: the editor would only ever see an extracted copy, and edits to it
 would never reach the archive.
 
@@ -263,20 +263,22 @@ metaphor:
 
 The window never auto-saves. Nothing takes effect until you click Apply.
 
-## ZIP archives as folders
+## Archives as folders
 
-Activating a `.zip` file enters it in the current panel. Archive folders, `..`, `⌘↑`, and
-back/forward history behave like directory navigation; nested zip members remain ordinary files.
-The path bar shows the archive file followed by its internal path.
+Activating a `.zip` or `.tar.gz` file (`.tgz` is the same archive) enters it in the current panel.
+Archive folders, `..`, `⌘↑`, and back/forward history behave like directory navigation; nested
+archive members remain ordinary files. The path bar shows the archive file followed by its
+internal path.
 
 Copy, move, drag-and-drop, new folder, rename, and delete work across filesystem directories and
-writable zip locations. Delete inside a zip removes the member permanently rather than using
-Trash, and the confirmation says so. Existing-name conflicts use the same overwrite, skip, and
-rename choices as filesystem operations. Mutating commands are disabled for a read-only zip.
+writable archive locations, including from a zip into a tar.gz. Delete inside an archive removes
+the member permanently rather than using Trash, and the confirmation says so. Existing-name
+conflicts use the same overwrite, skip, and rename choices as filesystem operations. Mutating
+commands are disabled for a read-only archive.
 
 Quick Look, F4, and dragging a member out extract that member to temporary storage first. Session
-restore records only the real directory containing the zip; a new window opened with `⌘N` during
-the same run still clones the current archive location.
+restore records only the real directory containing the archive; a new window opened with `⌘N`
+during the same run still clones the current archive location.
 
 ## Not in scope yet
 
@@ -287,4 +289,4 @@ Deliberately absent from the current design, in rough order of appeal:
 - **A toolbar** and a **volumes list**, for pointer-driven navigation.
 - **An inline preview pane**, as an alternative to the Quick Look panel.
 - **Search** beyond type-ahead — by name across a tree, or by content.
-- **Other archive formats** — tar and formats other than zip.
+- **Other archive formats** — plain tar, and formats other than zip and gzip-compressed tar.

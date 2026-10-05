@@ -30,6 +30,10 @@ package struct Cursor: Sendable, Equatable, Hashable {
         /// After `navigateToParent()`. Lands on the directory the panel just left.
         case landOnChild(URL)
 
+        /// After going up from a folder inside an archive. Lands on that folder's row.
+        /// Archive rows share the container URL, so the internal path is what identifies the folder.
+        case landOnArchiveChild(container: URL, internalPath: String)
+
         /// After delete / move on the source side. Lands on the row adjacent to the
         /// doomed URLs in the previous listing, mapped to the new listing.
         case landOnNeighbourOf([URL])
@@ -128,6 +132,17 @@ package struct Cursor: Sendable, Equatable, Hashable {
         case .landOnChild(let childURL):
             return cursorForRealItem(matching: childURL, in: listing)
                 ?? firstRowCursor(in: listing)
+
+        case .landOnArchiveChild(let container, let internalPath):
+            let containerPath = container.standardizedFileURL.path
+            guard let match = listing.first(where: {
+                !$0.isParentDirectory
+                    && $0.archiveContainer?.standardizedFileURL.path == containerPath
+                    && $0.archiveInternalPath == internalPath
+            }) else {
+                return firstRowCursor(in: listing)
+            }
+            return Cursor(focused: match.id, selected: [match.id])
 
         case .landOnNeighbourOf(let doomedURLs):
             if let neighbour = neighbourItem(of: doomedURLs, in: previousListing),

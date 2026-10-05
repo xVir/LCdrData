@@ -171,6 +171,71 @@ struct PanelViewModelTests {
         #expect(vm.state.items.contains { $0.name == "inside.txt" })
     }
 
+    @Test func openTarGzFileEntersArchiveRoot() async {
+        // Arrange
+        let container = URL(fileURLWithPath: "/tmp/files.tar.gz")
+        let archiveRow = FileItem(
+            url: container,
+            name: "files.tar.gz",
+            isDirectory: false
+        )
+        let member = FileItem(
+            archiveContainer: container,
+            internalPath: "inside.txt",
+            name: "inside.txt",
+            isDirectory: false
+        )
+        let vm = PanelViewModel(
+            side: .left,
+            initialDirectory: URL(fileURLWithPath: "/tmp"),
+            fileSystemService: MockFileSystemService(items: [archiveRow]),
+            archiveService: MockArchiveService(itemsByPath: ["": [member]])
+        )
+        await vm.reload(.fresh)
+
+        // Act
+        await vm.openItem(archiveRow)
+
+        // Assert
+        #expect(vm.state.location == .tarGzArchive(container: container, internalPath: ""))
+        #expect(vm.state.items.contains { $0.name == "inside.txt" })
+    }
+
+    @Test func leavingArchiveFolderFocusesThatFolder() async {
+        // Arrange — "alpha" sorts before "vacation", so a fresh cursor would not land on it.
+        let container = URL(fileURLWithPath: "/tmp/files.tar.gz")
+        let alpha = FileItem(
+            archiveContainer: container,
+            internalPath: "photos/alpha",
+            name: "alpha",
+            isDirectory: true
+        )
+        let vacation = FileItem(
+            archiveContainer: container,
+            internalPath: "photos/vacation",
+            name: "vacation",
+            isDirectory: true
+        )
+        let vm = PanelViewModel(
+            side: .left,
+            initialDirectory: URL(fileURLWithPath: "/tmp"),
+            fileSystemService: MockFileSystemService(),
+            archiveService: MockArchiveService(itemsByPath: [
+                "photos": [alpha, vacation],
+                "photos/vacation": [],
+            ])
+        )
+        await vm.navigate(to: .tarGzArchive(container: container, internalPath: "photos/vacation"))
+
+        // Act
+        await vm.navigateToParent()
+
+        // Assert
+        #expect(vm.state.location == .tarGzArchive(container: container, internalPath: "photos"))
+        #expect(vm.state.cursor.focused == vacation.id)
+        #expect(vm.state.cursor.selected == [vacation.id])
+    }
+
     @Test func leavingArchiveRootReturnsToZipRow() async {
         // Arrange
         let parentDirectory = URL(fileURLWithPath: "/tmp", isDirectory: true)

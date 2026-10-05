@@ -216,6 +216,39 @@ struct CursorTests {
         #expect(result.selected == [alpha.id])
     }
 
+    @Test func resolveLandOnArchiveChildFocusesTheFolderJustLeft() {
+        // Arrange — every archive row shares the container URL, so matching the URL
+        // would land on the first row. The internal path is the folder we left.
+        let container = URL(fileURLWithPath: "/tmp/files.tar.gz")
+        let parent = FileItem.parentEntry(
+            for: .tarGzArchive(container: container, internalPath: "photos")
+        )
+        let alpha = FileItem(
+            archiveContainer: container,
+            internalPath: "photos/alpha",
+            name: "alpha",
+            isDirectory: true
+        )
+        let vacation = FileItem(
+            archiveContainer: container,
+            internalPath: "photos/vacation",
+            name: "vacation",
+            isDirectory: true
+        )
+
+        // Act
+        let result = Cursor.resolve(
+            intent: .landOnArchiveChild(container: container, internalPath: "photos/vacation"),
+            listing: [parent, alpha, vacation],
+            previousListing: [],
+            previousCursor: Cursor()
+        )
+
+        // Assert
+        #expect(result.focused == vacation.id)
+        #expect(result.selected == [vacation.id])
+    }
+
     @Test func resolveLandOnNewFocusesNewlyCreatedItem() {
         // Arrange — folder "new" just got created.
         let parent = Self.parentEntry()

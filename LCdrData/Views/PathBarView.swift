@@ -147,12 +147,13 @@ package struct PathBarView: View {
         switch viewModel.state.location {
         case .directory(let url):
             return directoryComponents(through: url)
-        case .zipArchive(let container, let internalPath):
+        case .zipArchive(let container, let internalPath),
+             .tarGzArchive(let container, let internalPath):
             var components = directoryComponents(through: container.deletingLastPathComponent())
             components.append(
                 PathComponent(
                     name: container.lastPathComponent,
-                    location: .zipArchive(container: container, internalPath: "")
+                    location: .archive(container: container, internalPath: "")
                 )
             )
 
@@ -164,7 +165,7 @@ package struct PathBarView: View {
                 components.append(
                     PathComponent(
                         name: String(segment),
-                        location: .zipArchive(container: container, internalPath: accumulatedPath)
+                        location: .archive(container: container, internalPath: accumulatedPath)
                     )
                 )
             }

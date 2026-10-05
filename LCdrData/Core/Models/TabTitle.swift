@@ -56,14 +56,16 @@ package nonisolated struct TabTitle: Equatable, Sendable {
                 suffixLength: 1,
                 archiveIndex: nil
             )
-        case .zipArchive(let container, let internalPath):
+        case .zipArchive(let container, let internalPath),
+             .tarGzArchive(let container, let internalPath):
             let containerPath = standardizedPath(container)
             let outside = components(of: parentPath(of: containerPath))
             let inside = internalPath.split(separator: "/").map(String.init).filter { !$0.isEmpty }
-            let zipName = (containerPath as NSString).lastPathComponent
+            let archiveName = (containerPath as NSString).lastPathComponent
+            let format = ArchiveFormat(url: container) == .tarGz ? "tar" : "zip"
             return Entry(
-                components: outside + [zipName] + inside,
-                identity: "zip:\(containerPath)\n\(internalPath)",
+                components: outside + [archiveName] + inside,
+                identity: "\(format):\(containerPath)\n\(internalPath)",
                 suffixLength: 1 + inside.count,
                 archiveIndex: outside.count
             )

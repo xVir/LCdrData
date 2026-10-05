@@ -38,8 +38,8 @@ _Avoid_: using directory for the interior of a zip.
 
 ## Archive
 
-A filesystem **file item** (`.zip` in this slice) whose contents can be browsed as
-**locations**. A `.zip` that lives *inside* an archive is just a file item — copy
+A filesystem **file item** (`.zip`, `.tar.gz`, or `.tgz`) whose contents can be browsed as
+**locations**. A `.zip` or `.tar.gz` that lives *inside* an archive is just a file item — copy
 it out to enter it. Copy and Move to or from an archive are still Copy and Move —
 unpack/pack is how they happen, not separate commands. F8 and `⌘⌫` inside an
 archive **delete from the archive** — they do not use Trash. An archive you cannot

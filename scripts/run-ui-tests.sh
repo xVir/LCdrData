@@ -17,6 +17,9 @@
 #
 # Each test creates an isolated temporary left/right directory tree, launches
 # the app with those directories and --no-saved-state, then removes the tree.
+#
+# Requires `tuist install` first. Package.resolved is committed, but the
+# fetched packages live in Tuist/.build, which is not.
 
 set -euo pipefail
 
@@ -32,6 +35,34 @@ error: no GUI login session found for the current user.
 macOS UI tests need a real Aqua session and cannot run over SSH or on a
 headless CI runner. Run this from a terminal inside a logged-in desktop
 session.
+MSG
+    exit 1
+fi
+
+# `tuist test` resolves packages from Tuist/.build. That directory is produced
+# by `tuist install` and is gitignored, so a fresh worktree does not have it.
+# Checkouts are symlinks into the SwiftPM cache, so follow them: a dangling
+# link is the same as a missing package.
+tuist_deps_ready=0
+if [[ -f Tuist/.build/workspace-state.json ]]; then
+    shopt -s nullglob
+    for checkout in Tuist/.build/checkouts/*; do
+        if [[ -d "$checkout" ]]; then
+            tuist_deps_ready=1
+            break
+        fi
+    done
+    shopt -u nullglob
+fi
+if [[ "$tuist_deps_ready" -ne 1 ]]; then
+    cat >&2 <<'MSG'
+error: Tuist dependencies are not installed.
+
+The UI test runner needs the packages fetched into Tuist/.build. From the
+repository root:
+
+  tuist install
+
 MSG
     exit 1
 fi

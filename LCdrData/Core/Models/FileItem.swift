@@ -31,7 +31,7 @@ package nonisolated struct FileItem: Identifiable, Hashable, Sendable {
     package var isArchive: Bool {
         archiveContainer == nil
             && !isDirectory
-            && url.pathExtension.caseInsensitiveCompare("zip") == .orderedSame
+            && ArchiveFormat(url: url) != nil
     }
     package var isEnterable: Bool { isNavigableDirectory || isArchive }
 
@@ -111,15 +111,18 @@ package nonisolated struct FileItem: Identifiable, Hashable, Sendable {
         switch location {
         case .directory(let url):
             return parentEntry(for: url)
-        case .zipArchive(let container, let internalPath):
-            guard !internalPath.isEmpty else {
-                return parentEntry(for: container)
+        case .zipArchive, .tarGzArchive:
+            guard let archive = location.archive else {
+                return parentEntry(for: URL(fileURLWithPath: "/"))
             }
-            guard case .zipArchive(_, let parentPath) = location.parent else {
-                return parentEntry(for: container)
+            guard !archive.internalPath.isEmpty else {
+                return parentEntry(for: archive.container)
+            }
+            guard let parentPath = location.parent.archive?.internalPath else {
+                return parentEntry(for: archive.container)
             }
             return FileItem(
-                archiveContainer: container,
+                archiveContainer: archive.container,
                 internalPath: parentPath,
                 name: "..",
                 isDirectory: true,
@@ -145,7 +148,9 @@ package nonisolated struct FileItem: Identifiable, Hashable, Sendable {
         internalPath: String,
         isParentDirectory: Bool
     ) -> UUID {
-        let prefix = isParentDirectory ? "parent:" : "zip:"
+        let prefix = isParentDirectory
+            ? "parent:"
+            : (ArchiveFormat(url: container) == .tarGz ? "tar:" : "zip:")
         return stableID(forKey: prefix + container.standardizedFileURL.path + "!" + internalPath)
     }
 
