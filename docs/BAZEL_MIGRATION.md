@@ -95,6 +95,7 @@ actually produced:
 ```xml
 <key>com.apple.security.app-sandbox</key>          <true/>
 <key>com.apple.security.files.user-selected.read-write</key> <true/>
+<key>com.apple.security.automation.apple-events</key> <true/>
 ```
 
 Plus these, which Xcode injects only for **debug/test** builds and which must not
@@ -111,7 +112,8 @@ Two useful conclusions:
 - `ENABLE_APP_SANDBOXED_FILES_BOOKMARKS_APP_SCOPE` and `REGISTER_APP_GROUPS`
   produce **no entitlement keys at all** — app-scope bookmarks no longer require
   one, and no app groups are declared. The production entitlements file needs
-  exactly **two** keys.
+  the sandbox keys plus `com.apple.security.automation.apple-events`, which
+  lets "Open in Terminal" ask to control the configured terminal.
 - The debug entitlements are what let UI tests attach to the app. A separate
   debug variant, selected with `select()`, is required for the UI-test target.
 
@@ -400,7 +402,7 @@ out of the source folders):
   the file only needs `CFBundleName`, `CFBundleShortVersionString`,
   `CFBundleVersion`, `CFBundlePackageType`, `NSPrincipalClass`,
   `NSHumanReadableCopyright`, `CFBundleDevelopmentRegion`.
-- `Bazel/LCdrData.entitlements` — the two production keys from 2.3.
+- `Bazel/LCdrData.entitlements` — the production keys from 2.3.
 - `Bazel/LCdrData.debug.entitlements` — production keys plus `get-task-allow`
   and the two temporary exceptions, for UI-test builds.
 
@@ -560,8 +562,8 @@ buildables in the current scheme is empty` notice:
 - **The test host needs the debug entitlements.** A sandboxed app is refused its
   connection to `testmanagerd`, and the runner exits before XCTest attaches
   (`Failed to establish connection to the IDE`). The app target therefore selects
-  `Bazel/LCdrData.debug.entitlements` for non-`opt` builds and the two-key
-  production file for `--config=release`, which is exactly what Xcode does.
+  `Bazel/LCdrData.debug.entitlements` for non-`opt` builds and the production
+  file for `--config=release`, which is exactly what Xcode does.
 - **`tags = ["local"]` is mandatory.** Even with correct entitlements, the test
   never bootstraps inside Bazel's `darwin-sandbox`. Unsandboxed it runs in ~10s.
   Confirmed by `--strategy=TestRunner=local`, then made permanent via the tag.
@@ -735,7 +737,7 @@ Diff the Bazel-produced bundle against the Phase 0 snapshot:
 
 1. `Info.plist` keys — expect intentional differences only (no
    `NSMainStoryboardFile`; possibly different `DT*` values).
-2. `codesign -d --entitlements :-` — the two production keys, and **no**
+2. `codesign -d --entitlements :-` — the production keys, and **no**
    `get-task-allow` in a release build.
 3. `find LCdrData.app -type f` — `Assets.car`, `DefaultConfig.kdl`, and the app
    binary all present at the same paths.

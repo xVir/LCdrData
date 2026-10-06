@@ -124,6 +124,7 @@ Everything acts on the active panel's selection, with the other panel as the des
 | Rename | `Return` / `F2` | `Return` is Finder-style and only on non-enterable files, `F2` orthodox |
 | View | `F3` / `Space` | Quick Look preview |
 | Edit | `F4` | Open in the editor from `editor.default-app` |
+| Open in Terminal | — | Open the selected folder in a new tab of `terminal.default-app` |
 | Refresh | `⌘R` | Reload the active panel |
 
 - Destructive operations ask first.
@@ -223,6 +224,15 @@ editor {
     open-folders #false
 }
 
+terminal {
+    // Bundle identifier of the application "Open in Terminal" uses.
+    // The selected folder opens in a new tab of that application.
+    default-app "com.apple.Terminal"
+
+    // Example configuration for the Ghostty terminal app:
+    // default-app "com.mitchellh.ghostty"
+}
+
 operations {
     max-active 3
 }
@@ -245,6 +255,16 @@ currently showing, not its parent — that row is the one under the eye, and the
 one `Enter` away in any case. Folders **inside** an archive
 stay excluded either way: the editor would only ever see an extracted copy, and edits to it
 would never reach the archive.
+
+`terminal.default-app` is the bundle identifier of the application **Open in Terminal** uses.
+The command is in the menu bar, on a folder's context menu, and on the `..` row. It opens
+that one selected folder in a new tab. On `..` it opens the folder the panel is showing,
+not the parent that row navigates to. A folder inside an archive has nothing to hand
+to a terminal. The default is macOS Terminal (`com.apple.Terminal`), which is handed the folder path.
+The default configuration includes a commented example for Ghostty
+(`com.mitchellh.ghostty`). Ghostty is opened with `open -a Ghostty` and that folder path,
+which opens a new tab. Any other bundle identifier is handed the folder the way Finder
+would open it with that application.
 
 ### The settings window
 

@@ -21,6 +21,15 @@ editor {
     open-folders #false
 }
 
+terminal {
+    // Bundle identifier of the application "Open in Terminal" uses.
+    // The selected folder opens in a new tab of that application.
+    default-app "com.apple.Terminal"
+
+    // Example configuration for the Ghostty terminal app:
+    // default-app "com.mitchellh.ghostty"
+}
+
 operations {
     max-active 3
 }

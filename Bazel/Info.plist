@@ -18,5 +18,7 @@
 	<string>Copyright ©. All rights reserved.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>LCdrData opens the selected folder in a new terminal tab.</string>
 </dict>
 </plist>

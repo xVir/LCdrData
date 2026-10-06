@@ -67,7 +67,7 @@ No setup step is needed — Bazel resolves everything on first build.
 
 - **Debug builds carry extra entitlements, and must.** An app-hosted `macos_unit_test`
   cannot bootstrap without them: the sandboxed host is refused its connection to
-  `testmanagerd`. `--config=release` selects the two-key production set.
+  `testmanagerd`. `--config=release` selects the production entitlements.
 - **`bazel build //LCdrData` outputs `bazel-bin/LCdrData/LCdrData.zip`**, not a `.app`
   directory. Unzip it to inspect or run it.
 - **Each module declares who may depend on it** via `visibility` in its own BUILD file, so

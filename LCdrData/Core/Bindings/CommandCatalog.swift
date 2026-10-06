@@ -26,6 +26,7 @@ package enum CommandCatalog {
 
         case .open: return (.downArrow, .command)
         case .openItem: return nil
+        case .openInTerminal: return nil
         case .edit: return (KeyboardShortcuts.f4Key, [])
         case .quickLook: return (KeyboardShortcuts.f3Key, [])
 

@@ -208,6 +208,9 @@ let project = Project(
             productName: "LCdrData",
             bundleId: "com.xvir.LCdrData",
             deploymentTargets: .macOS("26.4"),
+            infoPlist: .extendingDefault(with: [
+                "NSAppleEventsUsageDescription": "LCdrData opens the selected folder in a new terminal tab.",
+            ]),
             sources: [
                 .glob(
                     "LCdrData/**",
@@ -236,11 +239,14 @@ let project = Project(
                 .target(name: "Views"),
             ],
             settings: .settings(
-                base: appSettings,
+                base: appSettings.merging([
+                    "CODE_SIGN_ENTITLEMENTS": "Bazel/LCdrData.debug.entitlements",
+                ]),
                 configurations: [
                     .debug(name: .debug),
                     .release(name: .release, settings: [
                         "DEVELOPMENT_TEAM": "M57JSUC35C",
+                        "CODE_SIGN_ENTITLEMENTS": "Bazel/LCdrData.entitlements",
                     ]),
                 ]
             )

@@ -156,6 +156,98 @@ struct CommandRunnerTests {
         #expect(!appState.commands.isEnabled(.rename(parent)))
     }
 
+    @Test func openInTerminalIsEnabledForASingleFolderAndTheParentRow() {
+        let folder = directory("reports")
+        let parent = FileItem.parentEntry(for: URL(fileURLWithPath: "/dir"))
+        let fileItem = file("a.txt")
+
+        let folderState = makeAppState(items: [folder], selected: [folder.id])
+        let parentState = makeAppState(items: [parent], selected: [parent.id])
+        let fileState = makeAppState(items: [fileItem], selected: [fileItem.id])
+        let both = makeAppState(items: [folder, fileItem], selected: [folder.id, fileItem.id])
+
+        #expect(folderState.commands.isEnabled(.openInTerminal))
+        #expect(parentState.commands.isEnabled(.openInTerminal))
+        #expect(!fileState.commands.isEnabled(.openInTerminal))
+        #expect(!both.commands.isEnabled(.openInTerminal))
+    }
+
+    @Test func openInTerminalOnTheParentRowOpensTheFolderBeingShown() async throws {
+        let current = URL(fileURLWithPath: "/dir/project")
+        let parent = FileItem.parentEntry(for: current)
+        let opener = RecordingTerminalOpening()
+        let appState = AppState(
+            leftDirectory: current,
+            configuration: try makeTerminalConfiguration(bundleID: "com.apple.Terminal"),
+            sandboxAccess: SandboxAccessService(
+                presenter: NoopAccessPresenter(),
+                bookmarkStore: BookmarkStore()
+            ),
+            terminalOpening: opener
+        )
+        appState.leftPanel.state.items = [parent]
+        appState.leftPanel.state.cursor = Cursor(focused: parent.id, selected: [parent.id])
+
+        appState.commands.perform(.openInTerminal)
+
+        var opens = opener.opens
+        for _ in 0..<50 where opens.isEmpty {
+            try await Task.sleep(for: .milliseconds(10))
+            opens = opener.opens
+        }
+
+        #expect(opens.count == 1)
+        #expect(opens.first?.directory == current)
+        #expect(opens.first?.directory != parent.url)
+    }
+
+    @Test func openInTerminalOpensTheSelectedFolderWithTheConfiguredApp() async throws {
+        let folder = directory("reports")
+        let opener = RecordingTerminalOpening()
+        let configuration = try makeTerminalConfiguration(bundleID: "com.mitchellh.ghostty")
+        let appState = AppState(
+            configuration: configuration,
+            sandboxAccess: SandboxAccessService(
+                presenter: NoopAccessPresenter(),
+                bookmarkStore: BookmarkStore()
+            ),
+            terminalOpening: opener
+        )
+        appState.leftPanel.state.items = [folder]
+        appState.leftPanel.state.cursor = Cursor(focused: folder.id, selected: [folder.id])
+
+        appState.commands.perform(.openInTerminal)
+
+        var opens = opener.opens
+        for _ in 0..<50 where opens.isEmpty {
+            try await Task.sleep(for: .milliseconds(10))
+            opens = opener.opens
+        }
+
+        #expect(opens.count == 1)
+        #expect(opens.first?.directory == folder.url)
+        #expect(opens.first?.bundleID == "com.mitchellh.ghostty")
+    }
+
+    @Test func openInTerminalDoesNothingWhenTheSelectionIsAFile() async throws {
+        let fileItem = file("a.txt")
+        let opener = RecordingTerminalOpening()
+        let appState = AppState(
+            configuration: try makeTerminalConfiguration(bundleID: "com.apple.Terminal"),
+            sandboxAccess: SandboxAccessService(
+                presenter: NoopAccessPresenter(),
+                bookmarkStore: BookmarkStore()
+            ),
+            terminalOpening: opener
+        )
+        appState.leftPanel.state.items = [fileItem]
+        appState.leftPanel.state.cursor = Cursor(focused: fileItem.id, selected: [fileItem.id])
+
+        appState.commands.perform(.openInTerminal)
+
+        #expect(opener.opens.isEmpty)
+    }
+
     @Test func alwaysEnabledCommands() {
         // Arrange
         let appState = makeAppState(items: [], selected: [])
@@ -268,6 +360,40 @@ struct CommandRunnerTests {
 
         // Act / Assert
         #expect(appState.commands.renameTarget == nil)
+    }
+
+    private func makeTerminalConfiguration(bundleID: String) throws -> ConfigurationService {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("LCdrDataTerminal-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        let service = ConfigurationService(
+            bundle: Bundle.main,
+            fileManager: .default,
+            configDirectory: tmp,
+            defaultKDLTextOverride: """
+            terminal {
+                default-app "\(bundleID)"
+            }
+
+            """
+        )
+        try service.load()
+        return service
+    }
+}
+
+private nonisolated final class RecordingTerminalOpening: TerminalOpening, @unchecked Sendable {
+    private let lock = NSLock()
+    private var recorded: [(directory: URL, bundleID: String)] = []
+
+    var opens: [(directory: URL, bundleID: String)] {
+        lock.withLock { recorded }
+    }
+
+    func openInNewTab(directory: URL, applicationBundleID: String) async {
+        lock.withLock {
+            recorded.append((directory: directory, bundleID: applicationBundleID))
+        }
     }
 }
 

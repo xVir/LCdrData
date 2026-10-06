@@ -41,6 +41,7 @@ package struct FileContextMenu: View {
     private var selectionMenu: some View {
         if model.isSingleSelection {
             menuButton("Open", command: .open)
+            openInTerminalButton
             Divider()
         }
 
@@ -69,6 +70,7 @@ package struct FileContextMenu: View {
     @ViewBuilder
     private var parentMenu: some View {
         menuButton("Open", command: .goToParent)
+        openInTerminalButton
     }
 
     // MARK: - Background variant
@@ -83,6 +85,16 @@ package struct FileContextMenu: View {
     }
 
     // MARK: - Helpers
+
+    /// Shown for a single real folder, and for the `..` row. On `..` it opens
+    /// the folder the panel is showing. Hidden for files and for folders
+    /// inside an archive.
+    @ViewBuilder
+    private var openInTerminalButton: some View {
+        if model.terminalDirectory != nil {
+            menuButton("Open in Terminal", command: .openInTerminal)
+        }
+    }
 
     /// A menu button that runs a `Command` and shows its catalog shortcut as
     /// native trailing grey text.

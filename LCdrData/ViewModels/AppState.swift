@@ -20,6 +20,9 @@ package final class AppState {
     /// as view `@State`) so `CommandRunner` can drive it.
     package let quickLook = QuickLookPreviewController()
 
+    /// Opens a folder in a new tab of the terminal named by configuration.
+    package let terminalOpening: any TerminalOpening
+
     /// The single entry point every UI surface uses to run user actions.
     /// A lightweight value recreated on access — no retain cycle with `self`.
     package var commands: CommandRunner { CommandRunner(appState: self) }
@@ -32,10 +35,12 @@ package final class AppState {
         archiveService: ArchiveServiceProtocol = ArchiveService(),
         configuration: ConfigurationService,
         sandboxAccess: SandboxAccessService,
-        pathExpander: TildePathExpander = TildePathExpander()
+        pathExpander: TildePathExpander = TildePathExpander(),
+        terminalOpening: any TerminalOpening = TerminalOpeningService()
     ) {
         self.configuration = configuration
         self.pathExpander = pathExpander
+        self.terminalOpening = terminalOpening
 
         let cfg = configuration.current
         self.leftPanel = PanelViewModel(

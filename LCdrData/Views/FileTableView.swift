@@ -127,7 +127,11 @@ package struct FileTableView: View {
                 ))
                 .contextMenu(forSelectionType: UUID.self) { ids in
                     FileContextMenu(
-                        model: FileContextMenuModel.resolve(selection: ids, in: viewModel.visibleItems),
+                        model: FileContextMenuModel.resolve(
+                            selection: ids,
+                            in: viewModel.visibleItems,
+                            currentDirectory: viewModel.state.currentDirectory
+                        ),
                         appState: appState
                     )
                 }

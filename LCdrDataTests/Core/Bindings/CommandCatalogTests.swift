@@ -74,6 +74,11 @@ struct CommandCatalogTests {
         #expect(CommandCatalog.binding(for: .revealInFinder) == nil)
     }
 
+    @Test func openInTerminalHasNoBinding() {
+        #expect(CommandCatalog.binding(for: .openInTerminal) == nil)
+        #expect(CommandCatalog.shortcut(for: .openInTerminal) == nil)
+    }
+
     // MARK: - Derived accessors agree with the binding
 
     @Test func keyEquivalentMatchesTheBindingKey() {

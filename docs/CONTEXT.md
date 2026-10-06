@@ -270,11 +270,13 @@ The menu shown on **secondary click** of a panel. It has three variants,
 determined by what the click resolves to:
 
 - **Selection context menu** — one or more real (non-`..`) rows are selected.
-  Offers file actions (Open — single selection only; Move to Trash; Rename —
-  single only; Copy / Move to the inactive panel; Copy Path; Reveal in Finder)
-  plus an extension section reserved for LCdrData-specific actions.
+  Offers file actions (Open — single selection only; Open in Terminal — a
+  single real folder only; Move to Trash; Rename — single only; Copy / Move to
+  the inactive panel; Copy Path; Reveal in Finder) plus an extension section
+  reserved for LCdrData-specific actions.
 - **Parent context menu** — the click resolves to only the synthetic `..` row.
-  A single "Open" item that navigates to the parent directory.
+  "Open" navigates to the parent directory. "Open in Terminal" opens the folder
+  the panel is showing, in a new tab.
 - **Background context menu** — a click on empty space below the rows (empty
   selection). Directory-scoped actions (New Folder, Select All, Toggle Hidden
   Files, Reload).

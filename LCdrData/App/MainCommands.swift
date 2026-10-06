@@ -81,6 +81,11 @@ struct MainCommands: Commands {
 
             commandButton("Go to Path…", .goToPath)
             commandButton("Open", .open)
+            Button("Open in Terminal") {
+                focused?.commands.perform(.openInTerminal)
+            }
+            .keyboardShortcut(CommandCatalog.shortcut(for: .openInTerminal))
+            .disabled(focused?.commands.isEnabled(.openInTerminal) != true)
         }
 
         CommandGroup(after: .pasteboard) {

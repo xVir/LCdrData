@@ -24,6 +24,10 @@ package struct FileContextMenuModel: Equatable {
     /// `.background`. Preserves listing order.
     package let items: [FileItem]
 
+    /// The folder "Open in Terminal" opens for this menu. A single real
+    /// directory, or — for the `..` row — the folder the panel is showing.
+    package let terminalDirectory: URL?
+
     /// True when exactly one real item is selected.
     package var isSingleSelection: Bool { items.count == 1 }
 
@@ -43,18 +47,27 @@ package struct FileContextMenuModel: Equatable {
     ///   if any, are filtered out of `items`).
     /// - A set that resolves to only the `..` row -> `.parent`.
     /// - An empty (or fully unresolved) set -> `.background`.
-    package static func resolve(selection: Set<UUID>, in listing: [FileItem]) -> FileContextMenuModel {
+    package static func resolve(
+        selection: Set<UUID>,
+        in listing: [FileItem],
+        currentDirectory: URL
+    ) -> FileContextMenuModel {
         let selectedItems = listing.filter { selection.contains($0.id) }
         let realItems = selectedItems.filter { !$0.isParentDirectory }
+        let terminalDirectory = TerminalTarget.directory(
+            selection: selection,
+            in: listing,
+            currentDirectory: currentDirectory
+        )
 
         if !realItems.isEmpty {
-            return FileContextMenuModel(variant: .selection, items: realItems)
+            return FileContextMenuModel(variant: .selection, items: realItems, terminalDirectory: terminalDirectory)
         }
 
         if selectedItems.contains(where: { $0.isParentDirectory }) {
-            return FileContextMenuModel(variant: .parent, items: [])
+            return FileContextMenuModel(variant: .parent, items: [], terminalDirectory: terminalDirectory)
         }
 
-        return FileContextMenuModel(variant: .background, items: [])
+        return FileContextMenuModel(variant: .background, items: [], terminalDirectory: terminalDirectory)
     }
 }

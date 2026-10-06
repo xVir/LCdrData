@@ -45,6 +45,13 @@ package struct CommandRunner {
             Task { await active.openSelectedItem() }
         case .openItem(let item):
             Task { await active.openItem(item) }
+        case .openInTerminal:
+            guard let directory = terminalDirectory else { return }
+            let bundleID = appState.configuration.current.terminalDefaultAppBundleID
+            let opening = appState.terminalOpening
+            Task {
+                await opening.openInNewTab(directory: directory, applicationBundleID: bundleID)
+            }
         case .edit:
             Task { await active.openPreparedSelectedFileWithDefaultApp() }
         case .quickLook:
@@ -100,6 +107,8 @@ package struct CommandRunner {
             return hasSelection
         case .revealInFinder:
             return hasSelection && !active.state.location.isArchive
+        case .openInTerminal:
+            return terminalDirectory != nil
         case .edit:
             return active.hasEditTarget
         case .quickLook:
@@ -140,6 +149,16 @@ package struct CommandRunner {
     }
 
     // MARK: - Private
+
+    /// The folder "Open in Terminal" opens: one selected real directory, or,
+    /// on the `..` row, the folder the panel is showing.
+    private var terminalDirectory: URL? {
+        TerminalTarget.directory(
+            selection: active.state.cursor.selected,
+            in: active.state.items,
+            currentDirectory: active.state.currentDirectory
+        )
+    }
 
     /// The single selected row, else the focused one.
     private var cursorTarget: FileItem? {

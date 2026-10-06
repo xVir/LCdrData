@@ -21,6 +21,9 @@ package struct AppConfiguration: Equatable, Sendable {
     package var bookmarkEntries: [BookmarkEntry]
     package var editorDefaultAppBundleID: String?
     package var editorOpenFolders: Bool
+    /// Bundle identifier of the application "Open in Terminal" uses.
+    /// `terminal.default-app` in KDL. macOS Terminal by default.
+    package var terminalDefaultAppBundleID: String
     /// How many background file operations may run at once in one window.
     /// Further ones stay waiting until a slot frees. `operations.max-active` in KDL.
     package var operationsMaxActive: Int
@@ -37,6 +40,7 @@ package struct AppConfiguration: Equatable, Sendable {
         ],
         editorDefaultAppBundleID: "com.apple.TextEdit",
         editorOpenFolders: false,
+        terminalDefaultAppBundleID: TerminalApplications.macOSTerminalBundleID,
         operationsMaxActive: 3
     )
 

@@ -190,6 +190,15 @@ package final class ConfigurationService {
             }
         }
 
+        if let terminal = document["terminal"] {
+            if let bundleID = stringArg(from: terminal, childName: "default-app") {
+                let trimmed = bundleID.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    result.terminalDefaultAppBundleID = trimmed
+                }
+            }
+        }
+
         if let operations = document["operations"] {
             if let maxActive = intArg(from: operations, childName: "max-active"), maxActive >= 1 {
                 result.operationsMaxActive = maxActive

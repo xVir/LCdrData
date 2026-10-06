@@ -26,6 +26,9 @@ package enum Command: Equatable {
     // Open / view
     case open
     case openItem(FileItem)
+    /// Open the selected folder in a new tab of the configured terminal.
+    /// On the `..` row, that folder is the one the panel is showing.
+    case openInTerminal
     case edit
     case quickLook
 
