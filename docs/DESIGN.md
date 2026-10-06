@@ -57,6 +57,8 @@ launch restores where you left off.
 ## Panels
 
 - Two side-by-side panels, each independently navigable, separated by a resizable splitter.
+  A secondary click on the splitter offers 50/50, 60/40, 40/60, 70/30, and 30/70, written as
+  left/right. Choosing one resizes the panels to that split.
 - Exactly one panel is **active** at a time, shown by a tinted border. `Tab` switches;
   clicking a panel activates it.
 - Each panel has a path bar, a file table and a status bar showing item counts and the size

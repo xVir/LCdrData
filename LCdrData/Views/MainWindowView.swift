@@ -257,17 +257,18 @@ package struct MainWindowView: View {
     private func mainContentLayer(showTaskList: Bool) -> some View {
         ZStack {
             VStack(spacing: 0) {
-                HSplitView {
-                    PanelView(viewModel: appState.leftPanel)
-                        .focusSection()
-                        .focused($focusedPanel, equals: .left)
-                        .frame(minWidth: 300)
-
-                    PanelView(viewModel: appState.rightPanel)
-                        .focusSection()
-                        .focused($focusedPanel, equals: .right)
-                        .frame(minWidth: 300)
-                }
+                PanelSplitView(
+                    left: {
+                        PanelView(viewModel: appState.leftPanel)
+                            .focusSection()
+                            .focused($focusedPanel, equals: .left)
+                    },
+                    right: {
+                        PanelView(viewModel: appState.rightPanel)
+                            .focusSection()
+                            .focused($focusedPanel, equals: .right)
+                    }
+                )
 
                 Divider()
 
