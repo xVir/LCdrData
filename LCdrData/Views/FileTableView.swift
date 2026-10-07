@@ -143,6 +143,7 @@ package struct FileTableView: View {
                 }
                 .focused($fileListFocused)
                 .listStyle(.plain)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .environment(\.defaultMinListRowHeight, 24)
                 // The Delete key is consumed by the underlying NSTableView before
                 // window-level .onKeyPress can see it. Claim the responder-chain

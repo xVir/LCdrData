@@ -63,11 +63,14 @@ struct FileListSelectionBridge: NSViewRepresentable {
                 stopMonitoring()
                 return
             }
-            // The list is not in the hierarchy yet while this view is being
-            // added to the window, so the lookup waits a turn.
-            DispatchQueue.main.async { [weak self] in
-                self?.startMonitoring()
-            }
+            startMonitoring()
+        }
+
+        override func layout() {
+            super.layout()
+            // The outline view can appear after this background view joins the
+            // window. Each layout is another chance to find it.
+            startMonitoring()
         }
 
         func startMonitoring() {
@@ -124,20 +127,27 @@ struct FileListSelectionBridge: NSViewRepresentable {
             }
         }
 
-        /// True for a primary click inside this panel's list that lands below
-        /// every row. Clicks in another window, in the other panel, or on a row
-        /// are left alone — the monitor is window-wide, so every one of those
-        /// has to be ruled out here.
+        /// True for a primary click inside this panel's list that lands on no
+        /// row. The table view is often only as tall as its rows, so the blank
+        /// area below them belongs to the scroll view, not the table. Clicks in
+        /// another window, in the other panel, or on a row are left alone — the
+        /// monitor is window-wide, so every one of those has to be ruled out.
         private func shouldSwallowPrimaryBlankClick(_ event: NSEvent) -> Bool {
-            guard let table = tableView,
-                  let window = table.window,
-                  event.window === window else { return false }
+            guard let table = tableView else { return false }
+            let host = table.enclosingScrollView?.contentView ?? table
+            guard let hostPoint = location(of: event, in: host),
+                  host.bounds.contains(hostPoint) else { return false }
 
-            let point = table.convert(event.locationInWindow, from: nil)
-            guard table.bounds.contains(point) else { return false }
-            // `row(at:)` reports -1 for a point past the last row, which is the
-            // blank area this exists for. A click on a row is a real selection.
-            return table.row(at: point) == -1
+            let tablePoint = table.convert(hostPoint, from: host)
+            if !table.bounds.contains(tablePoint) { return true }
+            // `row(at:)` reports -1 for a point past the last row. A click on a
+            // row is a real selection.
+            return table.row(at: tablePoint) < 0
+        }
+
+        private func location(of event: NSEvent, in view: NSView) -> CGPoint? {
+            guard let window = view.window, event.window === window else { return nil }
+            return view.convert(event.locationInWindow, from: nil)
         }
 
         private func isPrimaryRowClick(_ event: NSEvent) -> Bool {
@@ -157,14 +167,20 @@ struct FileListSelectionBridge: NSViewRepresentable {
             }
         }
 
-        /// The nearest table in the hierarchy: climb ancestors until a level's
-        /// subtree holds exactly one, so a sibling panel's table can never win.
+        /// The table for this panel. A common ancestor holds both panels'
+        /// tables, so the one whose scroll view overlaps this view is ours.
         private func enclosingTableView() -> NSTableView? {
+            let bridgeFrame = convert(bounds, to: nil)
+            guard bridgeFrame.width > 1, bridgeFrame.height > 1 else { return nil }
+
             var ancestor: NSView? = superview
             while let view = ancestor {
-                let tables = view.descendantTableViews()
-                if tables.count == 1 { return tables.first }
-                if tables.count > 1 { return nil }
+                let tables = view.descendantTableViews().filter { table in
+                    guard let scroll = table.enclosingScrollView else { return false }
+                    let scrollFrame = scroll.convert(scroll.bounds, to: nil)
+                    return scrollFrame.intersects(bridgeFrame)
+                }
+                if tables.count == 1 { return tables[0] }
                 ancestor = view.superview
             }
             return nil

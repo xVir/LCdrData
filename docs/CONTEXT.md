@@ -27,14 +27,27 @@ _Avoid_: the Tab key, which switches the **active panel**; a window.
 
 ## Location
 
-Where a panel currently is: either a **directory** or a folder inside an **archive**.
+Where a panel currently is: a **directory**, the path of a **symlink** to a directory,
+or a folder inside an **archive**.
 _Avoid_: calling an archive interior a directory; "current directory" when the panel
-is inside a zip.
+is inside a zip; the resolved target of a symlink.
 
 ## Directory
 
 A real folder on the filesystem.
-_Avoid_: using directory for the interior of a zip.
+_Avoid_: using directory for the interior of a zip; a symlink.
+
+## Symlink
+
+A filesystem entry that points at another path. A symlink to a directory is
+**enterable**, and the panel's **location** is that symlink's own path. Any
+location reached through it stays on that path, including when that path repeats.
+Going up walks back one step along it. The panel shows that path and not the
+directory it points at. An operation on the symlink itself changes the link. An
+operation inside the location changes the entries there.
+_Avoid_: alias (a Finder alias is a different file); the directory it points at;
+collapsing a repeated path; a symlink member inside an archive (that is a file
+item — copy it out to get a symlink).
 
 ## Archive
 

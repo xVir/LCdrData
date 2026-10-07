@@ -140,20 +140,16 @@ private struct TaskRow: View {
     var onCancel: () -> Void
 
     @Environment(\.lcPanelFontSize) private var panelFontSize
-    @State private var isHovering = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             kindMark
                 .padding(.top, 1)
             VStack(alignment: .leading, spacing: 3) {
-                HStack(alignment: .center, spacing: 6) {
-                    Text(operation.displayDescription)
-                        .font(.system(size: panelFontSize))
-                        .lineLimit(1)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    trailingMark
-                }
+                Text(operation.displayDescription)
+                    .font(.system(size: panelFontSize))
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 if let detail = detailText {
                     Text(detail)
                         .font(.system(size: detailFontSize))
@@ -170,13 +166,17 @@ private struct TaskRow: View {
                         .accessibilityValue(progressValue)
                 }
             }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("task-row")
+            .accessibilityLabel("\(operation.displayDescription), \(statusTitle)")
+            if showsCancel {
+                cancelButton
+            } else {
+                statusGlyph
+                    .accessibilityHidden(true)
+            }
         }
         .padding(.vertical, 2)
-        .contentShape(Rectangle())
-        .onHover { isHovering = $0 }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("task-row")
-        .accessibilityLabel("\(operation.displayDescription), \(statusTitle)")
     }
 
     private var detailFontSize: CGFloat {
@@ -203,18 +203,6 @@ private struct TaskRow: View {
             .accessibilityHidden(true)
     }
 
-    private var trailingMark: some View {
-        ZStack {
-            statusGlyph
-                .opacity(isHovering && showsCancel ? 0 : 1)
-                .accessibilityHidden(true)
-            if showsCancel {
-                cancelButton
-            }
-        }
-        .frame(width: 16, height: 16)
-    }
-
     @ViewBuilder
     private var statusGlyph: some View {
         switch operation.status {
@@ -239,19 +227,13 @@ private struct TaskRow: View {
         }
     }
 
-    /// The glyph is hidden until the row is hovered. The button stays in the
-    /// accessibility tree, so it can be activated without the pointer resting on it.
+    /// A running or waiting operation can be stopped. The title is the button's
+    /// name, so it stays findable without hovering the row.
     private var cancelButton: some View {
-        Button(action: onCancel) {
-            Image(systemName: "xmark")
-                .font(.system(size: 9, weight: .bold))
-                .frame(width: 16, height: 16)
-                .opacity(isHovering ? 1 : 0)
-                .background(Color.primary.opacity(0.001))
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(CancelIconButtonStyle())
-        .accessibilityLabel("Cancel")
+        Button("Cancel", action: onCancel)
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+            .accessibilityIdentifier("Cancel")
     }
 
     private var statusTitle: String {
@@ -315,41 +297,5 @@ private struct TaskRow: View {
         case .rename:
             return ("pencil", Color(nsColor: .systemBlue))
         }
-    }
-}
-
-/// Hover fills the circle lightly. Holding the mouse button fills it more.
-private struct CancelIconButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        CancelIconChrome(isPressed: configuration.isPressed) {
-            configuration.label
-        }
-    }
-}
-
-private struct CancelIconChrome<Label: View>: View {
-    var isPressed: Bool
-    @ViewBuilder var label: () -> Label
-    @State private var isHovering = false
-
-    var body: some View {
-        label()
-            .padding(3)
-            .background {
-                Circle()
-                    .fill(background)
-            }
-            .contentShape(Circle())
-            .onHover { isHovering = $0 }
-    }
-
-    private var background: Color {
-        if isPressed {
-            return Color.primary.opacity(0.28)
-        }
-        if isHovering {
-            return Color.primary.opacity(0.12)
-        }
-        return Color.clear
     }
 }

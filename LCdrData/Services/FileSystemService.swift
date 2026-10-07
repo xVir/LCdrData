@@ -12,7 +12,7 @@ package nonisolated protocol FileSystemServiceProtocol: Sendable {
 package nonisolated final class FileSystemService: FileSystemServiceProtocol, Sendable {
     package init() {}
 
-    /// Resource keys to pre-fetch for performance during directory listing.
+    /// Resource keys read for each entry while building its file item.
     private nonisolated static let resourceKeys: [URLResourceKey] = [
         .nameKey,
         .isDirectoryKey,
@@ -29,16 +29,20 @@ package nonisolated final class FileSystemService: FileSystemServiceProtocol, Se
         // Use a detached task to run on a background thread, using a local FileManager.
         return try await Task.detached {
             let fm = FileManager()
-            let contents = try fm.contentsOfDirectory(
-                at: url,
-                includingPropertiesForKeys: resourceKeys,
-                options: showHidden ? [] : [.skipsHiddenFiles]
-            )
+            // contentsOfDirectory(at:) refuses a symlink (ENOTDIR) and, when a
+            // path merely passes through one, returns children on the resolved
+            // target. Names stay on the URL the caller asked for.
+            let contents = try fm.contentsOfDirectory(atPath: url.path).map { name in
+                url.appendingPathComponent(name)
+            }
 
-            return contents.map { itemURL in
+            return contents.compactMap { itemURL in
                 let resourceValues = try? itemURL.resourceValues(
                     forKeys: Set(resourceKeys)
                 )
+                if !showHidden && (resourceValues?.isHidden ?? false) {
+                    return nil
+                }
 
                 let isSymlink = resourceValues?.isSymbolicLink ?? false
                 var isSymlinkToDirectory = false

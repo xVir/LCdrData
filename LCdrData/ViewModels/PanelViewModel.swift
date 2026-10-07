@@ -33,6 +33,8 @@ package final class PanelViewModel {
     package private(set) var isLocationWritable: Bool = true
     /// True when the last load failure was a sandbox permission denial.
     package var isPermissionError: Bool = false
+    /// Collapse two deliveries of one Delete key into a single leave.
+    private var lastLeaveUnreadableDirectoryTime: TimeInterval = 0
 
     /// When set, the row with this ID plays a highlight animation (fading
     /// green background). Cleared automatically after the animation ends.
@@ -551,6 +553,23 @@ package final class PanelViewModel {
         let cursor: Cursor
     }
 
+    /// Delete / forward-delete while a directory error is showing, and the
+    /// same keys otherwise. A failed navigation reverts to the previous folder
+    /// and then paints the error over that listing; the key reveals it. When
+    /// the folder on screen is itself unreadable, the key goes to its parent.
+    package func leaveUnreadableDirectory() async {
+        let now = ProcessInfo.processInfo.systemUptime
+        if now - lastLeaveUnreadableDirectoryTime < 0.05 { return }
+        lastLeaveUnreadableDirectoryTime = now
+
+        if errorMessage != nil, !state.items.isEmpty {
+            errorMessage = nil
+            isPermissionError = false
+            return
+        }
+        await navigateToParent()
+    }
+
     /// Navigate to the parent directory.
     /// After loading the parent listing, the cursor will land on the folder
     /// we just left so the user can easily re-enter it.
@@ -705,7 +724,27 @@ package final class PanelViewModel {
     /// arrow keys, Cmd-click). Routed through `Cursor.userDidSelect` so that
     /// rules like "empty selection restores from focused" live on the cursor.
     package func cursorDidChangeSelection(to newSelection: Set<UUID>) {
+        let previous = state.cursor
         state.cursor.userDidSelect(newSelection)
+
+        if newSelection.isEmpty, state.cursor == previous, !previous.selected.isEmpty {
+            resyncSelectionAfterEmptyClick()
+        }
+    }
+
+    /// Clicking blank space makes the list drop its highlight before it reports
+    /// the empty set. `userDidSelect` puts the focused row straight back, so the
+    /// binding ends up at the value SwiftUI already published — nothing is
+    /// written back down and the row stays dark. Publishing the empty state the
+    /// list is showing, then restoring it a turn later, makes the value change
+    /// so the row lights up again.
+    private func resyncSelectionAfterEmptyClick() {
+        let restored = state.cursor.selected
+        state.cursor.selected = []
+        Task { @MainActor in
+            guard state.cursor.selected.isEmpty else { return }
+            state.cursor.selected = restored
+        }
     }
 
     /// Selects all items (excluding ".." parent entry).

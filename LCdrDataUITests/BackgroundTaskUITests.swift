@@ -5,7 +5,9 @@ import XCTest
 final class BackgroundTaskUITests: LCdrDataUITestCase {
 
     private let filesPerBatch = 8
-    private let itemDelayMilliseconds = 400
+    /// Long enough that the test runner's pointer, which glides rather than jumps,
+    /// still reaches Cancel before the copy finishes.
+    private let itemDelayMilliseconds = 1200
 
     override func setUpWithError() throws {
         try super.setUpWithError()
@@ -73,8 +75,10 @@ final class BackgroundTaskUITests: LCdrDataUITestCase {
         copyBatch("batch1", in: app)
         openTaskList(in: app)
 
-        let cancel = app.descendants(matching: .any)["task-list"].buttons["Cancel"]
-        XCTAssertTrue(cancel.waitForExistence(timeout: 5), "running copy has no Cancel button")
+        let cancel = app.descendants(matching: .any)["task-list"]
+            .buttons.matching(NSPredicate(format: "label == %@ OR identifier == %@", "Cancel", "Cancel"))
+            .firstMatch
+        XCTAssertTrue(cancel.waitForExistence(timeout: 8), "running copy has no Cancel button")
         cancel.click()
 
         let cancelled = taskRows(in: app).matching(
@@ -126,29 +130,52 @@ final class BackgroundTaskUITests: LCdrDataUITestCase {
         return app
     }
 
+    /// Selects the batch and confirms the copy from the keyboard. The test
+    /// runner glides the pointer, so clicking the first file, the last file,
+    /// F5 and Confirm is most of the time spent before the copy even starts.
     @MainActor
     private func copyBatch(_ name: String, in app: XCUIApplication) {
         let list = app.outlines["fileList.left"]
-        let first = list.staticTexts["\(name)-01.txt"]
-        let last = list.staticTexts["\(name)-\(String(format: "%02d", filesPerBatch)).txt"]
-        XCTAssertTrue(first.waitForExistence(timeout: 5), "\(name) files are not in the left panel")
-        first.click()
+        let firstName = "\(name)-01.txt"
+        XCTAssertTrue(
+            list.staticTexts[firstName].waitForExistence(timeout: 5),
+            "\(name) files are not in the left panel"
+        )
+
+        let names = (try? FileManager.default.contentsOfDirectory(
+            at: leftFixtureDirectory,
+            includingPropertiesForKeys: nil
+        ).map(\.lastPathComponent).sorted()) ?? []
+        let index = names.firstIndex(of: firstName) ?? 0
+
+        app.typeKey(XCUIKeyboardKey.home, modifierFlags: [])
+        // Home selects the first file and skips "..". If the table took Home
+        // itself and landed on "..", step onto that first file.
+        if list.outlineRows.element(boundBy: 0).isSelected {
+            app.typeKey(XCUIKeyboardKey.downArrow, modifierFlags: [])
+        }
+        for _ in 0..<index {
+            app.typeKey(XCUIKeyboardKey.downArrow, modifierFlags: [])
+        }
+        let targetRow = list.outlineRows.element(boundBy: index + 1)
+        XCTAssertTrue(targetRow.isSelected, "could not select \(firstName)")
+        // Arrow keys move the highlight. A range is a shift-click, and that
+        // is the one pointer trip this setup still makes.
+        let lastName = "\(name)-\(String(format: "%02d", filesPerBatch)).txt"
+        let last = list.staticTexts[lastName]
+        XCTAssertTrue(last.waitForExistence(timeout: 2), "\(lastName) is not in the left panel")
         XCUIElement.perform(withKeyModifiers: .shift) {
             last.click()
         }
 
-        let copy = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "F5")).firstMatch
-        XCTAssertTrue(copy.waitForExistence(timeout: 5))
-        copy.click()
+        // F5 is the Copy shortcut. The C constant is not exposed as a Swift member.
+        app.typeKey(XCUIKeyboardKey(rawValue: "\u{F708}"), modifierFlags: [])
 
         let dialogConfirm = app.dialogs.buttons["Confirm"]
         let sheetConfirm = app.sheets.buttons["Confirm"]
-        if dialogConfirm.waitForExistence(timeout: 5) {
-            dialogConfirm.click()
-        } else {
-            XCTAssertTrue(sheetConfirm.waitForExistence(timeout: 2), "copy confirmation did not appear")
-            sheetConfirm.click()
-        }
+        let appeared = dialogConfirm.waitForExistence(timeout: 5) || sheetConfirm.exists
+        XCTAssertTrue(appeared, "copy confirmation did not appear")
+        app.typeKey(XCUIKeyboardKey.return, modifierFlags: [])
     }
 
     @MainActor

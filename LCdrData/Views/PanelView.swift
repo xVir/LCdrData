@@ -349,5 +349,16 @@ package struct PanelView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding()
         .focusable()
+        .onDeleteCommand {
+            Task { await viewModel.leaveUnreadableDirectory() }
+        }
+        .onKeyPress(.delete) {
+            Task { await viewModel.leaveUnreadableDirectory() }
+            return .handled
+        }
+        .onKeyPress(.deleteForward) {
+            Task { await viewModel.leaveUnreadableDirectory() }
+            return .handled
+        }
     }
 }

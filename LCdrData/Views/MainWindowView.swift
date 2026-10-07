@@ -77,7 +77,9 @@ package struct MainWindowView: View {
                 onF6: { runner.perform(.move) },
                 onF7: { runner.perform(.newFolder) },
                 onF8: { runner.perform(.trash) },
-                onDeleteKeyNavigateParent: { runner.perform(.goToParent) },
+                onDeleteKeyNavigateParent: {
+                    Task { await appState.activePanelViewModel.leaveUnreadableDirectory() }
+                },
                 onPermanentDelete: { runner.perform(.permanentDelete) },
                 pathEditingBlocksDelete: {
                     appState.activePanelViewModel.isPathBarEditing
