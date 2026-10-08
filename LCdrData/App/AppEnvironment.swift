@@ -5,13 +5,13 @@ import ViewModels
 
 /// Brackets `startAccessingSecurityScopedResource` so tests can stand in for
 /// the kernel-backed call without acquiring real scopes.
-package protocol SecurityScopeActivating: Sendable {
+package nonisolated protocol SecurityScopeActivating: Sendable {
     func startAccessing(_ url: URL) -> Bool
     func stopAccessing(_ url: URL)
 }
 
 /// Production activator: forwards to the URL extension methods.
-package struct SystemSecurityScopeActivator: SecurityScopeActivating {
+package nonisolated struct SystemSecurityScopeActivator: SecurityScopeActivating {
     package func startAccessing(_ url: URL) -> Bool {
         url.startAccessingSecurityScopedResource()
     }
@@ -60,8 +60,8 @@ package final class AppEnvironment {
         bookmarkStore: BookmarkStoreProtocol,
         sandboxAccess: SandboxAccessService? = nil,
         scopeActivator: SecurityScopeActivating = SystemSecurityScopeActivator(),
-        sessionStore: PanelSessionStoring = PanelSessionStore(),
-        columnLayouts: PanelColumnLayoutModel = PanelColumnLayoutModel(),
+        sessionStore: PanelSessionStoring? = nil,
+        columnLayouts: PanelColumnLayoutModel? = nil,
         launchOptions: LaunchOptions = LaunchOptions()
     ) {
         self.launchOptions = launchOptions
@@ -72,8 +72,10 @@ package final class AppEnvironment {
             bookmarkStore: bookmarkStore
         )
         self.scopeActivator = scopeActivator
-        self.sessionStore = sessionStore
-        self.columnLayouts = columnLayouts
+        // Built here, on the main actor. A default argument is evaluated outside
+        // that actor, so these cannot be written as `= PanelSessionStore()`.
+        self.sessionStore = sessionStore ?? PanelSessionStore()
+        self.columnLayouts = columnLayouts ?? PanelColumnLayoutModel()
     }
 
     package func registerWindow(_ state: AppState) {

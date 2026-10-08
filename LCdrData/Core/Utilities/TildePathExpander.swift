@@ -3,7 +3,7 @@ import Foundation
 
 /// Supplies the user's real home directory. Injectable so tests can pin a home
 /// directory instead of depending on the account the suite runs as.
-package protocol HomeDirectoryProviding: Sendable {
+package nonisolated protocol HomeDirectoryProviding: Sendable {
     var homeDirectory: URL { get }
 }
 
@@ -15,7 +15,7 @@ package protocol HomeDirectoryProviding: Sendable {
 /// home. That is the right answer for the app's own storage and the wrong one
 /// for paths the user wrote, where `~` means their actual home. `getpwuid`
 /// reports the real home and stays readable from inside the sandbox.
-package struct AccountHomeDirectoryProvider: HomeDirectoryProviding {
+package nonisolated struct AccountHomeDirectoryProvider: HomeDirectoryProviding {
     package var homeDirectory: URL {
         guard let entry = getpwuid(getuid()), let directory = entry.pointee.pw_dir else {
             return URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
@@ -33,7 +33,7 @@ package struct AccountHomeDirectoryProvider: HomeDirectoryProviding {
 ///
 /// Only `~` and `~/…` are expanded. A `~user` form is left alone rather than
 /// guessed at, and any other path is passed through untouched.
-package struct TildePathExpander: Sendable {
+package nonisolated struct TildePathExpander: Sendable {
 
     private let home: HomeDirectoryProviding
 

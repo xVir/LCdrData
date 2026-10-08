@@ -71,12 +71,11 @@ package final class DirectorySession: @unchecked Sendable {
             self.debounceGeneration &+= 1
             let token = self.debounceGeneration
             let interval = self.debounceInterval
-            let onChange = self.onChange
             Task { @MainActor [weak self] in
                 try? await Task.sleep(for: .seconds(interval))
                 guard let self, !self.isCancelled,
                       token == self.debounceGeneration else { return }
-                onChange()
+                self.onChange()
             }
         }
     }

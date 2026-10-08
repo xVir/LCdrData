@@ -2,19 +2,19 @@ import Foundation
 
 /// Serializes a URL to/from a `Data` blob (the bookmark). Production uses macOS
 /// security-scoped bookmarks; tests inject a fake.
-package protocol BookmarkSerializing: Sendable {
+package nonisolated protocol BookmarkSerializing: Sendable {
     func bookmarkData(for url: URL) -> Data?
     func resolve(_ data: Data) -> (url: URL?, refreshedData: Data?)
 }
 
-package extension BookmarkSerializing {
-    package func url(fromBookmarkData data: Data) -> URL? {
+package nonisolated extension BookmarkSerializing {
+    func url(fromBookmarkData data: Data) -> URL? {
         resolve(data).url
     }
 }
 
 /// Production serializer backed by the macOS app-scope security bookmark API.
-package struct SecurityScopedBookmarkSerializer: BookmarkSerializing {
+package nonisolated struct SecurityScopedBookmarkSerializer: BookmarkSerializing {
     package func bookmarkData(for url: URL) -> Data? {
         BookmarkService.bookmarkData(for: url)
     }
@@ -25,14 +25,14 @@ package struct SecurityScopedBookmarkSerializer: BookmarkSerializing {
 }
 
 /// Persists bookmarks keyed by path. Decoupled from window management.
-package protocol BookmarkStoreProtocol: Sendable {
+package nonisolated protocol BookmarkStoreProtocol: Sendable {
     func save(url: URL)
     func resolve(path: String) -> URL?
     func allBookmarkURLs() -> [URL]
     func bookmarkCovering(url: URL) -> URL?
 }
 
-package final class BookmarkStore: BookmarkStoreProtocol, @unchecked Sendable {
+package nonisolated final class BookmarkStore: BookmarkStoreProtocol, @unchecked Sendable {
 
     private static let storageKey = "bookmarks"
 

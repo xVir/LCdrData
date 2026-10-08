@@ -2,7 +2,7 @@ import Foundation
 
 /// Describes which kind of access request is being made. Drives alert copy,
 /// button labels, and the `NSOpenPanel.directoryURL` for the presenter.
-package enum AccessRequestContext: Sendable, Equatable {
+package nonisolated enum AccessRequestContext: Sendable, Equatable {
 
     /// First-launch prompt for Home folder access.
     case startup

@@ -1,7 +1,7 @@
 import Foundation
 
 /// Command-line options used by automated runs and other deterministic launches.
-package struct LaunchOptions: Sendable, Equatable {
+package nonisolated struct LaunchOptions: Sendable, Equatable {
     package let leftPath: String?
     package let rightPath: String?
     package let noSavedState: Bool
