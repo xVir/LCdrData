@@ -42,6 +42,10 @@ struct CommandCatalogTests {
         #expect(CommandCatalog.binding(for: .open)?.key == .downArrow)
         #expect(CommandCatalog.binding(for: .back)?.key == "[")
         #expect(CommandCatalog.binding(for: .forward)?.key == "]")
+        #expect(CommandCatalog.binding(for: .openLeftLocationInRightPanel)?.key == .rightArrow)
+        #expect(CommandCatalog.binding(for: .openLeftLocationInRightPanel)?.modifiers == .command)
+        #expect(CommandCatalog.binding(for: .openRightLocationInLeftPanel)?.key == .leftArrow)
+        #expect(CommandCatalog.binding(for: .openRightLocationInLeftPanel)?.modifiers == .command)
     }
 
     @Test func selectAllAndDeselectAllShareAKeyAndDifferByShift() {

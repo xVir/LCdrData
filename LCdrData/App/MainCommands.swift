@@ -69,6 +69,8 @@ struct MainCommands: Commands {
             Divider()
 
             commandButton("New Tab", .newTab)
+            commandButton("Open Left Location in Right Panel", .openLeftLocationInRightPanel)
+            commandButton("Open Right Location in Left Panel", .openRightLocationInLeftPanel)
             commandButton("Next Tab", .nextTab)
             commandButton("Previous Tab", .previousTab)
 

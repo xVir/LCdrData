@@ -40,6 +40,10 @@ package struct CommandRunner {
             active.activateNextTab()
         case .previousTab:
             active.activatePreviousTab()
+        case .openLeftLocationInRightPanel:
+            openLocation(of: appState.leftPanel, inNewTabOn: appState.rightPanel)
+        case .openRightLocationInLeftPanel:
+            openLocation(of: appState.rightPanel, inNewTabOn: appState.leftPanel)
 
         case .open:
             Task { await active.openSelectedItem() }
@@ -125,7 +129,8 @@ package struct CommandRunner {
             return active.isLocationWritable
         case .open, .goToParent, .goToPath, .refresh,
              .selectAll, .deselectAll, .toggleHidden,
-             .newTab, .closeTab, .nextTab, .previousTab:
+             .newTab, .closeTab, .nextTab, .previousTab,
+             .openLeftLocationInRightPanel, .openRightLocationInLeftPanel:
             return true
         }
     }
@@ -149,6 +154,14 @@ package struct CommandRunner {
     }
 
     // MARK: - Private
+
+    /// Opens the source panel's location as a new front tab on the destination.
+    /// Which panel is active does not matter, and this does not change it.
+    private func openLocation(of source: PanelViewModel, inNewTabOn destination: PanelViewModel) {
+        let location = source.state.location
+        let sort = source.state.sortDescriptor
+        Task { await destination.openLocationInNewTab(location, sort: sort) }
+    }
 
     /// The folder "Open in Terminal" opens: one selected real directory, or,
     /// on the `..` row, the folder the panel is showing.

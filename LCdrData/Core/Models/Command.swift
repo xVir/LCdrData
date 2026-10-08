@@ -22,6 +22,10 @@ package enum Command: Equatable {
     case closeTab
     case nextTab
     case previousTab
+    /// The left panel's location, opened as a new front tab on the right.
+    case openLeftLocationInRightPanel
+    /// The right panel's location, opened as a new front tab on the left.
+    case openRightLocationInLeftPanel
 
     // Open / view
     case open

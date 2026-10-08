@@ -33,6 +33,45 @@ struct CommandRunnerTests {
         FileItem(url: URL(fileURLWithPath: "/dir/\(name)"), name: name, isDirectory: true)
     }
 
+    @Test func openLeftLocationInRightPanelDoesNotChangeTheActivePanel() async throws {
+        // Arrange — the right panel is active, and the left panel is sorted by size.
+        let opened = FileItem(
+            url: URL(fileURLWithPath: "/left/a.txt"),
+            name: "a.txt",
+            isDirectory: false
+        )
+        let appState = AppState()
+        appState.leftPanel = PanelViewModel(
+            side: .left,
+            initialDirectory: URL(fileURLWithPath: "/left"),
+            sortDescriptor: FileSortDescriptor(column: .size, ascending: false),
+            fileSystemService: MockFileSystemService(itemsByPath: ["/left": [opened]])
+        )
+        appState.rightPanel = PanelViewModel(
+            side: .right,
+            initialDirectory: URL(fileURLWithPath: "/right"),
+            showHiddenFiles: true,
+            fileSystemService: MockFileSystemService(itemsByPath: ["/right": [], "/left": [opened]])
+        )
+        await appState.leftPanel.reload(.fresh)
+        await appState.rightPanel.reload(.fresh)
+        appState.activePanel = .right
+
+        // Act
+        appState.commands.perform(.openLeftLocationInRightPanel)
+        let deadline = Date().addingTimeInterval(2)
+        while Date() < deadline && appState.rightPanel.state.tabs.count < 2 {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        // Assert
+        #expect(appState.activePanel == .right)
+        #expect(appState.rightPanel.state.tabs.count == 2)
+        #expect(appState.rightPanel.state.location == .directory(URL(fileURLWithPath: "/left")))
+        #expect(appState.rightPanel.state.sortDescriptor == FileSortDescriptor(column: .size, ascending: false))
+        #expect(appState.rightPanel.state.showHiddenFiles)
+    }
+
     // MARK: - Edit enablement
 
     @Test func editIsDisabledOnAFolderWhenOpenFoldersIsOff() {

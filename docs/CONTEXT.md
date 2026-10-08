@@ -25,12 +25,18 @@ A panel's mutable surface is `PanelState`; its behaviour lives on `PanelViewMode
 One **location** open in a **panel**. A panel holds one or more tabs, and exactly one of them is in front.
 _Avoid_: the Tab key, which switches the **active panel**; a window.
 
+## History
+
+The **locations** a **panel** has successfully opened, in order. Back and Forward walk that list. It belongs to the panel, not to a **tab**. A location that could not be opened is not a visit.
+_Avoid_: a per-tab back stack.
+
 ## Location
 
 Where a panel currently is: a **directory**, the path of a **symlink** to a directory,
 or a folder inside an **archive**.
 _Avoid_: calling an archive interior a directory; "current directory" when the panel
-is inside a zip; the resolved target of a symlink.
+is inside a zip; the resolved target of a symlink; the selected row, when what
+you mean is the folder the panel is showing.
 
 ## Directory
 
@@ -75,6 +81,7 @@ _Avoid_: calling an archive a directory so that Return works; using
 The panel that receives keyboard input and is the implicit source for file
 operations. Tracked on `AppState.activePanel: PanelSide`. The other panel is the
 **inactive panel** and acts as the destination for cross-panel operations.
+Putting a **location** on the other panel does not change which panel is active.
 
 ## Listing
 
@@ -324,3 +331,7 @@ Keyboard shortcuts for commands live in `CommandCatalog` (the single
 command-to-shortcut map that every surface reads); titles stay per-surface
 because the same command is labelled differently in different places
 (e.g. "Copy" in the command bar vs. "Copy to Other Panel" in a context menu).
+
+## Flagged ambiguities
+
+- "current folder" was used for both the selected row and the folder a panel is showing — resolved: it means that panel's **location**.

@@ -416,6 +416,52 @@ package final class PanelViewModel {
         await reload(.fresh)
     }
 
+    /// Opens `location` as a new tab in front of this panel's current tab.
+    ///
+    /// Sort comes from the panel the location was taken from. Hidden files,
+    /// view mode, and columns stay as this panel already has them. The cursor
+    /// lands on the first row, and the visit is recorded in this panel's
+    /// history. A location that cannot be opened leaves no tab behind.
+    package func openLocationInNewTab(_ location: BrowseLocation, sort: FileSortDescriptor) async {
+        snapshotActiveTab()
+        let previousTabs = state.tabs
+        let previousIndex = state.activeTabIndex
+        let previousSort = state.sortDescriptor
+        let settings = state.tabs[state.activeTabIndex]
+
+        let newTab = PanelTab(
+            location: location,
+            title: title(for: location),
+            viewMode: settings.viewMode,
+            sortDescriptor: sort,
+            showHiddenFiles: state.showHiddenFiles,
+            columns: settings.columns
+        )
+        let insertionIndex = min(state.activeTabIndex + 1, state.tabs.count)
+        state.tabs.insert(newTab, at: insertionIndex)
+        state.activeTabIndex = insertionIndex
+        state.sortDescriptor = sort
+
+        await performAtomicNavigation(intent: .fresh, displayURL: location.watchURL) {
+            if self.state.historyIndex < self.state.locationHistory.count - 1 {
+                self.state.locationHistory = Array(
+                    self.state.locationHistory.prefix(self.state.historyIndex + 1)
+                )
+            }
+            self.state.location = location
+            self.state.locationHistory.append(location)
+            self.state.historyIndex = self.state.locationHistory.count - 1
+        }
+
+        guard errorMessage == nil else {
+            state.tabs = previousTabs
+            state.activeTabIndex = previousIndex
+            state.sortDescriptor = previousSort
+            updateActiveTabMetadata()
+            return
+        }
+    }
+
     /// Closes a specific tab, selecting the nearest surviving tab if needed.
     package func closeTab(at index: Int) async {
         guard state.tabs.count > 1 else { return }

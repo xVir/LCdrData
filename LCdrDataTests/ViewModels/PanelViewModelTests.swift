@@ -1421,6 +1421,87 @@ struct PanelViewModelTests {
         ])
     }
 
+    @Test func openLocationInNewTabUsesSourceSortAndDestinationSettings() async {
+        // Arrange — destination lists /right by name, with hidden files shown.
+        let opened = FileItem(
+            url: URL(fileURLWithPath: "/left/a.txt"),
+            name: "a.txt",
+            isDirectory: false
+        )
+        let service = MockFileSystemService(itemsByPath: [
+            "/right": [],
+            "/left": [opened],
+        ])
+        let vm = PanelViewModel(
+            side: .right,
+            initialDirectory: URL(fileURLWithPath: "/right"),
+            sortDescriptor: FileSortDescriptor(column: .name, ascending: true),
+            showHiddenFiles: true,
+            fileSystemService: service
+        )
+        await vm.reload(.fresh)
+        let sourceSort = FileSortDescriptor(column: .dateModified, ascending: false)
+
+        // Act
+        await vm.openLocationInNewTab(.directory(URL(fileURLWithPath: "/left")), sort: sourceSort)
+
+        // Assert
+        #expect(vm.state.tabs.count == 2)
+        #expect(vm.state.activeTabIndex == 1)
+        #expect(vm.state.tabs[0].location == .directory(URL(fileURLWithPath: "/right")))
+        #expect(vm.state.tabs[0].sortDescriptor == FileSortDescriptor(column: .name, ascending: true))
+        #expect(vm.state.location == .directory(URL(fileURLWithPath: "/left")))
+        #expect(vm.state.sortDescriptor == sourceSort)
+        #expect(vm.state.showHiddenFiles)
+        #expect(vm.state.items.contains { $0.name == "a.txt" })
+        #expect(vm.state.items.first?.isParentDirectory == true)
+        #expect(vm.state.cursor.focused == vm.state.items.first?.id)
+        #expect(vm.state.locationHistory.map(\.persistentDirectory.path) == ["/right", "/left"])
+
+        // A second open of the same location still adds a tab.
+        await vm.openLocationInNewTab(.directory(URL(fileURLWithPath: "/left")), sort: sourceSort)
+        #expect(vm.state.tabs.count == 3)
+    }
+
+    @Test func openLocationInNewTabLeavesNoTabWhenTheLocationCannotBeOpened() async {
+        // Arrange
+        let service = ThrowingMockFileSystemService(
+            itemsByPath: ["/right": []],
+            failingPaths: ["/left"],
+            error: NSError(
+                domain: NSCocoaErrorDomain,
+                code: 256,
+                userInfo: [NSLocalizedDescriptionKey: "The file “left” couldn’t be opened."]
+            )
+        )
+        let sandbox = SandboxAccessService(
+            presenter: NoopAccessPresenter(),
+            bookmarkStore: FakeBookmarkStore()
+        )
+        let keptSort = FileSortDescriptor(column: .size, ascending: true)
+        let vm = PanelViewModel(
+            side: .right,
+            initialDirectory: URL(fileURLWithPath: "/right"),
+            sortDescriptor: keptSort,
+            fileSystemService: service,
+            sandboxAccessService: sandbox
+        )
+        await vm.reload(.fresh)
+
+        // Act
+        await vm.openLocationInNewTab(
+            .directory(URL(fileURLWithPath: "/left")),
+            sort: FileSortDescriptor(column: .dateModified, ascending: false)
+        )
+
+        // Assert — the visit does not stick.
+        #expect(vm.state.tabs.count == 1)
+        #expect(vm.state.currentDirectory.path == "/right")
+        #expect(vm.state.historyIndex == 0)
+        #expect(vm.state.sortDescriptor == keptSort)
+        #expect(vm.errorMessage != nil)
+    }
+
     private func makeTemporaryDirectory() throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("lcdr-tab-sort-\(UUID().uuidString)", isDirectory: true)

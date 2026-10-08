@@ -23,6 +23,8 @@ package enum CommandCatalog {
         case .closeTab: return ("w", .command)
         case .nextTab: return ("\t", .control)
         case .previousTab: return ("\t", [.control, .shift])
+        case .openLeftLocationInRightPanel: return (.rightArrow, .command)
+        case .openRightLocationInLeftPanel: return (.leftArrow, .command)
 
         case .open: return (.downArrow, .command)
         case .openItem: return nil

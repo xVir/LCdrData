@@ -151,6 +151,8 @@ filename — the buffer clears after a second of silence.
 | `Delete` / forward delete | Go to parent directory |
 | `⌘↑` | Go to parent directory |
 | `⌘↓` / double-click | Open file, enter directory |
+| `⌘→` | Open the left panel's location in a new tab on the right |
+| `⌘←` | Open the right panel's location in a new tab on the left |
 | `⌘L` | Edit the path bar |
 | `⌘⇧O` | Open Folder… |
 | `⌘R` | Refresh panel |
@@ -170,6 +172,12 @@ filename — the buffer clears after a second of silence.
 | `⌘,` | Settings |
 | Arrows | Move through the list |
 | Any letter | Incremental filename search |
+
+`⌘→` and `⌘←` name a side, so they work when that panel is not the active one, and they leave
+the active panel where it was. The new tab is always created, even if that side is already
+showing the folder. It uses the source panel's sort and the destination panel's columns and
+other settings, and the cursor starts on the first row. Back on the destination panel returns
+to the folder it was showing. The same two commands are in the menu, next to New Tab.
 
 The command bar along the bottom labels the function keys — `F3 View`, `F5 Copy`, `F6 Move`,
 `F7 Mkdir`, `F8 Delete` — in the manner of classic orthodox managers. The buttons are
@@ -306,7 +314,6 @@ during the same run still clones the current archive location.
 
 Deliberately absent from the current design, in rough order of appeal:
 
-- **Tabs** — several directories per panel.
 - **Remappable shortcuts** — the keyboard map above is currently fixed.
 - **A toolbar** and a **volumes list**, for pointer-driven navigation.
 - **An inline preview pane**, as an alternative to the Quick Look panel.

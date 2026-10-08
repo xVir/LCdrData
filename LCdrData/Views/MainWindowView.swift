@@ -56,6 +56,8 @@ package struct MainWindowView: View {
                 onReturn: { handleReturn() },
                 onCmdL: { runner.perform(.goToPath) },
                 onCmdDown: { runner.perform(.open) },
+                onCmdLeft: { openOtherPanelLocation(.openRightLocationInLeftPanel) },
+                onCmdRight: { openOtherPanelLocation(.openLeftLocationInRightPanel) },
                 onCmdShiftA: { runner.perform(.deselectAll) },
                 onCmdW: { runner.perform(.closeTab) },
                 onEscape: {
@@ -219,6 +221,14 @@ package struct MainWindowView: View {
 
     // MARK: - Actions
 
+    /// ⌘← / ⌘→ name a side, so they run even when that side is not active.
+    /// They stay out of the path field, where those keys move the insertion point.
+    private func openOtherPanelLocation(_ command: Command) {
+        guard !appState.leftPanel.isPathBarEditing,
+              !appState.rightPanel.isPathBarEditing else { return }
+        runner.perform(command)
+    }
+
     private func handleReturn() {
         guard let command = runner.returnCommand else { return }
         runner.perform(command)
@@ -313,6 +323,8 @@ private struct KeyShortcutModifier: ViewModifier {
     package let onReturn: () -> Void
     package let onCmdL: () -> Void
     package let onCmdDown: () -> Void
+    package let onCmdLeft: () -> Void
+    package let onCmdRight: () -> Void
     package let onCmdShiftA: () -> Void
     package let onCmdW: () -> Void
     /// Returns true if handled
@@ -442,6 +454,8 @@ private struct KeyShortcutModifier: ViewModifier {
                     keyboardRoutingActive: keyboardRoutingActive,
                     onCmdL: onCmdL,
                     onCmdDown: onCmdDown,
+                    onCmdLeft: onCmdLeft,
+                    onCmdRight: onCmdRight,
                     onCmdShiftA: onCmdShiftA
                 )
                 if r != .ignored { return r }
@@ -454,6 +468,8 @@ private struct KeyShortcutModifier: ViewModifier {
         keyboardRoutingActive: Bool,
         onCmdL: () -> Void,
         onCmdDown: () -> Void,
+        onCmdLeft: () -> Void,
+        onCmdRight: () -> Void,
         onCmdShiftA: () -> Void
     ) -> KeyPress.Result {
         guard keyboardRoutingActive else { return .ignored }
@@ -466,6 +482,14 @@ private struct KeyShortcutModifier: ViewModifier {
         }
         if press.key == .downArrow, cmd {
             onCmdDown()
+            return .handled
+        }
+        if press.key == .leftArrow, cmd, !shift {
+            onCmdLeft()
+            return .handled
+        }
+        if press.key == .rightArrow, cmd, !shift {
+            onCmdRight()
             return .handled
         }
         if press.key == KeyEquivalent("a"), cmd, shift {
