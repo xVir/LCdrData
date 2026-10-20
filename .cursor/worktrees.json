@@ -1,0 +1,5 @@
+{
+  "setup-worktree-unix": [
+    "if [ -f \"$ROOT_WORKTREE_PATH/local.bazelrc\" ]; then ln -sfn \"$ROOT_WORKTREE_PATH/local.bazelrc\" local.bazelrc; fi"
+  ]
+}
