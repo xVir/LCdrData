@@ -53,8 +53,29 @@ struct ConfigurationServiceTests {
         try svc.load()
 
         #expect(svc.current.panelShowHiddenFiles == false)
+        #expect(svc.current.panelShowHomeAsTilde == true)
         #expect(svc.current.panelSortColumn == .name)
         #expect(svc.current.panelSortAscending == true)
+    }
+
+    @Test func showHomeAsTildeCanBeTurnedOff() throws {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("LCdrDataCfgTest-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        let svc = makeService(tempDir: tmp)
+        try svc.load()
+        #expect(svc.current.panelShowHomeAsTilde == true)
+
+        try svc.apply(fromUserKDL: """
+        panel {
+            show-home-as-tilde #false
+        }
+
+        """)
+
+        #expect(svc.current.panelShowHomeAsTilde == false)
     }
 
     @Test func editorOpenFoldersDefaultsToFalseAndParsesFromKDL() throws {

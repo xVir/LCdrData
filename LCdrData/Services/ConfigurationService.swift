@@ -157,6 +157,9 @@ package final class ConfigurationService {
             if let hidden = boolArg(from: panel, childName: "show-hidden-files") {
                 result.panelShowHiddenFiles = hidden
             }
+            if let tilde = boolArg(from: panel, childName: "show-home-as-tilde") {
+                result.panelShowHomeAsTilde = tilde
+            }
             if let col = stringArg(from: panel, childName: "sort-by").flatMap(Self.parseSortColumn) {
                 result.panelSortColumn = col
             }

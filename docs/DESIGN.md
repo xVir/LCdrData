@@ -213,6 +213,7 @@ It is created the first time you apply a change, and deleting it restores every 
 ```kdl
 panel {
     show-hidden-files #false
+    show-home-as-tilde #true
     sort-by name
     sort-ascending #true
 }
@@ -248,6 +249,11 @@ operations {
 
 Each `bookmarks` entry is a `label|path` pair and becomes an item in the Favorites menu;
 `~` expands to your home folder.
+
+`panel.show-home-as-tilde` is on by default. The path bar then shows a location inside your
+home folder as `~/some_folder` instead of the absolute path, and `⌘L` edits that form.
+Turn it off and every location is shown as an absolute path again. A folder outside your
+home folder is always absolute.
 
 `editor.default-app` is the bundle identifier of the application `F4` opens files with. If it
 names an application you do not have installed, `F4` falls back to the system default handler

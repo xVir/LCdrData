@@ -2,6 +2,7 @@
 
 panel {
     show-hidden-files #false
+    show-home-as-tilde #true
     sort-by name
     sort-ascending #true
 }

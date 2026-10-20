@@ -11,11 +11,16 @@ import Models
 package struct PathBarView: View {
 
     @Bindable var viewModel: PanelViewModel
+    @Environment(AppState.self) private var appState
     @FocusState private var pathFieldFocused: Bool
     @State private var editedPath: String = ""
     @State private var showCopyConfirmation: Bool = false
 
     private let pathExpander = TildePathExpander()
+
+    private var showHomeAsTilde: Bool {
+        appState.configuration.current.panelShowHomeAsTilde
+    }
 
     package var body: some View {
         HStack(spacing: 2) {
@@ -34,7 +39,7 @@ package struct PathBarView: View {
         .background(.bar)
         .onChange(of: viewModel.isPathBarEditing) { _, editing in
             if editing {
-                editedPath = viewModel.state.location.displayPath
+                editedPath = displayedPath(for: viewModel.state.location)
                 // The text field is only installed once this update commits, so
                 // a focus request made here lands on a view that does not exist
                 // yet and is dropped. Ask again on the next run loop turn, once
@@ -82,7 +87,7 @@ package struct PathBarView: View {
             }
         }
         .accessibilityIdentifier("pathBar.\(viewModel.side.identifier)")
-        .accessibilityValue(viewModel.state.location.displayPath)
+        .accessibilityValue(displayedPath(for: viewModel.state.location))
     }
 
     // MARK: - Copy Path Button
@@ -91,7 +96,7 @@ package struct PathBarView: View {
         Button {
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
-            pasteboard.setString(viewModel.state.location.displayPath, forType: .string)
+            pasteboard.setString(displayedPath(for: viewModel.state.location), forType: .string)
 
             withAnimation(.easeInOut(duration: 0.2)) {
                 showCopyConfirmation = true
@@ -173,16 +178,26 @@ package struct PathBarView: View {
         }
     }
 
-    private func directoryComponents(through locationURL: URL) -> [PathComponent] {
-        var components: [PathComponent] = []
-        var url = locationURL.standardizedFileURL
+    private func displayedPath(for location: BrowseLocation) -> String {
+        guard showHomeAsTilde else { return location.displayPath }
+        return pathExpander.abbreviate(location.displayPath)
+    }
 
-        while url.path != "/" {
+    private func directoryComponents(through locationURL: URL) -> [PathComponent] {
+        let url = locationURL.standardizedFileURL
+        if showHomeAsTilde, let homeRelative = componentsInsideHome(through: url) {
+            return homeRelative
+        }
+
+        var components: [PathComponent] = []
+        var current = url
+
+        while current.path != "/" {
             components.insert(
-                PathComponent(name: url.lastPathComponent, location: .directory(url)),
+                PathComponent(name: current.lastPathComponent, location: .directory(current)),
                 at: 0
             )
-            url = url.deletingLastPathComponent()
+            current = current.deletingLastPathComponent()
         }
 
         // Add root
@@ -191,6 +206,28 @@ package struct PathBarView: View {
             at: 0
         )
 
+        return components
+    }
+
+    /// Breadcrumbs from `~` down to `url`, or `nil` when `url` is outside the home folder.
+    private func componentsInsideHome(through url: URL) -> [PathComponent]? {
+        let home = pathExpander.homeDirectory.standardizedFileURL
+        let homePath = home.path
+        guard url.path == homePath || url.path.hasPrefix(homePath + "/") else { return nil }
+
+        var components: [PathComponent] = []
+        var current = url
+        while current.path != homePath && current.path != "/" {
+            components.insert(
+                PathComponent(name: current.lastPathComponent, location: .directory(current)),
+                at: 0
+            )
+            current = current.deletingLastPathComponent()
+        }
+        components.insert(
+            PathComponent(name: "~", location: .directory(home)),
+            at: 0
+        )
         return components
     }
 }

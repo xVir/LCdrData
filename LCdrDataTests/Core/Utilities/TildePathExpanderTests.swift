@@ -69,6 +69,30 @@ struct TildePathExpanderTests {
         #expect(url.path == "/Users/dskachkov/Projects")
     }
 
+    @Test func abbreviatesAPathInsideHome() {
+        let expander = Self.makeExpander()
+
+        #expect(expander.abbreviate("/Users/dskachkov/Projects/personal") == "~/Projects/personal")
+        #expect(expander.abbreviate("/Users/dskachkov") == "~")
+        #expect(expander.abbreviate("/Users/dskachkov/") == "~")
+    }
+
+    @Test func leavesAPathOutsideHomeAbsolute() {
+        let expander = Self.makeExpander()
+
+        #expect(expander.abbreviate("/Volumes/Backup/Photos") == "/Volumes/Backup/Photos")
+        #expect(expander.abbreviate("/Users/dskachkov-extra/file") == "/Users/dskachkov-extra/file")
+    }
+
+    @Test func abbreviatesAnArchivePathInsideHome() {
+        let expander = Self.makeExpander()
+
+        #expect(
+            expander.abbreviate("/Users/dskachkov/Documents/files.zip/photos")
+                == "~/Documents/files.zip/photos"
+        )
+    }
+
     @Test func tildeInsideThePathIsNotTreatedAsHome() {
         // Arrange
         let expander = Self.makeExpander()

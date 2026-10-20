@@ -14,6 +14,8 @@ package struct AppConfiguration: Equatable, Sendable {
     }
 
     package var panelShowHiddenFiles: Bool
+    /// When true, a location inside the real home folder is shown as `~/…`.
+    package var panelShowHomeAsTilde: Bool
     package var panelSortColumn: FileSortDescriptor.Column
     package var panelSortAscending: Bool
     package var appearanceFontSize: Double
@@ -30,6 +32,7 @@ package struct AppConfiguration: Equatable, Sendable {
 
     package static let defaults = AppConfiguration(
         panelShowHiddenFiles: false,
+        panelShowHomeAsTilde: true,
         panelSortColumn: .name,
         panelSortAscending: true,
         appearanceFontSize: 13,
