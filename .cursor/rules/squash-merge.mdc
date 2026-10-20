@@ -1,0 +1,15 @@
+---
+description: Squash-merge worktree branches into the main checkout's develop
+alwaysApply: true
+---
+
+# Merging into the main checkout
+
+When merging a branch from a worktree into the main repository checkout (`/Users/dskachkov/Projects/personal/LCdrData`, branch `develop`), always squash.
+
+```bash
+git merge --squash <branch>
+git commit
+```
+
+Do not create a merge commit. Do not push unless asked. Leave the main checkout's untracked `.cursor/` directory out of the commit.

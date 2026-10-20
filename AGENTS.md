@@ -15,6 +15,8 @@ in it. **[docs/CURRENT_ARCH.md](docs/CURRENT_ARCH.md)** is the counterpart: the 
 as built, module layering, and where the code and the spec disagree.
 **[docs/CONTEXT.md](docs/CONTEXT.md)** defines the project's vocabulary.
 
+When merging a branch from a worktree into the main checkout's `develop`, always use squash (`git merge --squash`). Do not create a merge commit, and do not push unless asked.
+
 ## Which tool for which task
 
 This repo uses **two build tools on purpose**. Neither is being phased out.
